@@ -1,13 +1,16 @@
 """Owned composed fixtures and exact parent-bound original node sequences."""
-import ast
 import os
 import re
 from pathlib import Path
 
 from composed_cases import CASES,STEPS,DIRECT,DIRECT_NODES,HTTP,ADOPT,UNDELIVERABLE,nodes,query_count,targets
 from content_manifest import Refused,read_regular,_key
-from launch_policy import source_unit,render_string
 from measurement_runtime import record,running
+
+ADAPTER_PIN='245f9fc0eabd9d4ea5c8f701e77380cbadcc137f476d4cf87933d8c9202f06cb'
+DIRECT_PINS=dict(zip(DIRECT,('4db1a5ec24bb138fef3cc6d663efa65986f52b37e51e069048e89bc544e40375',
+    '0a16fea38bc51c2b0befc3affc9a8a5bb07456e4561185cdb6b6dd92c7d659bf'),strict=True))
+SHIM_PIN='50c2fac90e35c49d1ee817c4c86367292cb2efaed44e922800ae80aab46a908a'
 
 
 def root(host):
@@ -17,32 +20,13 @@ def root(host):
     return Path(value[0])
 
 
-def literal_write(checkout,name,receiver):
-    from completion_roles import SERVER_TEST,PINS
-    owner=source_unit(checkout,SERVER_TEST,PINS[SERVER_TEST],(name,))
-    writes=[node for node in ast.walk(owner) if isinstance(node,ast.Call) and ast.unparse(node.func)==receiver+'.write_text']
-    if len(writes)!=1 or len(writes[0].args)!=1 or not isinstance(writes[0].args[0],ast.Constant) or type(writes[0].args[0].value) is not str:
-        raise Refused('composed sole original fixture literal')
-    return writes[0].args[0].value
-
-
 def adapter(host,parent):
-    from completion_roles import SERVER_TEST,PINS
-    checkout=Path(host.meta['checkout'])
-    body=literal_write(checkout,'_write_composed_acp_adapter','adapter')
-    if host.case in DIRECT:
-        owner=source_unit(checkout,SERVER_TEST,PINS[SERVER_TEST],(host.case.split('::')[1].split('[')[0],))
-        rows=[node.value for node in owner.body if isinstance(node,ast.Assign) and len(node.targets)==1
-            and isinstance(node.targets[0],ast.Name) and node.targets[0].id=='source' and isinstance(node.value,ast.BinOp)]
-        if len(rows)!=1 or not isinstance(rows[0].left,ast.BinOp):
-            raise Refused('composed sole targetless postimage')
-        middle=rows[0].left.right
-        replacement=render_string(middle,(('attention',114,repr(host.case==DIRECT[1])),))
-        begin,end=body.index('    snapshot = {'),body.index('\ndef response(')
-        body=body[:begin]+replacement+body[end:]
+    if host.case not in CASES:
+        raise Refused('composed declared adapter case')
+    expected=DIRECT_PINS.get(host.case,ADAPTER_PIN)
     file=parent/'workspace/.hermetic-acp-adapter.py'
-    actual,info,pin=read_regular(file,32768,uid=20000,mode=0o700)
-    if actual!=body.encode() or host.fixture_roots.setdefault(('composed-script',host.case),(str(file),_key(info),pin))!=(str(file),_key(info),pin):
+    _,info,pin=read_regular(file,32768,uid=20000,mode=0o700)
+    if pin!=expected or host.fixture_roots.setdefault(('composed-script',host.case),(str(file),_key(info),pin))!=(str(file),_key(info),pin):
         raise Refused('composed original adapter bytes or generation')
     return file,pin
 
@@ -52,10 +36,9 @@ def bootstrap(host,parent):
     if host.case!=UNDELIVERABLE:
         return None
     checkout=Path(host.meta['checkout'])
-    expected=literal_write(checkout,'_write_undeliverable_adapter','shim').encode()
     file=parent/'workspace/sitecustomize.py'
-    body,info,pin=read_regular(file,4096,uid=20000,mode=0o644)
-    if body!=expected:
+    _,info,pin=read_regular(file,4096,uid=20000,mode=0o644)
+    if pin!=SHIM_PIN:
         raise Refused('composed exact delivery-blocked bootstrap bytes')
     from content_manifest import native_digest
     return {'kind':'undeliverable','path':str(file),'sha256':pin,'identity':list(_key(info)),

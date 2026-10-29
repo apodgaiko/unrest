@@ -198,7 +198,7 @@ def test_resumed_signals_require_admission_and_exact_cursor_without_fake_popen(t
     run='run:'+'a'*64
     row={'case':PARITY[0],'adoptable':True,'pid':child.pid,'run_id':run,'run_control':'control','run_project':'project'}
     cursor={'run_id':run,'generation':1,'control_identity_digest':'control','pid':child.pid,'pgid':child.pid}
-    worker={'birth':child,'signals':set()}
+    worker={'case':PARITY[0],'birth':child,'signals':set()}
     host=SimpleNamespace(case=PARITY[0],ledger=ledger,intents={1:row},actors={child.pid:worker},
         executed=lambda row:True,meta={'pid_namespace':'pid:[123]'})
     monkeypatch.setattr(completion_roles,'actor_slot',lambda host,actor:{'server_slot':0 if mutation=='old-server' else 1})
@@ -238,3 +238,31 @@ def test_resumed_signals_require_admission_and_exact_cursor_without_fake_popen(t
     with pytest.raises(Refused):
         adoption.signal(host,{},payload)
     assert adoption.signal(host,{},dict(payload,signal=0,group=False))=={'ok':True,'live':True}
+
+
+@pytest.mark.parametrize('mutation',(None,'birth','namespace'))
+def test_group_signal_attributes_only_verified_members_and_keeps_other_sessions_alive(monkeypatch,mutation):
+    from test_process_ledger import identity
+    ledger,_,leader,observed=ready()
+    ids={leader.pid:{**ledger.process(leader).registered_identity,'namespaces':{'pid':'pid:[123]'}}}
+    actors={leader.pid:{'case':PARITY[0],'birth':leader,'signals':set()}}
+    for pid,parent,group in ((102,leader.pid,leader.pid),(103,leader.pid,103),(104,100,leader.pid)):
+        actual={**identity(pid,parent),'pgid':group,'sid':group}
+        emit(ledger,'kernel_child',parent=parent,child=pid,event=1,identity=actual)
+        birth=Birth.read(actual)
+        ledger.register(birth,str(pid),(),case=PARITY[0],command_class='fixture')
+        ids[pid]={**actual,'namespaces':{'pid':'pid:[123]'}}
+        actors[pid]={'case':PARITY[0],'birth':birth,'signals':set()}
+    if mutation=='birth':
+        ids[102]['start_ticks']+=1
+    elif mutation=='namespace':
+        ids[102]['namespaces']['pid']='foreign'
+    monkeypatch.setattr(adoption,'process_identity',ids.__getitem__)
+    host=SimpleNamespace(case=PARITY[0],ledger=ledger,actors=actors,meta={'pid_namespace':'pid:[123]'})
+    if mutation is not None:
+        with pytest.raises(Refused):
+            adoption.record_group(host,actors[leader.pid],15)
+        assert not any(actor['signals'] for actor in actors.values())
+    else:
+        adoption.record_group(host,actors[leader.pid],15)
+        assert {pid for pid,actor in actors.items() if actor['signals']}=={leader.pid,102}

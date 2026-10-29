@@ -139,17 +139,26 @@ def signal(host,actor,payload):
     if canonical(observed)!=process.adopted_identity or observed['namespaces']['pid']!=host.meta['pid_namespace']:
         raise Refused('composed resumed process changed')
     if payload['signal']==15:
-        members=[]
-        for member in host.actors.values():
-            current=host.ledger.process(member['birth'])
-            ancestor=current
-            while ancestor.parent is not None and ancestor.birth!=child['birth']:
-                ancestor=host.ledger.process(ancestor.parent)
-            if ancestor.birth==child['birth'] and current.terminal is None:
-                actual=process_identity(member['birth'].pid)
-                if Birth.read(actual)!=host.ledger.peer_birth(member['birth']) or (actual['pgid'],actual['sid'])!=(child['birth'].pid,child['birth'].pid):
-                    raise Refused('composed resumed group custody')
-                members.append(member)
-        for member in members:
-            member['signals'].add(15)
+        record_group(host,child,15)
     return {'ok':True,'live':True}
+
+
+def record_group(host,leader,signum):
+    members=[]
+    for member in host.actors.values():
+        if member['case']!=host.case:
+            continue
+        current=host.ledger.process(member['birth'])
+        ancestor=current
+        while ancestor.parent is not None and ancestor.birth!=leader['birth']:
+            ancestor=host.ledger.process(ancestor.parent)
+        if ancestor.birth!=leader['birth'] or current.exit is not None or current.terminal is not None:
+            continue
+        actual=process_identity(member['birth'].pid)
+        if (Birth.read(actual)!=host.ledger.peer_birth(member['birth'])
+                or actual['namespaces']['pid']!=host.meta['pid_namespace']):
+            raise Refused('source signal group birth changed')
+        if (actual['pgid'],actual['sid'])==(leader['birth'].pid,leader['birth'].pid):
+            members.append(member)
+    for member in members:
+        member['signals'].add(signum)

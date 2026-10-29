@@ -526,7 +526,11 @@ class Observer:
             actual = process_identity(child['birth'].pid)
             if (Birth.read(actual) != self.ledger.peer_birth(child['birth']) or payload['group'] and (not process.new_session or actual['pgid'] != child['birth'].pid or actual['sid'] != child['birth'].pid)):
                 return {'ok': True, 'live': False}
-            child['signals'].add(payload['signal'])
+            if payload['group']:
+                from composed_adoption import record_group
+                record_group(self,child,payload['signal'])
+            else:
+                child['signals'].add(payload['signal'])
             return {'ok': True, 'live': True}
         elif kind == 'guard-refusal':
             shape(payload, ('code',))

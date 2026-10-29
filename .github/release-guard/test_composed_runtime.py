@@ -2,6 +2,8 @@
 from pathlib import Path
 from types import SimpleNamespace
 import os
+import ast
+import hashlib
 
 import pytest
 
@@ -10,6 +12,60 @@ import composed_runtime as runtime
 from content_manifest import Refused
 
 ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
+
+
+def authored_scripts():
+    from completion_roles import SERVER_TEST,PINS
+    from launch_policy import source_unit,render_string
+    def literal(name,receiver):
+        owner=source_unit(ROOT,SERVER_TEST,PINS[SERVER_TEST],(name,))
+        writes=[node for node in ast.walk(owner) if isinstance(node,ast.Call) and ast.unparse(node.func)==receiver+'.write_text']
+        assert len(writes)==1 and len(writes[0].args)==1
+        return ast.literal_eval(writes[0].args[0])
+    base=literal('_write_composed_acp_adapter','adapter')
+    result={cases.HERMETIC:base,'shim':literal('_write_undeliverable_adapter','shim')}
+    for case in cases.DIRECT:
+        unit=source_unit(ROOT,SERVER_TEST,PINS[SERVER_TEST],(case.split('::')[1].split('[')[0],))
+        rows=[node.value for node in unit.body if isinstance(node,ast.Assign) and len(node.targets)==1
+            and isinstance(node.targets[0],ast.Name) and node.targets[0].id=='source' and isinstance(node.value,ast.BinOp)]
+        assert len(rows)==1
+        replacement=render_string(rows[0].left.right,(('attention',114,repr(case==cases.DIRECT[1])),))
+        result[case]=base[:base.index('    snapshot = {')]+replacement+base[base.index('\ndef response('):]
+    return {case:body.encode() for case,body in result.items()}
+
+
+def test_authored_byte_declarations_match_every_original_literal_and_postimage():
+    expected={cases.HERMETIC:runtime.ADAPTER_PIN,**runtime.DIRECT_PINS,'shim':runtime.SHIM_PIN}
+    assert {case:hashlib.sha256(body).hexdigest() for case,body in authored_scripts().items()}==expected
+
+
+@pytest.mark.parametrize('case',(cases.HERMETIC,*cases.DIRECT,'foreign'))
+@pytest.mark.parametrize('mutation',(None,'byte','other-variant','inode'))
+def test_byte_pins_do_not_admit_changed_programs_or_another_case_variant(tmp_path,monkeypatch,case,mutation):
+    scripts=authored_scripts()
+    file=tmp_path/'workspace/.hermetic-acp-adapter.py'
+    file.parent.mkdir()
+    file.write_bytes(scripts.get(case,scripts[cases.HERMETIC]))
+    file.chmod(0o700)
+    host=SimpleNamespace(case=case,fixture_roots={})
+    read=runtime.read_regular
+    monkeypatch.setattr(runtime,'read_regular',lambda path,*args,**kwargs:read(path,*args,**{**kwargs,'uid':os.getuid()}))
+    if case!='foreign':
+        runtime.adapter(host,tmp_path)
+    if mutation=='byte':
+        file.write_bytes(file.read_bytes()+b'\n')
+    elif mutation=='other-variant':
+        file.write_bytes(scripts[cases.DIRECT[0] if case!=cases.DIRECT[0] else cases.DIRECT[1]])
+    elif mutation=='inode':
+        replacement=tmp_path/'replacement'
+        replacement.write_bytes(file.read_bytes())
+        replacement.chmod(0o700)
+        replacement.replace(file)
+    if mutation is not None or case=='foreign':
+        with pytest.raises(Refused):
+            runtime.adapter(host,tmp_path)
+    else:
+        assert runtime.adapter(host,tmp_path)[0]==file
 
 
 def test_composed_topology_preserves_every_original_parameter_and_parent_slot():

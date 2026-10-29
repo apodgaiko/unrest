@@ -862,3 +862,18 @@ SHA256 run-id filename, only corroborates it. Every affected admitted group memb
 is rechecked before the signal is recorded. SIGKILL, foreign sessions and broader
 resumption remain refused. Existing provider denials and UNVERIFIED limitations
 are unaffected.
+
+Authorized process-group signals are attributed to each already admitted live
+member after checking its immutable ancestry, current birth and PID namespace.
+Descendants in another session receive no signal fact. Original-parent and
+resumed-server group cancellation share this census; the existing caller,
+signal-kind and session-leader permission checks remain separate.
+
+The composed adapter's three constant postimages and undeliverable shim use
+authored exact-byte SHA256 declarations instead of runtime AST reconstruction.
+The exact case selects the expected digest before any candidate bytes are read.
+Acquired UID/mode, file-generation retention and compilation-time verification
+remain. Supplementary tests derive all four digests independently from the
+pinned original literals and postimages and reject cross-variant substitutions.
+This removes runtime AST derivation for constant fixtures; root-dependent
+templates retain their renderer and no generic Python body is admitted.
