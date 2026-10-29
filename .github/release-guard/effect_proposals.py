@@ -9,7 +9,7 @@ import hashlib
 from content_manifest import Refused
 from plan_launch import CASES as PLANS, expected as plan_expected
 from session_launch import CASES as SESSIONS, expected as session_expected
-from fixed_inline import CASES as FIXED, SEQUENCES, NESTED_CASES, STORAGE_CASES, expected as fixed_expected, STDIO, startup_expected, translated as fixed_translated
+from fixed_inline import CASES as FIXED, SEQUENCES, NESTED_CASES, STORAGE_CASES, INSPECTION_CASES, expected as fixed_expected, STDIO, startup_expected, translated as fixed_translated
 from ordinary_acp import CASES as ORDINARY, expected as ordinary_expected
 from cleanup_launch import EXECUTION_CASES as CLEANUP, expected as cleanup_expected, base_path, translated as cleanup_vector
 from cleanup_inline import DECLARATIONS, INFLIGHT, expected as inline_expected
@@ -97,7 +97,12 @@ def proposal(host, actor, raw):
             raise Refused('finite fixed proposal exhausted')
         operation = 'check' if query else SEQUENCES[case][len(records)]
         environment = {**root_environment,'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}
-        if case in STORAGE_CASES:
+        if case in INSPECTION_CASES:
+            if query:
+                raise Refused('inspection child has no descendants')
+            from inspection_launch import expected as inspection_expected
+            expected=inspection_expected(host,argv,cwd,environment,native,pin)
+        elif case in STORAGE_CASES:
             if query:
                 raise Refused('storage read child has no descendants')
             from storage_launch import expected as storage_expected

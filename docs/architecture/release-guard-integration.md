@@ -454,3 +454,11 @@ The journal's live-owner regression keeps its single literal sleep child and
 inherited standard descriptors. It retains the original SIGTERM and numeric
 parent wait, including a possible owned termination before body READY. This child
 has no descendant authority; no zero exit is manufactured for its termination.
+
+Fresh frontier reconstruction and stranded-recovery inspection retain three
+actual child executions across two original cases. Each uses the byte-pinned
+original inline program. Home and project operands must bind an owned fixture
+generation and its actual persisted project ID/workspace record; syntax alone
+cannot authorize a different project. The recovery CLI retains its exact home
+and projects environment, changed cwd and redaction assertions. These read-only
+children receive no descendant launch permission.
