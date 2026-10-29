@@ -180,6 +180,14 @@ resources remain independently bound. Original null/inherited/merged stream
 shape is an application-test assertion, no longer an additional guard claim;
 actual process identity, READY and original-parent waits are unchanged.
 
+Child bootstrap validates its authenticated observer-issued execution entry and
+membership in the externally selected inventory. Full-discovery references are
+loaded and byte/source/dependency checked. The finite builder and uniquely
+consumed intent remain the authority for issuing a child profile; collection
+membership grants no launch. Duplicate child-side role/case and focused-group
+catalogues are removed. Actual identity, parent, argv, environment, mounts,
+inherited descriptors, execution pins and READY checks remain.
+
 ## Verification and retired model controls
 
 Every original product/source test and its real completion, status and cleanup

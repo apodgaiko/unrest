@@ -10,29 +10,12 @@ from pathlib import Path
 import sys
 
 from content_manifest import Refused, capture
-from http_cases import CASES as HTTP_CASES, TRANSPORT as MCP_CASES
-from preflight_cases import CASES as PREFLIGHT_ALL
-from multiprocess_routes import GROUPS as MP_GROUPS
-from multiprocess_entry import ALL_CASES as MP_CASES, CASES as MP_STATUS, CHILD_CASES, IPC_CASES, TRACKER_CASES, TRACKER_SMOKE, TRACKER_REMAINING, ZERO
-from plan_launch import CASES as PLAN_CASES, PYTHON as PLAN_PYTHON
-from bootstrap_cases import BOOTSTRAP
-from controlled_cases import CASES as CONTROLLED, GROUPS as CONTROLLED_GROUPS
-from controlled_startup import CASES
-from ordinary_acp import ALL_CASES, CASES as ORDINARY_CASES
-from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, GROUPS as CLEANUP_GROUPS
-from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, CLIENT_CASES
+from http_cases import CASES as HTTP_CASES
 from linux_observation import credential_identity, process_identity
 from process_ledger import Birth, canonical
-from git_sites import CASES as GIT_CASES,GROUPS as GIT_GROUPS
-from session_launch import CASES as SESSION_CASES, GROUPS as SESSION_GROUPS
-
-from review_wire import CASES as REVIEW_CASES
-from product_audit import CASES as AUDIT_CASES
 from postbuild_root import CASES as ARCHIVE_CASES, COMMAND as ARCHIVE_COMMAND
-from package_cases import CASES as PACKAGE_CASES,GROUPS as PACKAGE_GROUPS,POSITIVE,MUTATIONS,NEGATIVE,FIRST,LIFECYCLE,SECURITY_CASES
-from fixed_inline import CASES as FIXED_CASES, GROUPS as FIXED_GROUPS, NESTED_CASES, DESKTOP_CASE
-
-from completion_roles import CASES as ROLE_CASES,GROUPS as ROLE_GROUPS
+from execution_spec import DOMAINS
+from case_inventory import identity as case_identity,load
 
 ROOT_COMMAND = 'from source_root import main;raise SystemExit(main())'
 METHODS = frozenset({'collection-finish', 'collection', 'core-ready', 'body-ready', 'case-start', 'case-finish', 'root-finish',
@@ -86,17 +69,21 @@ def readonly_mounts(expected: dict, namespace: str) -> None:
 
 
 def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
-    full = type(profile) is dict and type(profile.get('cases')) is dict
-    if full:
-        from case_inventory import reference
-        reference(profile['cases'], Path(__file__).parent.parent/'profiles')
-    if (type(profile) is not dict or set(profile) != FIELDS
-            or profile['schema'] != 'unrest.bootstrap-source.v1'
-            or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend', 'mock-acp', 'mcp', 'cleanup-acp', 'cleanup-inline', 'workspace-owned', 'session-adapter', 'session-child', 'session-inline', 'fixed-inline', 'plan-python','mp-child','mp-tracker','review-wire','pytest-regression','desktop','archive-checker','archive-leaf','archive-installed')
-            or type(profile['case']) is not str
-            or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else (*BOOTSTRAP, *CONTROLLED, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES, *PLAN_CASES, *MP_CASES, *REVIEW_CASES,*PACKAGE_CASES,*ROLE_CASES))
-            or not full and (type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ORDINARY_CASES[:3], ORDINARY_CASES[3:], ALL_CASES, NO_LAUNCH, tuple(STARTUP), CLIENT_CASES, GIT_CASES,*GIT_GROUPS.values(), *FIXED_GROUPS, *SESSION_GROUPS, *CLEANUP_GROUPS, *CONTROLLED_GROUPS.values(), PLAN_CASES, PREFLIGHT_ALL, MP_CASES, MP_STATUS, IPC_CASES, *MP_GROUPS.values(), TRACKER_CASES, TRACKER_SMOKE, TRACKER_REMAINING, REVIEW_CASES, ARCHIVE_CASES, AUDIT_CASES,*PACKAGE_GROUPS.values(),*ROLE_GROUPS.values()))):
+    if (type(profile) is not dict or set(profile)!=FIELDS
+            or profile['schema']!='unrest.bootstrap-source.v1'
+            or type(profile['role']) is not str or profile['role'] not in DOMAINS
+            or type(profile['case']) is not str):
         raise Refused('source closed profile')
+    full=type(profile['cases']) is dict
+    if full:
+        cases=load(profile['cases'],Path(__file__).parent.parent/'profiles',
+                   profile['source_sha256'],profile['dependency_sha256'])['cases']
+    else:
+        case_seal(profile['cases'])
+        cases=profile['cases']
+    if (profile['case']!='<bootstrap>' if profile['role']=='root'
+            else profile['case'] not in {case_identity(case) for case in cases}):
+        raise Refused('source selected inventory membership')
     for key in ('native', 'checkout', 'owned', 'dependencies', 'runtime_root', 'cwd'):
         value = profile[key]
         if type(value) is not str or not value.startswith('/') or str(Path(value).resolve()) != value:
@@ -158,22 +145,6 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
         if seen != inherited:
             raise Refused('source missing inherited inventory')
     readonly_mounts(profile['mounts'], profile['mount_namespace'])
-    from bootstrap_cases import wrapper
-    from session_launch import LIVE, INVALID, TIMEOUT, node
-    inline_session = node('clean_exit_zero_without_response_is_failed_unknown_work')
-    eligible = {
-        'review-wire':REVIEW_CASES, 'mp-child': CHILD_CASES, 'mp-tracker': tuple(case for case in MP_CASES if case!=ZERO),
-        'root': ('<bootstrap>',), 'backend': (*BOOTSTRAP,*CONTROLLED), 'acp': (*BOOTSTRAP,*CONTROLLED),
-        'delayed-backend': tuple(case for case in BOOTSTRAP if wrapper(case) is not None),
-        'archive-checker':(POSITIVE,*MUTATIONS),'archive-leaf':(POSITIVE,*NEGATIVE),'archive-installed':(FIRST,LIFECYCLE,*SECURITY_CASES),
-        'desktop':(DESKTOP_CASE,), 'pytest-regression': tuple(NESTED_CASES), 'fixed-inline': (*tuple(case for case in FIXED_CASES if case not in (*NESTED_CASES,DESKTOP_CASE)),*tuple(case for case,row in ROLE_CASES.items() if row[0]!='ownership')), 'plan-python': (PLAN_PYTHON,),
-        'session-adapter': tuple(case for case in LIVE if case not in (*INVALID,inline_session)),
-        'session-inline': (inline_session,), 'session-child': (TIMEOUT,),
-        'workspace-owned': (GIT_CASES[7],), 'cleanup-inline': tuple(DECLARATIONS),
-        'mcp': MCP_CASES, 'cleanup-acp': CLEANUP_CASES, 'mock-acp': ORDINARY_CASES,
-    }
-    if profile['case'] not in eligible[profile['role']]:
-        raise Refused('source execution role and case')
     from execution_spec import validate as validate_execution
     validate_execution(profile,event,arguments,Path(__file__).parent.parent/'profiles')
     native = profile['native']

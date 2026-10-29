@@ -394,4 +394,4 @@ def test_two_actual_clients_share_only_the_same_listener_description():
                 with accepted:
                     assert ticket.listener==acquire_tcp(birth,listener.fileno())
                     assert acquire_tcp(birth,accepted.fileno()).uid==birth.uid
-        assert endpoints.connection_counts[route.name] == 2 and not endpoints.poison and not ledger.poison
+        assert endpoints.connection_counts=={'client-0':1,'client-1':1} and not endpoints.poison and not ledger.poison

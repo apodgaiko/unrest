@@ -96,12 +96,19 @@ def test_ps_inventory_is_exact_and_follows_original_server_wait(prepared,monkeyp
 
 
 @pytest.mark.parametrize('subject',['http','foreign-mcp','http-extra-fd'])
-def test_actual_profile_validator_accepts_only_the_declared_mcp_family(tmp_path,monkeypatch,subject):
+def test_http_authority_and_inherited_profile_descriptors_remain_closed(tmp_path,monkeypatch,subject):
     import os
     import source_profile as profiles
     from execution_spec import issue
     from process_ledger import canonical
     from multiprocess_routes import GROUPS
+
+    if subject=='foreign-mcp':
+        host=SimpleNamespace(case=GROUPS['mp-lock3'][0],root_only=lambda actor:None,intents={})
+        with pytest.raises(Refused,match='HTTP original case'):
+            http_cases.proposal(host,{}, {})
+        assert not host.intents
+        return
 
     # Synthetic kernel/mount observations isolate the real role/profile validator.
     # Native CI, not this control, proves the actual credentials and mount facts.
@@ -140,7 +147,7 @@ def test_actual_profile_validator_accepts_only_the_declared_mcp_family(tmp_path,
         observed,pins=profiles.validate(profile,'cpython.run_command',('pass\n',))
         assert observed==actual and len(pins)==6
     else:
-        with pytest.raises(Refused,match='source execution role and case' if subject=='foreign-mcp' else 'finite inherited inventory'):
+        with pytest.raises(Refused,match='finite inherited inventory'):
             profiles.validate(profile,'cpython.run_command',('pass\n',))
 
 
