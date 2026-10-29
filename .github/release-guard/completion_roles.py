@@ -1,5 +1,6 @@
 """Closed original role-server schedules, environments and literal templates."""
 import ast
+import re
 import stat
 from pathlib import Path
 
@@ -49,7 +50,7 @@ def root(host,cwd):
     workspace=Path(cwd)
     if workspace.name!='workspace' or workspace.resolve()!=workspace:
         raise Refused('completion original workspace')
-    parent,info=acquire(str(workspace.parent),Path(host.meta['owned']),case.split('::')[1].split('[')[0][:30],OWNER)
+    parent,info=acquire(str(workspace.parent),Path(host.meta['owned']),re.sub(r'[\W]','_',case.split('::')[1])[:30],OWNER)
     item=workspace.stat()
     if not stat.S_ISDIR(item.st_mode) or item.st_uid!=OWNER or item.st_mode&0o6022:
         raise Refused('completion workspace custody')

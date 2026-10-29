@@ -1,5 +1,6 @@
 """Finite original Git operands and seed-generation custody; model controls only."""
 import os
+import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -13,7 +14,7 @@ import completion_roles as roles
 @pytest.fixture
 def fixture(tmp_path,monkeypatch):
     case=next(iter(roles.CASES))
-    base=tmp_path/'pytest'/(case.split('::')[1].split('[')[0][:30]+'0')
+    base=tmp_path/'pytest'/(re.sub(r'[\W]','_',case.split('::')[1])[:30]+'0')
     workspace=base/'workspace'
     workspace.mkdir(parents=True)
     home=tmp_path/'home'
