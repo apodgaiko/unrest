@@ -64,9 +64,9 @@ def test_each_concurrent_http_constructor_consumes_one_exact_authored_slot(host)
             server.proposal(host,actor,changed)
         answer=server.proposal(host,actor,command)
         consumed(host,answer)
-    # Both original servers are live; moving to the late-client phase must wait.
-    with pytest.raises(Refused,match='actual server waits'):
-        server.proposal(host,actor,raw(host,parent,2))
+    # Application phase order belongs to the original tests; the slot stays exact.
+    answer=server.proposal(host,actor,raw(host,parent,2))
+    assert host.intents[answer['ticket']]['server_slot']==2
     assert not host.retired
 
 
@@ -81,17 +81,6 @@ def test_setup_slot_one_may_construct_first_but_neither_slot_may_repeat(host):
     with pytest.raises(Refused,match='original server sequence'):
         server.proposal(host,actor,raw(host,parent,1))
     assert not host.retired
-
-
-def test_child_exit_alone_cannot_satisfy_original_completion(host,monkeypatch):
-    host,actor,parent=host
-    monkeypatch.setattr(server,'status',lambda *args:True)
-    row={'case':host.case,'role':'mcp','server_slot':0,'consumed':True,'pid':1}
-    host.intents={1:row}
-    host.actors={1:{'birth':1,'token':'server','waited':False}}
-    assert not server.complete(host,row)
-    host.actors[1]['waited']=True
-    assert server.complete(host,row)
 
 
 def test_restart_inventory_is_native_bounded_and_requires_an_admitted_server(host,monkeypatch):
@@ -120,3 +109,25 @@ def test_restart_inventory_is_native_bounded_and_requires_an_admitted_server(hos
     with pytest.raises(Refused):
         server.proposal(value,actor,request)
     assert len(seen)==1
+
+
+@pytest.mark.parametrize('role',('mcp','fixed-inline'))
+@pytest.mark.parametrize('code,ready,accepted',((0,True,True),(1,True,False),(0,False,False)))
+def test_each_role_server_keeps_terminal_status_at_the_shared_final_join(role,code,ready,accepted):
+    from source_observer import Observer
+    case=next(case for case,row in roles.CASES.items() if row==('ownership','work','valid'))
+    birth=object()
+    intent={'ticket':1,'case':case,'role':role,'birth':birth,'token':'server','consumed':True,'server_slot':0}
+    actor={'case':case,'role':role,'birth':birth,'token':'server','intent':intent,'body_ready':ready,'signals':set()}
+    host=SimpleNamespace(intents={1:intent},ledger=SimpleNamespace(process=lambda value:SimpleNamespace(terminal=(3,code<<8,code))))
+    assert Observer.completed_child(host,actor) is accepted
+
+
+@pytest.mark.parametrize('code,admitted,accepted',((0,True,True),(1,True,False),(0,False,False)))
+def test_completion_git_head_keeps_success_at_shared_final_join(code,admitted,accepted):
+    from source_observer import Observer
+    birth=object()
+    intent={'ticket':1,'case':'case','role':'git-command','birth':birth,'token':'git','consumed':True,'operation':'completion-head'}
+    actor={'case':'case','role':'git-command','birth':birth,'token':'git','intent':intent,'kernel_admitted':admitted}
+    host=SimpleNamespace(intents={1:intent},ledger=SimpleNamespace(process=lambda value:SimpleNamespace(terminal=(3,code<<8,code))))
+    assert Observer.completed_child(host,actor) is accepted

@@ -907,3 +907,11 @@ actual exec. Case finalization requires every admitted command and helper to hav
 its real numeric parent wait; helpers also retain the successful native status,
 image pin, parent, case and execution generation checks. The guard does not
 independently certify application-level Git call ordering or HEAD correctness.
+
+Role-server finalization uses the same per-actor terminal and kernel-wait join as
+other source children. Both HTTP and inline role servers retain their declared
+success/intentional-crash/signaled-cleanup status checks. The separate recursive
+server/query completion pass and intermediate application phase-wait model are
+retired. Fixture custody is acquired again before any further Git command or
+server launch; finished fixtures grant no later capability. Original concurrent
+server, late-client and restart tests retain their actual ordering assertions.

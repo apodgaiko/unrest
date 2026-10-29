@@ -345,9 +345,11 @@ class Observer:
             expected={'kind':NEGATIVE.get(actor['case'],'normal'),'count':0 if NEGATIVE.get(actor['case'])=='missing-package' else 15,
                 'failed':15 if NEGATIVE.get(actor['case'])=='missing-corpus' else 0,'exit':code}
             return terminal is not None and terminal[2]==code and actor['body_ready'] and (actor['role']!='archive-leaf' or actor.get('archive_result')==expected)
-        if actor['role']=='fixed-inline' and value is not None and 'server_slot' in value:
+        if actor['role'] in ('fixed-inline','mcp') and value is not None and 'server_slot' in value:
             from completion_server import status
             return value is not None and status(self,actor,value['server_slot'])
+        if actor['role']=='git-command' and value is not None and value.get('operation')=='completion-head':
+            return actor.get('kernel_admitted') is True and terminal is not None and terminal[2]==0
         if actor['role']=='pytest-regression':
             return terminal is not None and terminal[2]==0 and actor['body_ready'] and actor.get('preselected_complete') is True
         if actor['case'] in PLAN_CASES:
@@ -407,10 +409,7 @@ class Observer:
                 self.ledger.process(self.root_birth).case = self.case
             else:
                 children = [value for value in self.actors.values() if value['role'] != 'root' and value['case'] == self.case]
-                from completion_server import finish as role_finish
                 from package_security import CASES as SECURITY_CASES,provenance
-                if self.case in ROLE_CASES and outcome=='passed':
-                    role_finish(self)
                 if self.case in SECURITY_CASES:
                     provenance(self)
                 if skipped:

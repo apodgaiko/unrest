@@ -28,17 +28,6 @@ def status(host,actor,slot):
     return terminal[2]==0 or terminal[2] in (-9,-15) and -terminal[2] in actor['signals']
 
 
-def complete(host,row):
-    if not row['consumed']:
-        return False
-    actor=host.actors[row['pid']]
-    queries=[value for value in host.intents.values() if value['case']==host.case
-             and value['role']=='git-command' and value['parent']==actor['birth']]
-    return (status(host,actor,row['server_slot']) and host.ledger.reaped(actor['birth'],actor['token'])
-        and all(value['consumed'] and host.git.reaped(host.actors[value['pid']])
-                and host.ledger.process(value['birth']).terminal[2]==0 for value in queries))
-
-
 def before(host,slot):
     existing=rows(host)
     family,_,_=CASES[host.case]
@@ -53,13 +42,6 @@ def before(host,slot):
         raise Refused('completion original server sequence')
     if any(not host.executed(row) for row in existing.values()):
         return None
-    prior=(tuple(existing) if family=='ownership' and slot>=2 or family=='crash' and slot==1 else ())
-    if family=='composed' and slot>0:
-        prior=(slot-1,)
-    if family=='restart' and slot==2 or family in ('targetless','defect') and slot==1:
-        prior=(1,) if family=='restart' else (0,)
-    if any(not complete(host,existing[index]) for index in prior):
-        raise Refused('completion next phase before actual server waits')
     return parent
 
 
@@ -112,11 +94,3 @@ def proposal(host,actor,raw):
             'execution_fixture':bootstrap(host,parent) if case in COMPOSED else None},
         maximum=len(schedule(case))+(len(nodes(case)) if case in COMPOSED else 0),port=port)
     return answer
-
-
-def finish(host):
-    if any(not complete(host,row) for row in rows(host).values()):
-        raise Refused('completion original servers incomplete')
-    fixture=host.fixture_roots.get(('completion-role',host.case))
-    if fixture is not None:
-        git_ready(host,Path(fixture[0])/'workspace')
