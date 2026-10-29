@@ -40,3 +40,19 @@ def test_each_fixed_declaration_is_limited_to_its_original_sequence(case):
                 expected(case,operation,'/native/python','a'*64,ROOT,{},query=True)
     with pytest.raises(Refused,match='closed'):
         expected(case,'unregistered','/native/python','a'*64,ROOT,{})
+
+
+def test_journal_keeps_the_original_sleep_and_no_descendant_authority():
+    from fixed_inline import JOURNAL_CASE, JOURNAL_TEST, GROUPS, translated
+    tree=ast.parse((ROOT/JOURNAL_TEST).read_bytes())
+    owner=next(node for node in tree.body if isinstance(node,ast.FunctionDef) and node.name==JOURNAL_CASE.split('::')[-1])
+    call=next(node for node in ast.walk(owner) if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr=='Popen')
+    body=ast.literal_eval(call.args[0].elts[2])
+    value=expected(JOURNAL_CASE,'sleep','/native/python','a'*64,ROOT,{'PATH':'/bin:/usr/bin'})
+    assert value.argv==('/native/python','-c',body)
+    assert body=='import time; time.sleep(10)'
+    assert dict(value.environment)=={'PATH':'/bin:/usr/bin'}
+    assert translated(value)==('/native/python','-I','-S','-c',body)
+    assert (JOURNAL_CASE,) in GROUPS and SEQUENCES[JOURNAL_CASE]==('sleep',)
+    with pytest.raises(Refused,match='no descendants'):
+        expected(JOURNAL_CASE,'sleep','/native/python','a'*64,ROOT,{},query=True)

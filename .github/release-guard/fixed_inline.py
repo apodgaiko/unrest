@@ -40,6 +40,9 @@ OBSERVATION_ARGUMENTS = {
     'observe-positive': ('["observe-project", "--help"]','0'),
 }
 PINS[OBSERVATION_TEST] = 'bc4977de515c9f3a3b3ccab626a245525deccd9a6449fce8ad02253d220af305'
+JOURNAL_TEST='tests/test_mutation_journal.py'
+JOURNAL_CASE=JOURNAL_TEST+'::test_live_foreign_owner_is_busy_and_record_is_unchanged'
+PINS[JOURNAL_TEST]='dbaec57f5937ce7583c1de5819ee87b55dd30f45d8e4a3cc0c2d8d9b1607ea49'
 RELOAD_TEST = 'tests/test_v04_speed_runner.py'
 RELOAD_NAME = 'test_process_installs_only_one_audit_hook_across_reload'
 RELOAD_CASE = RELOAD_TEST + '::' + RELOAD_NAME
@@ -56,14 +59,15 @@ DETACHED_CASE = RELOAD_TEST+'::test_detached_socket_descriptor_is_preflight_evid
 NETWORK_CASES = (*NETWORK,DETACHED_CASE)
 ISOLATED = {RELOAD_CASE:'reload', DETACHED_CASE:'detached', **dict(zip(METHOD_CASES,METHODS,strict=True)),
             **{case:case for case in (*NETWORK,*SPEED_CASES)}}
-CASES = (*IMPORT_CASES,*STDIO,OBSERVATION_CASE,CLI_CASE,*NESTED_CASES,DESKTOP_CASE,*STORAGE_CASES,*ISOLATED)
-GROUPS = (IMPORT_CASES,tuple(STDIO),(OBSERVATION_CASE,),(RELOAD_CASE,),METHOD_CASES,NETWORK_CASES,SPEED_CASES,(CLI_CASE,),*(tuple([case]) for case in NESTED_CASES),(DESKTOP_CASE,),tuple(STORAGE_CASES),CASES)
+CASES = (*IMPORT_CASES,*STDIO,OBSERVATION_CASE,CLI_CASE,*NESTED_CASES,DESKTOP_CASE,JOURNAL_CASE,*STORAGE_CASES,*ISOLATED)
+GROUPS = (IMPORT_CASES,tuple(STDIO),(OBSERVATION_CASE,),(RELOAD_CASE,),METHOD_CASES,NETWORK_CASES,SPEED_CASES,(CLI_CASE,),*(tuple([case]) for case in NESTED_CASES),(DESKTOP_CASE,),(JOURNAL_CASE,),tuple(STORAGE_CASES),CASES)
 SEQUENCES.update({case:('startup',) for case in STDIO})
 SEQUENCES[OBSERVATION_CASE] = OBSERVATION_OPERATIONS
 SEQUENCES[CLI_CASE] = tuple('run-'+str(i) for i in range(5))
 SEQUENCES.update({case:('pytest',) for case in NESTED_CASES})
 SEQUENCES.update({case:('read0','read1') if case==STORAGE_DIRECTORY else ('read0',) for case in STORAGE_CASES})
 SEQUENCES[DESKTOP_CASE] = ('serve','ps')
+SEQUENCES[JOURNAL_CASE]=('sleep',)
 SEQUENCES.update({case:(operation,) for case,operation in ISOLATED.items()})
 PINS[STDIO_TEST] = '588e6f2128c32f4020cae0dfaf00182bdc117ea640760da1790dd687f5246105'
 
@@ -133,8 +137,20 @@ def script(checkout, operation, root=None):
 
 
 def expected(case, operation, native, pin, checkout, environment, *, query=False, root=None):
-    if type(case) is not str or case not in (*IMPORT_CASES,OBSERVATION_CASE,CLI_CASE,*NESTED_CASES,*ISOLATED) or type(operation) is not str or operation not in SEQUENCES[case] or type(query) is not bool:
+    if type(case) is not str or case not in (*IMPORT_CASES,OBSERVATION_CASE,CLI_CASE,JOURNAL_CASE,*NESTED_CASES,*ISOLATED) or type(operation) is not str or operation not in SEQUENCES[case] or type(query) is not bool:
         raise Refused('fixed inline closed operation')
+    if case==JOURNAL_CASE:
+        if query:
+            raise Refused('journal sleep has no descendants')
+        body=(checkout/JOURNAL_TEST).read_bytes()
+        if hashlib.sha256(body).hexdigest()!=PINS[JOURNAL_TEST]:
+            raise Refused('journal original body bytes')
+        owner=next(node for node in ast.parse(body).body if isinstance(node,ast.FunctionDef) and node.name==JOURNAL_CASE.split('::')[-1])
+        calls=[node for node in ast.walk(owner) if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr=='Popen']
+        if len(calls)!=1:
+            raise Refused('journal sole original child')
+        program=ast.literal_eval(calls[0].args[0].elts[2])
+        return build_expected('fixed:journal',case,native,pin,(native,'-c',program),tuple(sorted(environment.items())),str(checkout),'python-command')
     if case==HERMETIC and not query:
         body,environment=hermetic(checkout,environment)
         nodes=NESTED_CASES[case]

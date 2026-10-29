@@ -215,7 +215,6 @@ def test_hermetic_child_seals_all_three_nodes_without_advancing_outer_case(monke
 
 def test_each_bounded_nested_frontier_is_independently_closed():
     import ast
-    from pathlib import Path
     from fixed_inline import GROUPS
     from nested_pytest import HERMETIC
     from source_host import main

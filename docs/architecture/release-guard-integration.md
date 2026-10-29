@@ -449,3 +449,8 @@ state-file operand and owned pytest-directory generation. Relative operands stay
 relative with the original changed cwd. The directory-fsync case retains two
 sequential children; no read child receives descendant permission. The parent
 still asserts the actual bytes, modes, cleanup and error behavior.
+
+The journal's live-owner regression keeps its single literal sleep child and
+inherited standard descriptors. It retains the original SIGTERM and numeric
+parent wait, including a possible owned termination before body READY. This child
+has no descendant authority; no zero exit is manufactured for its termination.

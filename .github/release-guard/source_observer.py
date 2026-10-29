@@ -33,7 +33,7 @@ from source_profile import METHODS, ROOT_COMMAND
 from ordinary_acp import CASES as ORDINARY_CASES, MOCK, NEGATIVE_CASES
 from unix_endpoints import UnixPairs
 from session_launch import CASES as SESSION_CASES, LIVE as SESSION_LIVE, TIMEOUT as SESSION_TIMEOUT, SCRIPT as SESSION_SCRIPT
-from fixed_inline import CASES as FIXED_CASES, SEQUENCES as FIXED_SEQUENCES, CLI_CASE
+from fixed_inline import CASES as FIXED_CASES, SEQUENCES as FIXED_SEQUENCES, CLI_CASE, JOURNAL_CASE
 from git_sites import CASES as GIT_CASES
 from git_observer import Git
 from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, INFLIGHT, child_count as inline_count
@@ -198,7 +198,7 @@ class Observer:
             inline = role == 'cleanup-inline'
             terminal = inline and self.case in INFLIGHT and os.readlink(Path('/proc') / str(pid) / 'cwd') != self.meta['checkout']
             inherited = (inline and (descriptor == 0 if terminal or self.case in STARTUP else descriptor == 2)
-                or role=='fixed-inline' and self.case in STORAGE_CASES and descriptor==2)
+                or role=='fixed-inline' and (self.case in STORAGE_CASES and descriptor==2 or self.case==JOURNAL_CASE))
             if terminal and descriptor == 2:
                 other = (Path('/proc') / str(pid) / 'fd/1').stat()
                 if (info.st_dev, info.st_ino) != (other.st_dev, other.st_ino):
