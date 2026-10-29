@@ -56,3 +56,26 @@ def test_journal_keeps_the_original_sleep_and_no_descendant_authority():
     assert (JOURNAL_CASE,) in GROUPS and SEQUENCES[JOURNAL_CASE]==('sleep',)
     with pytest.raises(Refused,match='no descendants'):
         expected(JOURNAL_CASE,'sleep','/native/python','a'*64,ROOT,{},query=True)
+
+
+def test_journal_zero_signal_is_one_owned_liveness_probe_not_generic_permission(monkeypatch):
+    import source_observer
+    from source_observer import Observer
+    from fixed_inline import JOURNAL_CASE
+    from test_process_ledger import setup
+    ledger,root,child=setup()
+    host=object.__new__(Observer)
+    host.case,host.root_birth,host.finished,host.ledger=JOURNAL_CASE,root,False,ledger
+    actor={'role':'root','birth':root}
+    target={'role':'fixed-inline','birth':child,'case':JOURNAL_CASE,'token':'child-token','signals':set()}
+    host.actors={child.pid:target}
+    monkeypatch.setattr(source_observer,'process_identity',lambda pid:ledger.process(child).identity)
+    message={'kind':'custody_signal','payload':{'pid':child.pid,'child_token':'child-token','signal':0,'group':False}}
+    assert host.dispatch(actor,message)=={'ok':True,'live':True}
+    assert target['liveness_probes']==1 and not target['signals']
+    with pytest.raises(Refused,match='liveness probe'):
+        host.dispatch(actor,message)
+    target.pop('liveness_probes')
+    host.case=target['case']='foreign-case'
+    with pytest.raises(Refused,match='liveness probe'):
+        host.dispatch(actor,message)

@@ -877,8 +877,12 @@ class Observer:
                 raise Refused('controlled warning signal replay')
             process = self.ledger.process(child['birth'])
             if payload['signal'] == 0:
-                if child['role'] != 'workspace-owned' or payload['group']:
+                journal=self.case==JOURNAL_CASE and child['role']=='fixed-inline'
+                if (payload['group'] or child['role']!='workspace-owned' and not journal
+                        or journal and child.get('liveness_probes',0)!=0):
                     raise Refused('source exact owned liveness probe')
+                if journal:
+                    child['liveness_probes']=1
                 try:
                     if Birth.read(process_identity(child['birth'].pid)) != child['birth']:
                         raise Refused('source reused probe PID')
