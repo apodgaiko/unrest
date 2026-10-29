@@ -16,8 +16,6 @@ from launch_policy import build_expected
 
 TEST = 'tests/test_experimental_bootstrap.py'
 ACP = 'tests/fixtures/controlled_python_acp.py'
-SESSION_PIN = '7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2'
-TEST_PIN = 'c81fc04a81ef3aa657c16a69627c4c6b80ba1012f9255d2a05b15557934a7383'
 BACKEND_PIN = 'be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53'
 ACP_PIN = 'f5134a2d79b348b70b05a66566ff65d0049f102665200a22f3a6fcbd1c4f58be'
 CASES = tuple('tests/test_experimental_bootstrap.py::' + name for name in (

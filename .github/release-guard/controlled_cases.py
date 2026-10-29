@@ -10,32 +10,6 @@ from content_manifest import Refused
 
 STARTUP_FAILURE = 'tests/test_experimental_startup_diagnostics.py::test_coordinator_persists_startup_and_separate_cleanup_failure'
 
-PINS = {
-    'tests/test_experimental_notifications.py': '5a1aea6102ae089fb8d5ad82496562a020def6ce1f4ece95b8ef84dadb22cf00',
-    'tests/test_experimental_admission_bounds.py': '97557e0d3bd047948cbee27aa6e5c3f30daa45ed79a4544eae19b5e22f2e6c9d',
-    'tests/test_experimental_provider_config.py': 'e2efb30678c7372df2f69523b27573517082819b7412d7cabc604b48bf7faa6b',
-    'tools/probe_v046_startup.py': 'eb26f43472ce1798d2dd066fa87d6ceb5d58d1a94abc0e9edddeb20b285dd564',
-    'tests/test_experimental_config_frames.py': '2cc54ff5577127750ce01a6a08e97ec879367797aa6ab903eea5842d47bc03e7',
-    'tests/test_controlled_acp_warnings.py': '8d0a9a1aa0d804357acbb267523d3d7c0b7baf37349432b0b5243e2787d6e3c7',
-    'tests/test_experimental_startup_diagnostics.py': 'b2b2d05a217dcd4e082e06371c00e9ae91fb99a7c50bfcec15e7e810b2b7d65f',
-    'src/unrest_harness/experimental_custody.py': 'a6da184702daa03c9e9a7b6c5fcf22d9514901abb9112c44c8686a05880d25dc',
-    'src/unrest_harness/experimental_cohort.py': 'd830a15c39394463022150c7b01c41e941100ae55f4eff033fc247cbf6af7c61',
-    'src/unrest_harness/experimental_provider_config.py': '92c8d11fc6aedbf8a737be416387de5f0aa4a239ce8e9e048f543bb8cd4041a5',
-    'src/unrest_harness/experimental_session.py': '7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2',
-    'tests/controlled_transport.py': '93f50ee7ce976db2dfddb0df5cc4df202768147f753e618f91eb1352a3d6bca9',
-    'tests/fixtures/controlled_python_acp.py': 'f5134a2d79b348b70b05a66566ff65d0049f102665200a22f3a6fcbd1c4f58be',
-    'tests/fixtures/experimental_session_app_server.py': 'be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53',
-    'tests/test_controlled_acp_cancel.py': 'f19e29820f7b6e65bd0ee863f2b58a8ff811984843b418b3d82f9c667b696233',
-    'tests/test_controlled_python_acp.py': 'b1e700c6ba4bcdc734b595ae12ad9fcce5d5ff8f1fddc4f5f70e6629875665da',
-    'tests/test_experimental_ack_durability.py': 'dd8b0d8954ec6dfd5195dc617f3a179bb04823b7929832af954cf38ce3163f0d',
-    'tests/test_experimental_bridge_shutdown.py': 'b3ee029992d35039d5163febbb327cdd4c92d31fa47cc9f73b9b364f896e1ecb',
-    'tests/test_experimental_drain_retirement.py': '1ff7a2341842a74a7e20d5ebaae2791f69cd8b40fe581e059d1d1f136f87346d',
-    'tests/test_experimental_finite_orders.py': 'aca649f5eb745f52a6a6e5457ebd7f10f983a3936d24074050db161dfec9ff61',
-    'tests/test_experimental_finite_priority.py': '05ac2bda998c5bb8043d2e090741dca9046b055b3e123d5c1abc248e87b5111b',
-    'tests/test_experimental_finite_stops.py': '47e3bdecc0eb3aac50669c08fc76f7f367aa22288e197ef5e68fdd4eba4ad9ed',
-    'tests/test_experimental_first_halt.py': '0678f16ff434aa6d1dc69c3532938b81cb085d43fce4b05646aade2514955766',
-    'tests/test_experimental_session.py': 'baca26ee3feb60d74d435becb950db24e8849aa16015cf15e1943cfbc0f3f9e3',
-}
 
 INITIALIZED_HTTP = 'tests/test_experimental_startup_diagnostics.py::test_initialized_owner_has_no_http_mutation_authority'
 STANDARD = ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server')

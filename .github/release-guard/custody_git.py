@@ -16,8 +16,6 @@ from git_commands import Command
 from git_observer import regular
 from git_operands import digest
 
-SOURCE = 'src/unrest_harness/experimental_custody.py'
-PIN = 'a6da184702daa03c9e9a7b6c5fcf22d9514901abb9112c44c8686a05880d25dc'
 ENVIRONMENT = {
     'PATH':'/usr/bin:/bin','LC_ALL':'C','GIT_CONFIG_NOSYSTEM':'1',
     'GIT_CONFIG_GLOBAL':'/dev/null','GIT_TERMINAL_PROMPT':'0',

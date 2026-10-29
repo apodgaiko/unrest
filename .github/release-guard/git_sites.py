@@ -3,13 +3,6 @@ from measurement_git import COLD as MEASUREMENT_OPERATIONS
 from history_git import CASES as HISTORY_CASES
 from git_fixtures import SLOTS
 from git_commands import OPERATIONS as COMMANDS,SETUP
-PINS = {
-    'tests/test_workspaces.py': '590b0e1d07d73a6a2a770edb41d839ec903f53b8c28ff19be16a0e13dc6abe14',
-    'tests/test_evolution.py': '778aeac7d73291bbeaaad3cb2ad2905d6a4e93a723a42378daa080222e7c57db',
-    'src/unrest_harness/workspaces.py': '9359e8bb14e68531a487aa8fbeb0eeb91cab444a1e24bbf02c0f03462e205f92',
-    'src/unrest_harness/evolution.py': '4f5547d803449eab5ce969688533afbf8dd099a117888d524187dc851d39b79d',
-    'src/unrest_harness/accepted_point_authority.py': '4df305ef4be4c176d77e3faddfdb625193599bc9152c9cf470a763f3c58a9c80',
-}
 CASES = (
     'tests/test_workspaces.py::test_exact_clean_base_scope_and_t1_label_survive_restart',
     'tests/test_workspaces.py::test_two_leases_use_distinct_worktrees_and_scope_escape_fails',

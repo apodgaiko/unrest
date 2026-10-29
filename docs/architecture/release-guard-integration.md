@@ -531,3 +531,8 @@ entry. Each prior pair must be actually reaped before the next node. MCP retains
 its exact inherited pipe and local port; only the source-pinned mock script may
 act as ACP. Mock exit0 and MCP exit0/authorized TERM/KILL retain explicit
 completion checks. No native provider acceptance or live benchmark follows.
+
+Unused digest tables left by retired focused-driver validation are removed from
+controlled_cases/git_sites and unused startup/custody constants. They supplied
+no runtime check. Active source-unit pins, generated backend postimage pins,
+native/dependency identities and original ordered case maps remain enforced.
