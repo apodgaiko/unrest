@@ -50,11 +50,6 @@ def module_mode(case):
     return {'work': 'worker', 'validate': 'validator', 'terminal_reviewer': 'terminal-reviewer'}[selection(case)[2]]
 
 
-def child_count(case):
-    recorded, _, role = selection(case)
-    return (5 if role == 'work' else 4) if recorded else 2
-
-
 def git_completion(case):
     recorded, _, role = selection(case)
     return recorded and role == 'work'

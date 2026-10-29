@@ -34,12 +34,6 @@ class Case:
                 or self.name.startswith('test_original_limits_refuse_before_grant_or_send['))
 
     @property
-    def minimum_children(self):
-        optional = (self.name == 'test_actual_launch_lifetime_and_interruptions[near]'
-                    or self.name.startswith('test_original_limits_refuse_before_grant_or_send[False-'))
-        return 0 if optional else self.children
-
-    @property
     def nodeid(self):
         return TEST + '::' + self.name
 

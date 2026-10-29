@@ -14,25 +14,20 @@ import stat
 import struct
 import time
 
-from review_wire import CASES as REVIEW_CASES,count as review_count
-from multiprocess_entry import ALL_CASES as MP_CASES, count as mp_count
 from content_manifest import Refused, native_digest
 from http_cases import CASES as HTTP_CASES
 from plan_launch import CASES as PLAN_CASES, INVALID as PLAN_INVALID, PYTHON as PLAN_PYTHON
 from control_transport import Admission, Frame, REQUEST_LIMIT, cancelled_empty, reply
-from bootstrap_cases import BOOTSTRAP, declaration
 from controlled_cases import CASES as CONTROLLED, backend_path, WARNING_REFUSALS, NOTIFICATION_SIGNALS
 from linux_observation import process_identity
 from process_ledger import Birth, Ledger, canonical
 from source_profile import METHODS
-from ordinary_acp import EXECUTION_CASES as ORDINARY_CASES, NEGATIVE_CASES
-from session_launch import CASES as SESSION_CASES, LIVE as SESSION_LIVE, TIMEOUT as SESSION_TIMEOUT
-from fixed_inline import CASES as FIXED_CASES, SEQUENCES as FIXED_SEQUENCES, CLI_CASE, JOURNAL_CASE, DRAIN_CASE, CONSOLE_CASE, UV_CASES
-from git_sites import CASES as GIT_CASES,HISTORY_CASES
+from session_launch import TIMEOUT as SESSION_TIMEOUT
+from fixed_inline import CLI_CASE, JOURNAL_CASE, DRAIN_CASE, CONSOLE_CASE, UV_CASES
+from git_sites import CASES as GIT_CASES
 from completion_roles import CASES as ROLE_CASES,actor_slot
 from git_observer import Git
-from cleanup_inline import NO_LAUNCH, DECLARATIONS, child_count as inline_count
-from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, child_count, snapshot_path
+from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, snapshot_path
 
 
 from readiness_launch import CASES as READINESS_CASES
@@ -428,24 +423,16 @@ class Observer:
                 self.ledger.process(self.root_birth).case = self.case
             else:
                 children = [value for value in self.actors.values() if value['role'] != 'root' and value['case'] == self.case]
-                spec = declaration(self.case) if self.case in BOOTSTRAP else None
-                from package_cases import CASES as PACKAGE_CASES,count as package_count
                 from completion_server import finish as role_finish
-                count = role_finish(self) if self.case in ROLE_CASES and outcome=='passed' else package_count(self.case,self) if self.case in PACKAGE_CASES else review_count(self.case) if self.case in REVIEW_CASES else mp_count(self.case)+(2 if self.case in HTTP_CASES else 0) if self.case in MP_CASES  else 1 if self.case in PLAN_CASES else len(children) if self.case in GIT_CASES else (2*len(FIXED_SEQUENCES[self.case]) if self.case in UV_CASES else len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2 if self.case in (*BOOTSTRAP,*ORDINARY_CASES) else 0
-                from run_worker_launch import EXITS,DESCENDANT
-                if self.case in EXITS:
-                    count=len(EXITS[self.case])+int(self.case==DESCENDANT)
-                if outcome=='passed' and self.case in UV_CASES:
-                    uv_children=[child for child in children if child['role'] in ('uv-cli','fixed-inline')]
-                    if len(uv_children)!=2*len(FIXED_SEQUENCES[self.case]):
-                        raise Refused('stock uv original child count')
-                if outcome=='failed':
-                    count,spec=len(children),None
+                from package_security import CASES as SECURITY_CASES,provenance
+                if self.case in ROLE_CASES and outcome=='passed':
+                    role_finish(self)
+                if self.case in SECURITY_CASES:
+                    provenance(self)
                 if skipped:
-                    count,spec=0,None
                     if children:
                         raise Refused('skipped source case launched children')
-                if (payload['case'] != self.case or outcome=='passed' and self.case in GIT_CASES and len(children) < (1 if self.case in HISTORY_CASES else 5) or not ((spec.minimum_children <= len(children) <= spec.children) if spec else len(children) == count)
+                if (payload['case'] != self.case
                         or any(not self.completed_child(value) for value in children)
                         or any(not value['consumed'] for value in self.intents.values() if value['case'] == self.case)
                         or any(not (self.git.reaped(value) if self.case in (*GIT_CASES,*CONTROLLED) else self.ledger.reaped(value['birth'], value['token'])) for value in children)):

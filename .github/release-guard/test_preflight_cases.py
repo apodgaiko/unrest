@@ -79,7 +79,7 @@ def test_no_effect_endpoint_and_signal_requests_are_sticky(event, arguments):
 
 
 @pytest.mark.parametrize("with_child", [False, True])
-def test_no_effect_host_requires_zero_children_not_observed_child_count(with_child):
+def test_case_finish_requires_actual_completion_of_every_observed_child(with_child):
     from source_observer import Observer
     from process_ledger import Birth
 
@@ -98,6 +98,7 @@ def test_no_effect_host_requires_zero_children_not_observed_child_count(with_chi
     observer.completed = []
     if with_child:
         observer.actors[101] = {"role": "foreign", "case": case}
+        observer.completed_child=lambda child:False
         with pytest.raises(Refused, match="actual cleanup incomplete"):
             observer.dispatch(actor, {"kind": "case-finish", "payload": {"case": case}})
         assert not observer.completed
@@ -106,3 +107,28 @@ def test_no_effect_host_requires_zero_children_not_observed_child_count(with_chi
             "ok": True
         }
         assert observer.completed == [case]
+
+
+@pytest.mark.parametrize('failure',('unconsumed-intent','incomplete-child','missing-parent-wait','skipped-child'))
+def test_case_finish_never_substitutes_outcome_for_actual_cleanup(failure):
+    from types import SimpleNamespace
+    from source_observer import Observer
+    from process_ledger import Birth
+    observer=object.__new__(Observer)
+    observer.full,observer.outcomes=True,[]
+    root=Birth(100,100,99,1,'boot',20000)
+    case=next(iter(NO_EFFECT))
+    actor={'birth':root,'role':'root','case':case}
+    observer.root_birth=root
+    observer.finished=False
+    observer.case=case
+    observer.actors={100:actor,101:{'role':'fixed-inline','case':case,'birth':object(),'token':'child'}}
+    observer.intents={1:{'case':case,'consumed':failure!='unconsumed-intent'}}
+    observer.completed=[]
+    observer.completed_child=lambda child:failure!='incomplete-child'
+    observer.ledger=SimpleNamespace(reaped=lambda birth,token:failure!='missing-parent-wait')
+    outcome='skipped' if failure=='skipped-child' else 'passed'
+    phases={'setup':outcome,'teardown':'passed'} if outcome=='skipped' else dict.fromkeys(('setup','call','teardown'),'passed')
+    with pytest.raises(Refused):
+        observer.dispatch(actor,{'kind':'case-finish','payload':{'case':case,'outcome':outcome,'phases':phases}})
+    assert not observer.completed

@@ -29,9 +29,3 @@ PINS={'tests/contracts/conftest.py': '397631196d19b0060ab5042601888f502982e227c9
 def literal(checkout,path,name,variable):
     return source_literal(source_unit(checkout,path,PINS[path],() if name is None else (name,)),variable)
 
-
-def count(case,host=None):
-    if case in SECURITY_CASES:
-        from package_security import count as security_count
-        return security_count(host)
-    return 2 if case==POSITIVE else 1 if case in (*MUTATIONS,*NEGATIVE,FIRST,LIFECYCLE) else 0

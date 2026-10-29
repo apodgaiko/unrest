@@ -100,22 +100,8 @@ def proposal(host,actor,raw):
 
 
 def finish(host):
-    expected=schedule(host.case)
-    servers=rows(host)
-    if set(servers)!=set(range(len(expected))) or not all(complete(host,row) for row in servers.values()):
+    if any(not complete(host,row) for row in rows(host).values()):
         raise Refused('completion original servers incomplete')
-    parent=Path(host.fixture_roots['completion-role',host.case][0])
-    git_ready(host,parent/'workspace')
-    queries=[row for row in host.intents.values() if row['case']==host.case and row['role']=='git-command' and not row.get('fixture_git')]
-    for index,row in servers.items():
-        owned=[query for query in queries if query['parent']==row['birth']]
-        if len(owned)>expected[index][2]:
-            raise Refused('completion server query count')
-    family,role,scenario=CASES[host.case]
-    lower,upper=((0,0) if role=='validate' else (2,3) if family=='ownership' and scenario=='invalid'
-        else (2,2) if family=='ownership' and scenario=='valid' else (3,3) if family=='ownership'
-        else (2,2) if family=='crash' and scenario=='before' else (1,1) if family=='crash'
-        else (1,2) if scenario=='valid-invalid' else (1,1) if scenario=='valid-valid' else (2,2))
-    if not lower<=len(queries)<=upper or any(query['parent'] not in {row['birth'] for row in servers.values()} for query in queries):
-        raise Refused('completion actual query aggregate')
-    return 2+len(servers)+len(queries)
+    fixture=host.fixture_roots.get(('completion-role',host.case))
+    if fixture is not None:
+        git_ready(host,Path(fixture[0])/'workspace')

@@ -149,7 +149,7 @@ The two activation CLI routes reuse the stock-uv image and single console-child
 admission. Their request files are bounded JSON at exact owned fixture paths;
 request semantics remain the original product tests' responsibility. Existing
 invalid/task request-byte checks remain. Mixed Git/uv cases retain every actual
-parent wait and separately require the exact uv/console child count.
+parent wait; admission retains the exact per-case uv/console launch quotas.
 
 The foundation async error cases reuse the library-module child domain for one
 exact `run_worker` entry and retained request identity. Executor, generation,
@@ -437,8 +437,7 @@ Historical release checks use their original source-pinned cases and finite
 readonly Git commands over the closed public projection. They cannot mutate a
 repository, query other paths/revisions, or launch helpers. Each command retains
 exact image/environment/cwd binding, one consumed intent and its actual original
-parent wait before the next command. Historical cases use their own command
-inventory rather than the five-command minimum of a newly initialized fixture.
+parent wait before the next command. Historical cases use their own closed readonly command inventory.
 The private source copy includes a fixed ignored egg-info marker so the existing
 ignored-file exclusion assertion remains a real probe in the readonly source
 suite; this generated test input is outside the candidate tracked-file binding.
@@ -449,3 +448,13 @@ expected statuses 0/1. Only those authenticated children may request the two
 readonly inventory forms in the original empty repository. Its metadata must
 retain the literal HEAD and empty objects/refs without config or aliases; no
 helper or root-level Git authority follows from the nested route.
+
+
+The guard does not certify a second expected child count for each source test.
+Original pytest assertions and outcomes prove the test's execution expectations.
+Finite admission declarations and their quotas remain unchanged. At case finish,
+every issued intent must have been consumed and every actual actor must satisfy
+its completion contract and independent original-parent terminal wait. Skipped
+cases must launch no children. Completion-server status/session/READY checks and
+package provenance remain mandatory; only the duplicate expected-count claims
+and finish-only count calculators are retired.

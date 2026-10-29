@@ -176,8 +176,3 @@ def proposal(host,actor,raw):
         maximum=limit+1,fields={'security_status':status,'security_operation':'matrix' if case==MATRIX else 'provider',
             'credential_snapshot':sealed,'merged_output':True})
 
-
-def count(host):
-    case=host.case
-    provenance(host)
-    return (20 if case==MATRIX else 1)+int(any(row['case']==case and row.get('security_operation')=='provenance' for row in host.intents.values()))

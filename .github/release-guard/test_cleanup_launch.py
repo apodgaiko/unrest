@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from cleanup_launch import ALL_CASES, RECORDED, SAVED, CREDENTIAL, CASES, OFFLINE, selection, child_count, module_mode, git_completion, PINS, SCRIPT, environment, expected, scenario, snapshot_path, translated
+from cleanup_launch import ALL_CASES, RECORDED, SAVED, CREDENTIAL, CASES, OFFLINE, selection, module_mode, git_completion, PINS, SCRIPT, environment, expected, scenario, snapshot_path, translated
 import cleanup_launch
 from content_manifest import Refused
 
@@ -119,7 +119,6 @@ def test_cleanup_declaration_preserves_every_original_role_and_payload(tmp_path,
     else:
         assert body == {'role': role, 'no_handoff': True}
     assert module_mode(case) == {'work': 'worker', 'validate': 'validator', 'terminal_reviewer': 'terminal-reviewer'}[role]
-    assert child_count(case) == ((5 if role == 'work' else 4) if recorded else 2)
     assert git_completion(case) is (recorded and role == 'work')
     env = environment(tmp_path, {'HOME': '/home', 'TMPDIR': '/tmp', 'PATH': '/usr/bin:/bin'}, agent=False, case=case)
     if role == 'terminal_reviewer':
@@ -203,7 +202,7 @@ def test_saved_review_scenario_and_credential_declaration(case, tmp_path, monkey
     monkeypatch.syspath_prepend(str(next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())))
     from tests.test_acp_cleanup import malformed
     _, variant, role = selection(case)
-    assert role == 'terminal_reviewer' and child_count(case) == 2 and not git_completion(case)
+    assert role == 'terminal_reviewer' and not git_completion(case)
     assert json.loads(scenario(case, tmp_path)) == {'role': role, 'progress': True,
         'receipt': str(tmp_path / 'receipt'), 'raw': malformed('array_id') if variant == 'transport' else None}
     root = {'HOME': '/home', 'TMPDIR': '/tmp', 'PATH': '/usr/bin:/bin'}
