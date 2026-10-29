@@ -10,9 +10,9 @@ from test_process_ledger import PINS, SEAL, setup, terminal
 
 def ready(ledger, birth, *, body=True):
     process = ledger.process(birth)
-    ledger.control(birth, process.token, process.generation, 0, 'core-ready', {'pins': PINS})
+    ledger.ready(birth, 'core-ready', {'pins': PINS})
     if body:
-        ledger.control(birth, process.token, process.generation, 1, 'body-ready', {'seal': SEAL})
+        ledger.ready(birth, 'body-ready', {'seal': SEAL})
     return Owner(birth, process.token, process.generation)
 
 

@@ -119,7 +119,7 @@ class Observer:
             ('source', source['source_sha256']), ('support', source['support_sha256']),
             ('runtime', source['runtime_sha256']), ('dependency', source['dependency_sha256']))))
         actor = {'birth': Birth.read(actual), 'role': role, 'case': case, 'token': token,
-                 'profile': source, 'pins': pins, 'sequence': 0, 'returned': role == 'root', 'body_ready': False, 'signals': set()}
+                 'profile': source, 'pins': pins, 'returned': role == 'root', 'body_ready': False, 'signals': set()}
         self.actors[pid] = actor
         command_class = {'root': 'bootstrap-root', 'acp': 'controlled-acp',
                          'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline','plan-python':'plan-python','mp-child':'mp-child','mp-tracker':'mp-tracker','review-wire':'review-wire','pytest-regression':'pytest-regression','desktop':'desktop',**dict.fromkeys(('archive-checker','archive-leaf','archive-installed'),'archive-python')}[role]
@@ -263,10 +263,6 @@ class Observer:
             self.profile(pid, intent['role'], intent['case'], intent.get('python_vector',vector), environment, cwd, intent['token'], intent.get('inherited', ()))
         return True
 
-    def actor_control(self, actor, kind, payload):
-        self.ledger.control(actor['birth'], actor['token'], 1, actor['sequence'], kind, payload)
-        actor['sequence'] += 1
-
     def root_only(self, actor):
         if actor['birth'] != self.root_birth or actor['role'] != 'root' or self.finished:
             raise Refused('source root-only operation')
@@ -399,14 +395,14 @@ class Observer:
             shape(payload, ('pins',))
             if payload['pins'] != [list(pair) for pair in actor['pins']]:
                 raise Refused('source exact READY pins')
-            self.actor_control(actor, kind, {'pins': actor['pins']})
+            self.ledger.ready(actor['birth'], kind, {'pins': actor['pins']})
             if actor['role']=='mp-child':
                 from multiprocess_pipe import retained
                 for (birth,_),row in self.mp_pipes.items():
                     if birth==actor['birth']:
                         retained(self,actor,row,body=False)
         elif kind == 'body-ready':
-            self.actor_control(actor, kind, payload)
+            self.ledger.ready(actor['birth'], kind, payload)
             actor['body_ready'] = True
         elif kind == 'collection-finish':
             self.root_only(actor)

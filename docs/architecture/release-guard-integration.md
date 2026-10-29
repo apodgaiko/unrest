@@ -396,3 +396,12 @@ every terminal pidfd until suite completion exhausted RLIMIT_NOFILE on sequentia
 Git fixtures. A bounded native control now runs 160 sequential children under a
 96-descriptor limit, checks bounded live handles and every original numeric wait.
 Failure cleanup still closes all remaining handles and never infers missing waits.
+
+
+READY has one protocol. The transport authenticates the current birth, token,
+registration generation and unique request ID; the ledger transitions registered
+to core-ready to body-ready under exact pins/seal, live-process and session checks.
+An observer-generated second sequence/epoch protocol is removed. Kernel execution
+generations remain independently bounded and stale or out-of-order READY refuses.
+Historical body readiness remains available after exit for completion checks;
+actual terminal and original-parent wait joins are unchanged.

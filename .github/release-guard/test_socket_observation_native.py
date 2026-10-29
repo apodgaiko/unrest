@@ -83,8 +83,8 @@ def unix_authority():
     ledger.kernel(0, {'kind': 'kernel_root', 'identity': actual})
     pins, seal = (('runtime', 'a' * 64),), 'b' * 64
     ledger.register(birth, 'owner', pins, seal, case='native-unix', command_class='control')
-    ledger.control(birth, 'owner', 0, 0, 'core-ready', {'pins': pins})
-    ledger.control(birth, 'owner', 0, 1, 'body-ready', {'seal': seal})
+    ledger.ready(birth, 'core-ready', {'pins': pins})
+    ledger.ready(birth, 'body-ready', {'seal': seal})
     return UnixPairs(Endpoints(ledger)), Owner(birth, 'owner', 0)
 
 

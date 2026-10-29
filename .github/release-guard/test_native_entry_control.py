@@ -156,7 +156,7 @@ def worker(case, binding, output):
                             if payload != {'pins': [list(pair) for pair in pins]}:
                                 raise ValueError('native actual READY pins')
                             payload = {'pins': pins}
-                        ledger.control(birth, token, 1, next_control, request['kind'], payload)
+                        ledger.ready(birth, request['kind'], payload)
                         next_control += 1
                         answer = {'ok': True}
                     except (ValueError, KeyError):

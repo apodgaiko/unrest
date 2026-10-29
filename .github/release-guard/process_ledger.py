@@ -17,8 +17,6 @@ from content_manifest import Refused
 MAX_PROCESSES = 20000
 MAX_EXEC_EPOCHS = 128
 MAX_WAITID_ROWS = 128
-# Two readiness records per independently registered execution epoch.
-MAX_CONTROL_ROWS = 2
 
 
 def fail_closed(method):
@@ -83,12 +81,6 @@ class Birth:
 
 
 @dataclass
-class Epoch:
-    token: str
-    sequence: int = 0
-
-
-@dataclass
 class Process:
     birth: Birth
     identity: dict
@@ -102,13 +94,11 @@ class Process:
     session_complete: bool = False
     token: str | None = None
     life_token: str | None = None
-    epochs: dict[int, Epoch] = field(default_factory=dict)
     pins: tuple[tuple[str, str], ...] = ()
     expected_seal: str | None = None
     generation: int = 0
     registered_generation: int = 0
     stage: str = 'born'
-    control_sequence: int = 0
     exit: tuple[int, int] | None = None
     terminal: tuple[int, int, int] | None = None
     parent_wait: tuple[int, int, int, int] | None = None
@@ -122,7 +112,6 @@ class Ledger:
         self.processes: dict[Birth, Process] = {}
         self.current: dict[int, Birth] = {}
         self.children: dict[Birth, list[Birth]] = {}
-        self.tokens: set[str] = set()
         self.by_token: dict[str, Birth] = {}
         self.pending_waits: dict[tuple[int, int, int, int], list[Birth]] = {}
         self.poison: list[str] = []
@@ -141,40 +130,26 @@ class Ledger:
         token = text(token)
         if expected_generation is None:
             expected_generation = process.generation
-        if (type(expected_generation) is not int
-                or expected_generation not in (process.generation, process.generation + 1)
-                or type(new_session) is not bool):
+        if expected_generation not in (process.generation, process.generation + 1):
             raise Refused('ledger registration generation')
-        if (token in self.tokens or process.stage not in ('born', 'exec-unregistered')
-                or type(pins) is not tuple or not 0 < len(pins) <= 128
-                or any(type(pair) is not tuple or len(pair) != 2 for pair in pins)):
+        if not 0<=expected_generation<MAX_EXEC_EPOCHS:
+            raise Refused('ledger unbounded exec epoch')
+        if token in self.by_token or process.stage not in ('born', 'exec-unregistered'):
             raise Refused('ledger registration')
-        pins = tuple(sorted((text(key), text(value)) for key, value in pins))
-        if len({key for key, _ in pins}) != len(pins):
-            raise Refused('ledger duplicate pin')
-        self.tokens.add(token)
+        pins = tuple(sorted(pins))
         self.by_token[token] = birth
-        process.token, process.pins, process.expected_seal = token, pins, text(seal)
+        process.token, process.pins, process.expected_seal = token, pins, seal
         if process.life_token is None:
             process.life_token = token
-        if expected_generation in process.epochs or len(process.epochs) >= MAX_EXEC_EPOCHS:
-            raise Refused('ledger duplicate or unbounded exec epoch')
-        process.epochs[expected_generation] = Epoch(token)
         process.registered_generation = expected_generation
-        process.case, process.command_class = text(case), text(command_class)
+        process.case, process.command_class = case, command_class
         process.new_session = new_session
-        process.stage, process.control_sequence = 'registered', 0
+        process.stage = 'registered'
 
     @fail_closed
-    def control(self, birth: Birth, token: str, generation: int, sequence: int,
-                kind: str, payload: dict) -> None:
+    def ready(self, birth: Birth, kind: str, payload: dict) -> None:
         process = self.process(birth)
-        epoch = process.epochs.get(generation) if type(generation) is int else None
-        if (epoch is None or type(token) is not str or token != epoch.token
-                or type(sequence) is not int or sequence != epoch.sequence
-                or sequence >= MAX_CONTROL_ROWS or type(payload) is not dict):
-            raise Refused('ledger control epoch or sequence')
-        if generation != process.generation or process.registered_generation != generation:
+        if process.registered_generation != process.generation:
             raise Refused('stale readiness epoch')
         if kind in ('core-ready', 'body-ready') and (process.exit is not None or process.terminal is not None):
             raise Refused('readiness after terminal')
@@ -191,9 +166,6 @@ class Ledger:
             process.stage = 'body-ready'
         else:
             raise Refused('ledger control operation')
-        epoch.sequence += 1
-        if generation == process.generation:
-            process.control_sequence = epoch.sequence
 
     @fail_closed
     def wait_entry(self, caller: Birth, requested: int) -> None:

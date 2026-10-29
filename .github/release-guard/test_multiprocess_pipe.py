@@ -217,7 +217,7 @@ def test_actual_core_ready_dispatch_precedes_independent_member_recensus(monkeyp
     actor = {"birth": child, "pins": (), "role": "mp-child"}
     host = SimpleNamespace(
         mp_pipes={(child, 11): [11, 1, 50, 2, 900, 60, 1]},
-        actor_control=lambda *args: stage.append("core-ready"),
+        ledger=SimpleNamespace(ready=lambda *args: stage.append("core-ready")),
     )
 
     def retained(host, actor, row, *, body):
