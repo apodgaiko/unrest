@@ -9,7 +9,7 @@ import hashlib
 from content_manifest import Refused
 from plan_launch import CASES as PLANS, expected as plan_expected
 from session_launch import CASES as SESSIONS, expected as session_expected
-from fixed_inline import CASES as FIXED, SEQUENCES, NESTED_CASES, STORAGE_CASES, INSPECTION_CASES, MEASUREMENT_CASE, COMPLETION_CASES, DRAIN_CASE, CONSOLE_CASE, UV_CASES, expected as fixed_expected, STDIO, startup_expected, translated as fixed_translated
+from fixed_inline import CASES as FIXED, SEQUENCES, NESTED_CASES, STORAGE_CASES, INSPECTION_CASES, MEASUREMENT_CASE, COMPLETION_CASES, DRAIN_CASE, CONSOLE_CASE, UV_CASES, READINESS_CASES, expected as fixed_expected, STDIO, startup_expected, translated as fixed_translated
 from ordinary_acp import CASES as ORDINARY, expected as ordinary_expected
 from cleanup_launch import EXECUTION_CASES as CLEANUP, expected as cleanup_expected, base_path, translated as cleanup_vector
 from cleanup_inline import DECLARATIONS, INFLIGHT, expected as inline_expected
@@ -46,6 +46,9 @@ def proposal(host, actor, raw):
     if case in ROLE_CASES:
         from completion_server import proposal as role_proposal
         return role_proposal(host,actor,raw)
+    if case in READINESS_CASES:
+        from readiness_launch import proposal as readiness_proposal
+        return readiness_proposal(host,actor,raw)
     if case in UV_CASES:
         from uv_cli import proposal as uv_proposal
         return uv_proposal(host,actor,raw)

@@ -12,6 +12,16 @@ import package_security as security
 ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
 
 
+def test_focused_security_selection_retains_every_crosswalk_reference():
+    from package_cases import GROUPS
+    unit=source_unit(ROOT,security.TEST,security.PIN,())
+    rows=ast.literal_eval(next(node.value for node in unit.body if isinstance(node,ast.Assign)
+        and any(isinstance(target,ast.Name) and target.id=='SCENARIOS' for target in node.targets)))
+    references=tuple(sorted({row[2] for row in rows if not row[2].startswith('local::')}))
+    assert security.REFERENCES==references
+    assert GROUPS['security3']==(*references,*security.CASES)
+
+
 def test_matrix_builder_matches_every_original_operand_without_executing_a_child(tmp_path):
     unit=source_unit(ROOT,security.TEST,security.PIN,('_run_cli_matrix',))
     captured=[]

@@ -16,6 +16,8 @@ from fixed_inline import NETWORK, NETWORK_CASES, METHOD_CASES
 from speed_inline import CASES as SPEED_CASES, CLI_CASE
 from nested_pytest import CASE as NESTED_CASE
 
+from readiness_launch import CASES as READINESS_CASES,READY
+
 TYPE = type
 
 
@@ -57,7 +59,7 @@ class Hooks:
                     raise Refused('source socket adoption generation')
                 self.local.adoption=None
                 return True
-            isolated = self.policy.profile['role']=='fixed-inline' and self.policy.profile['case'] in NETWORK_CASES
+            isolated = self.policy.profile['role']=='fixed-inline' and self.policy.profile['case'] in (*NETWORK_CASES,READY)
             if (len(args) != 4 or type(args[0]) not in (self.socket_type, self.base_type)
                     or any(type(value) is not int for value in args[1:])
                     or args[1] not in ((socket.AF_INET, socket.AF_INET6, socket.AF_UNIX) if isolated else (socket.AF_INET, socket.AF_UNIX))
@@ -87,7 +89,11 @@ class Hooks:
         descriptor = self.descriptor(stream)
         role = self.policy.profile['role']
         if name == 'bind':
-            if role == 'mcp':
+            if role=='fixed-inline' and self.policy.profile['case']==READY:
+                if kwargs or args!=(('127.0.0.1',0),):
+                    self.policy.refuse('readiness exact original ephemeral listener')
+                source={'tag':'readiness','nonce':None}
+            elif role == 'mcp':
                 if kwargs or args != (('127.0.0.1', int(self.policy.profile['argv'][12])),):
                     self.policy.refuse('source unknown module listener')
                 source = {'tag': 'mcp', 'nonce': None}
@@ -98,7 +104,7 @@ class Hooks:
             self.rpc('bind', {'fd': descriptor, **source})
             self.local.socket = 'socket.bind', stream, args[0]
         elif name in ('connect', 'connect_ex'):
-            cleanup = self.policy.case in (*MCP_CASES, *STARTUP) or self.policy.profile['case'] in (*MCP_CASES, *STARTUP)
+            cleanup = self.policy.case in (*MCP_CASES,*STARTUP,*READINESS_CASES) or self.policy.profile['case'] in (*MCP_CASES,*STARTUP,*READINESS_CASES)
             if ((role not in ('root', 'cleanup-acp') if cleanup else role != 'acp' and not (role == 'root' and self.policy.case in ROOT_HTTP) and not (controlled_limits(self.policy.profile['case'])[1] > 0 if self.policy.profile['case'] in CONTROLLED else declaration(self.policy.profile['case']).broker_http)) or kwargs or len(args) != 1 or type(args[0]) is not tuple
                     or len(args[0]) != 2 or type(args[0][0]) is not str or args[0][0] != '127.0.0.1'
                     or type(args[0][1]) is not int or not 0 < args[0][1] <= 65535):
@@ -107,7 +113,7 @@ class Hooks:
             answer = self.rpc('connect', {'fd': descriptor, 'address': list(args[0]),
                 **({'context':context} if context is not None else {})})
             probe = answer.get('probe') is True
-            if probe and (role != 'root' or self.policy.case not in STARTUP):
+            if probe and (role != 'root' or self.policy.case not in (*STARTUP,*READINESS_CASES)):
                 self.policy.refuse('source negative probe context')
             self.local.socket = 'socket.connect', stream, args[0]
             try:
@@ -119,6 +125,8 @@ class Hooks:
             finally:
                 self.local.socket = None
             if probe:
+                if answer.get('readiness_only') is True and self.policy.case==READY and result in (None,0):
+                    return result
                 if type(result) is not int or result not in (errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK, errno.ECONNREFUSED):
                     self.policy.refuse('source negative probe unexpectedly connected')
                 return result
@@ -139,7 +147,7 @@ class Hooks:
                             or len(args) == 2 and (type(args[1]) is not int or args[1] < 0))):
                     self.policy.refuse('source EOF-only read flags or buffer')
         elif name == 'listen':
-            if role not in ('root', 'mcp') or kwargs or len(args) > 1 or args and (type(args[0]) is not int or not 0 <= args[0] <= 2048):
+            if (role not in ('root','mcp') and not (role=='fixed-inline' and self.policy.profile['case']==READY)) or kwargs or len(args) > 1 or args and (type(args[0]) is not int or not 0 <= args[0] <= 2048):
                 self.policy.refuse('source listener operation')
             self.rpc('listen', {'fd': descriptor, 'stage': 'before'})
         else:

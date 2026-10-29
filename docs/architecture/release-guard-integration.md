@@ -626,3 +626,16 @@ fixture directory leaves it pending: matrix work requires the probe's real body
 READY, exit0 and original-parent wait. Original JSON/module/cwd provenance assertions
 remain in the fixture. This coverage grants no provider or descendant launch and
 does not substitute for release archive or installed-lifecycle certification.
+
+Focused security execution includes every reference selected by the original
+provider/security contract module, before its three local installed/copy cases.
+The session-level crosswalk binder remains enabled: passing local leaves alone
+cannot turn an incomplete reference selection into a passing session.
+
+The four original ACP readiness cases keep their literal child programs, original
+deadlines, diagnostic redaction and final drain/cleanup assertions. The ready
+child can create one exact ephemeral loopback listener; its probe must match the
+actual body-ready owner and retained descriptor. Negative probes retain port1.
+One readiness connection grants neither payload nor accepted-peer authority.
+All child statuses and original-parent numeric waits remain mandatory; an early
+exit must retain23 and signal cleanup must retain its actually authorized status.

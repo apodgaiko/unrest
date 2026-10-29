@@ -15,6 +15,24 @@ OPTIONS=('--agent','--orchestrator-provider','--worker-provider','--validator-pr
     '--worker-reasoning-effort','--validator-reasoning-effort','--terminal-reviewer-reasoning-effort','--scope')
 SENTINEL='known-installed-choice-sentinel-8a17'
 
+REFERENCES=(
+    'tests/test_acp_runner.py::test_terminal_review_timeout_cleans_acp_and_mcp_children',
+    'tests/test_capability_policy.py::test_ambient_credential_inventory_is_provider_neutral_and_deterministic[0]',
+    'tests/test_capability_policy.py::test_codex_structured_config_drops_exact_aliases_and_preserves_config',
+    'tests/test_capability_policy.py::test_credential_redaction_is_boundary_aware_and_deterministic',
+    'tests/test_capability_policy.py::test_cyclic_containers_have_stable_value_free_boundary_diagnostics',
+    'tests/test_capability_policy.py::test_filesystem_callbacks_enforce_absolute_traversal_symlink_and_read_only',
+    'tests/test_capability_policy.py::test_only_explicit_unsafe_profile_emits_unrestricted_provider_settings',
+    'tests/test_capability_policy.py::test_progress_redaction_spans_chunks_callbacks_and_message_ids',
+    'tests/test_capability_policy.py::test_raw_acp_terminal_protocol_redacts_credential_values',
+    'tests/test_capability_policy.py::test_role_environment_is_minimal_deterministic_and_credential_named',
+    'tests/test_capability_policy.py::test_safe_codex_subprocess_settings_override_ambient_unrestricted',
+    'tests/test_capability_policy.py::test_terminal_callbacks_enforce_process_cwd_and_environment',
+    'tests/test_capability_policy.py::test_unsupported_profile_has_stable_provider_role_version_error',
+    'tests/test_lean_provider_security_runtime.py::test_supported_provider_set_is_claude_and_codex_only',
+    'tests/test_server.py::test_redacted_mcp_handoffs_survive_restart_and_mirroring',
+)
+
 
 def matrix_program(checkout,bootstrap,trap):
     node=assignment(source_unit(checkout,TEST,PIN,('_run_cli_matrix',)),'script')

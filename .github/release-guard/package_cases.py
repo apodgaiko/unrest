@@ -2,7 +2,7 @@
 
 from launch_policy import source_unit,literal as source_literal
 
-from package_security import CASES as SECURITY_CASES
+from package_security import CASES as SECURITY_CASES,REFERENCES as SECURITY_REFERENCES
 
 TEST='tests/test_distribution_check.py'
 POSITIVE=TEST+'::test_checker_builds_and_executes_15_cases_with_extracted_provenance'
@@ -23,7 +23,7 @@ LIFECYCLE=CONTRACT+'::test_reference_contract_scenario[VAL-PACKAGE-003__installe
 REFERENCES=('tests/test_capability_policy.py::test_cli_safe_init_round_trips_policy_and_never_persists_secrets',
     'tests/test_server.py::test_redacted_mcp_handoffs_survive_restart_and_mirroring')
 CASES=(*DISTRIBUTION,FIRST,LIFECYCLE,*SECURITY_CASES)
-GROUPS={'security3':SECURITY_CASES,'distribution17':DISTRIBUTION,'package-contracts4':(*REFERENCES,FIRST,LIFECYCLE)}
+GROUPS={'security3':(*SECURITY_REFERENCES,*SECURITY_CASES),'distribution17':DISTRIBUTION,'package-contracts4':(*REFERENCES,FIRST,LIFECYCLE)}
 PINS={'tests/contracts/conftest.py': '397631196d19b0060ab5042601888f502982e227c9c6feb3448e26f1b4006567', 'tests/contracts/test_lean_package.py': '8d4f3fe06f1aadb67e04c20fbcbf1c1749a4c4fe660ab48aaa8d65686bf2b8de', 'tests/test_distribution_check.py': '4f71d34b55bb0f1b94b9cba976246a204301f1e0e821e5f7928924b351b61232', 'tools/check_distribution.py': '384f0c545be75553d389df4dfbcdd08c2f1249f61131f5cf7a19e538c1b56e61'}
 
 

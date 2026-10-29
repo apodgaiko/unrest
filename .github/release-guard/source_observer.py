@@ -41,6 +41,8 @@ from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, INFLIGHT, child_cou
 from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, GROUPS as CLEANUP_GROUPS, child_count, SCRIPT, snapshot_path
 
 
+from readiness_launch import CASES as READINESS_CASES,READY as READINESS_READY
+
 PARK_SELF_PAIR=object()
 
 def shape(value, keys):
@@ -79,6 +81,7 @@ class Observer:
         self.eof_drains, self.eof_fds, self.interrupted_records = {}, {}, []
         self.connected_routes: dict[str, int] = {}
         self.probe_ports = {}
+        self.readiness_attempts={}
         self.fixture_roots = {}
         self.plan_records: list[dict] = []
         self.http_contexts: dict[tuple[str,int],dict] = {}
@@ -451,6 +454,9 @@ class Observer:
                   and row['case']==actor['case'] and row['role']=='fixed-inline' and row['consumed']]
             return (len(rows)==1 and terminal is not None and actor['body_ready']
                     and terminal[2]==(73 if rows[0]['fixed_operation']=='crash' else 0))
+        if actor.get('case') in READINESS_CASES:
+            from readiness_launch import completed
+            return completed(actor,terminal)
         if actor.get('case') in UV_CASES:
             return terminal is not None and terminal[2]==1 and (actor.get('kernel_admitted') is True or actor['body_ready'])
         if actor['role']=='desktop' or actor.get('case') in (DRAIN_CASE,CONSOLE_CASE):
@@ -597,6 +603,8 @@ class Observer:
                 from package_cases import CASES as PACKAGE_CASES,count as package_count
                 from completion_server import finish as role_finish
                 count = role_finish(self) if self.case in ROLE_CASES and outcome=='passed' else package_count(self.case,self) if self.case in PACKAGE_CASES else review_count(self.case) if self.case in REVIEW_CASES else mp_count(self.case)+(2 if self.case in HTTP_CASES else 0) if self.case in MP_CASES else 0 if self.case in NO_EFFECT else 1 if self.case in PLAN_CASES else (2*len(FIXED_SEQUENCES[self.case]) if self.case in UV_CASES else len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2 if self.case in (*BOOTSTRAP,*ORDINARY_CASES) else 0
+                if outcome=='passed' and self.case==READINESS_READY and self.case not in self.readiness_attempts:
+                    raise Refused('readiness original successful connect missing')
                 if outcome=='failed':
                     count,spec=len(children),None
                 if skipped:
@@ -716,7 +724,10 @@ class Observer:
                 self.listener_fds.pop(key, None)
                 self.connections.pop(key, None)
         elif kind == 'bind':
-            if actor['role'] != 'mcp':
+            if actor['role']=='fixed-inline' and self.case==READINESS_READY:
+                from readiness_launch import target
+                target(self,actor)
+            elif actor['role'] != 'mcp':
                 self.root_only(actor)
             elif actor['case'] != self.case or self.case not in MCP_CASES:
                 raise Refused('source declared module listener case')
@@ -731,7 +742,8 @@ class Observer:
                     if probe(self) is None:
                         return None
             fd = number(payload['fd'])
-            if ((actor['role'] == 'mcp' and payload['tag'] != 'mcp')
+            if ((actor['role']=='fixed-inline' and payload['tag']!='readiness')
+                    or (actor['role'] == 'mcp' and payload['tag'] != 'mcp')
                     or actor['role'] == 'root' and (payload['tag'] not in (('mcp-probe',) if self.case in (*MCP_CASES, *STARTUP) else ('broker', 'bridge', 'lifetime'))
                         or self.case not in (*BOOTSTRAP, *CONTROLLED, *MCP_CASES, *STARTUP))):
                 raise Refused('source finite root listener')
@@ -743,8 +755,8 @@ class Observer:
                 if payload['tag'] == 'bridge':
                     before_spawn(self.case,scope,'acp',[v for v in self.intents.values() if v['case'] == self.case],self.actors)
             nonce = payload['nonce']
-            if ((payload['tag'] in ('broker', 'mcp', 'mcp-probe') and nonce is not None)
-                    or payload['tag'] not in ('broker', 'mcp', 'mcp-probe') and (type(nonce) is not str or len(nonce) != 64
+            if ((payload['tag'] in ('broker','mcp','mcp-probe','readiness') and nonce is not None)
+                    or payload['tag'] not in ('broker','mcp','mcp-probe','readiness') and (type(nonce) is not str or len(nonce) != 64
                     or any(char not in '0123456789abcdef' for char in nonce))
                     or self.listener_key(self.case,payload['tag'],scope) in self.listeners):
                 raise Refused('source listener application binding')
@@ -777,7 +789,10 @@ class Observer:
             else:
                 self.probe_ports[self.case] = {'socket': observed, 'attempts': 0}
         elif kind == 'listen':
-            if actor['role'] != 'mcp':
+            if actor['role']=='fixed-inline' and self.case==READINESS_READY:
+                from readiness_launch import target
+                target(self,actor)
+            elif actor['role'] != 'mcp':
                 self.root_only(actor)
             elif actor['case'] != self.case or self.case not in MCP_CASES:
                 raise Refused('source declared module listener case')
@@ -820,6 +835,9 @@ class Observer:
             if type(address) is not list or len(address) != 2 or address[0] != '127.0.0.1':
                 raise Refused('source literal loopback connection')
             port = number(address[1], 1)
+            if self.case in READINESS_CASES:
+                from readiness_launch import connect as readiness_connect
+                return readiness_connect(self,actor,payload,port)
             if self.case in STARTUP:
                 self.root_only(actor)
                 probe = self.probe_ports.get(self.case)
