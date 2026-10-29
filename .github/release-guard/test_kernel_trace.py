@@ -333,3 +333,27 @@ open({str(marker)!r}, 'w').write('resumed')
         run_control(argv, allowed, True, validate_wait=reject)
     assert len(seen) == 1 and seen[0][1] == requested
     assert not marker.exists()
+
+
+def test_sequential_children_do_not_accumulate_terminal_pidfds():
+    import resource
+
+    body="import os\nfor _ in range(160):\n p=os.fork()\n if p==0: os._exit(0)\n actual,raw=os.waitpid(p,0)\n assert actual==p and raw==0\n"
+    argv=[sys.executable,'-I','-S','-c',body]
+    allowed=[{'path':sys.executable,'argv':argv,
+        'sha256':hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest(),
+        'environment':{},'cwd':os.getcwd()}]
+    before=resource.getrlimit(resource.RLIMIT_NOFILE)
+    peak=[]
+    try:
+        resource.setrlimit(resource.RLIMIT_NOFILE,(min(96,before[1]),before[1]))
+        child,result=run_control(argv,allowed,True,
+            on_tick=lambda observer:peak.append(len(observer.pidfds)))
+    finally:
+        resource.setrlimit(resource.RLIMIT_NOFILE,before)
+    assert result['root_parent_wait_raw']==0 and not result['poison']
+    assert max(peak)<=3
+    waits=[row for row in result['records'] if row['kind']=='original_parent_wait4']
+    assert len(waits)==160 and all(row['parent']==child and row['raw']==0 for row in waits)
+    terminals=[row for row in result['records'] if row['kind']=='tracer_terminal_wait']
+    assert len(terminals)==161 and all(row['raw']==0 for row in terminals)

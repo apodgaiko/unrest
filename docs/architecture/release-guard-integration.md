@@ -387,3 +387,12 @@ reply echo, deadline and sticky failure handling. Fixed constructor arguments
 and authenticated observer-produced replies are no longer decoded again as
 untrusted configuration in source-side wrappers. The sender still bounds its
 encoded frame; the receiver still validates every incoming request.
+
+
+The tracer holds pidfds only while each tracked birth is live. Its actual terminal
+wait records the immutable birth/status evidence before releasing that handle;
+original-parent joins still use the retained independent kernel records. Keeping
+every terminal pidfd until suite completion exhausted RLIMIT_NOFILE on sequential
+Git fixtures. A bounded native control now runs 160 sequential children under a
+96-descriptor limit, checks bounded live handles and every original numeric wait.
+Failure cleanup still closes all remaining handles and never infers missing waits.

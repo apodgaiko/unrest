@@ -361,6 +361,9 @@ class OwnedTrace:
                              'root_original_parent': pid == self.child})
         if pid == self.child:
             self.root_parent_wait = raw
+        descriptor = self.pidfds.pop(pid, None)
+        if descriptor is not None:
+            os.close(descriptor)
 
     def _vfork_return(self, child: int) -> None:
         for parent, value in list(self.vforks.items()):

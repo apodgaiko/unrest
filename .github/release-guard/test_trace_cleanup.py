@@ -17,7 +17,7 @@ def owned():
     value = object.__new__(trace.OwnedTrace)
     value.child = 11
     value.active = {11, 12}
-    value.pidfds = {11: 101, 12: 102}
+    value.pidfds = {}
     value.records, value.poison = [], []
     value.cleanup_seconds = .05
     value.root_parent_wait = None
@@ -209,6 +209,7 @@ def test_failed_kill_never_resumes_owned_body(monkeypatch):
 
 def test_cleanup_interrupt_still_closes_all_descriptors(monkeypatch):
     value = owned()
+    value.pidfds = {11: 101, 12: 102}
     value._pin = lambda pid: (_ for _ in ()).throw(RuntimeError('setup'))
     value._cleanup = lambda: (_ for _ in ()).throw(KeyboardInterrupt())
     closed = []
@@ -264,3 +265,14 @@ def test_vfork_child_stop_settles_before_suspended_parent(monkeypatch):
     assert value._cleanup() == []
     assert killed == {11, 12} and not value.active and not value.poison
     assert value.root_parent_wait == signal.SIGKILL
+
+
+def test_terminal_wait_releases_only_that_births_pidfd(monkeypatch):
+    value=owned()
+    value.pidfds={11:101,12:102}
+    closed=[]
+    monkeypatch.setattr(trace.os,'close',closed.append)
+    value._terminal(12,0,cleanup=False)
+    assert closed==[102] and value.pidfds=={11:101}
+    assert value.records[-1]['kind']=='tracer_terminal_wait'
+    assert value.active=={11}
