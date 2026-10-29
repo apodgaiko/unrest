@@ -84,7 +84,7 @@ class Frame:
         if (self.owner is not None or self.buffer or self.received is not None
                 or self.eof or self.binding is not None):
             self.refuse('control late peer capture')
-        peer(self.stream, birth, gid)
+        peer(self.stream, ledger.peer_birth(birth), gid)
         process = ledger.process(birth)
         if (type(token) is not str or process.token != token
                 or process.registered_generation != process.generation
@@ -185,7 +185,7 @@ class Admission:
         request = frame.received
         if type(request) is not dict or set(request) != {'pid', 'nonce', 'token', 'generation', 'id', 'kind', 'payload'}:
             raise Refused('control request schema')
-        peer(frame.stream, birth, gid)
+        peer(frame.stream, self.ledger.peer_birth(birth), gid)
         process = self.ledger.process(birth)
         identifier = request['id']
         if (type(identifier) is not str or len(identifier) != 32

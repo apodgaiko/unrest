@@ -67,6 +67,7 @@ class Observer:
         self.actors, self.intents, self.mp_pipes = {}, {}, {}
 
         self.cohort_observations=[]
+        self.adoptions=[]
         self.fixture_roots = {}
         self.plan_records: list[dict] = []
         self.frames, self.controls, self.completed = [], [], []
@@ -120,6 +121,8 @@ class Observer:
     def consume(self, trace):
         self.ledger_trace = trace
         while self.ledger.next_kernel < len(trace.records):
+            from composed_adoption import refresh
+            refresh(self)
             row = trace.records[self.ledger.next_kernel]
             self.ledger.kernel(self.ledger.next_kernel, row)
             if self.case in PLAN_CASES:
@@ -151,6 +154,8 @@ class Observer:
                 self.profile(self.root, 'root', '<bootstrap>',
                     vector,
                     self.meta_environment(), self.meta['checkout'], os.urandom(16).hex())
+        from composed_adoption import refresh
+        refresh(self)
 
     def meta_environment(self):
         if self.full:
@@ -415,11 +420,16 @@ class Observer:
                 waived=closeout(self,children) if self.case in CRASH else set()
                 if waived is None:
                     return None
+                from composed_adoption import closeout as adopted_closeout
+                from composed_cases import ADOPT
+                if not adopted_closeout(self,children):
+                    return None
                 ordinary=children if not waived else [value for value in children if value['birth'] not in waived]
                 if (payload['case'] != self.case
                         or any(not self.completed_child(value) for value in ordinary)
                         or any(not value['consumed'] for value in self.intents.values() if value['case'] == self.case)
-                        or any(not (self.git.reaped(value) if value['role']=='git-helper' else self.ledger.reaped(value['birth'], value['token'])) for value in ordinary)):
+                        or any(not (self.git.reaped(value) if value['role']=='git-helper' else
+                            self.ledger.reaped(value['birth'], value['token']) or self.case in ADOPT and self.ledger.process(value['birth']).init_wait is not None) for value in ordinary)):
                     raise Refused('source original case actual cleanup incomplete')
                 if self.full:
                     self.outcomes.append(dict(payload))
@@ -477,6 +487,12 @@ class Observer:
                     or type(payload['signal']) is not int or payload['signal'] != 15 or 15 not in actor['signals']
                     or len(children) != 1 or not all(self.ledger.reaped(value['birth'], value['token']) for value in children)):
                 raise Refused('session self stop before original child wait')
+        elif kind=='resumed-signal':
+            shape(payload,('pid','signal','group'))
+            if type(payload['pid']) is not int or type(payload['signal']) is not int or type(payload['group']) is not bool:
+                raise Refused('composed resumed signal schema')
+            from composed_adoption import signal
+            return signal(self,actor,payload)
         elif kind == 'custody_signal':
             self.launch_owner(actor)
             shape(payload, ('pid', 'child_token', 'signal', 'group'))
@@ -500,7 +516,7 @@ class Observer:
                 if journal:
                     child['liveness_probes']=1
                 try:
-                    if Birth.read(process_identity(child['birth'].pid)) != child['birth']:
+                    if Birth.read(process_identity(child['birth'].pid)) != self.ledger.peer_birth(child['birth']):
                         raise Refused('source reused probe PID')
                 except (FileNotFoundError, ProcessLookupError):
                     pass
@@ -508,7 +524,7 @@ class Observer:
             if process.exit is not None or process.terminal is not None:
                 return {'ok': True, 'live': False}
             actual = process_identity(child['birth'].pid)
-            if (Birth.read(actual) != child['birth'] or payload['group'] and (not process.new_session or actual['pgid'] != child['birth'].pid or actual['sid'] != child['birth'].pid)):
+            if (Birth.read(actual) != self.ledger.peer_birth(child['birth']) or payload['group'] and (not process.new_session or actual['pgid'] != child['birth'].pid or actual['sid'] != child['birth'].pid)):
                 return {'ok': True, 'live': False}
             child['signals'].add(payload['signal'])
             return {'ok': True, 'live': True}
@@ -556,7 +572,8 @@ class Observer:
                     continue
                 admitted=self.admission.admit(frame)
                 from cohort_controller import WAIVED
-                if actor['role']=='root' and admitted['kind']=='case-finish' and self.case in WAIVED:
+                from composed_cases import ADOPT
+                if actor['role']=='root' and admitted['kind']=='case-finish' and self.case in (*WAIVED,*ADOPT):
                     frame.seconds=22
                 channel['request'] = admitted
                 self.controls.append({**admitted, 'observed_monotonic_ns': time.monotonic_ns()})

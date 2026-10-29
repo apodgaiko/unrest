@@ -88,6 +88,8 @@ class Process:
     exit: tuple[int, int] | None = None
     terminal: tuple[int, int, int] | None = None
     parent_wait: tuple[int, int, int, int] | None = None
+    adopted_identity: dict | None = None
+    init_wait: int | None = None
 
 
 class Ledger:
@@ -187,7 +189,7 @@ class Ledger:
                 if leader is None:
                     raise Refused('ledger missing parent thread group')
                 parent = leader
-                expected_parent = parent.pid if birth.pid == birth.tgid else parent.parent
+                expected_parent = parent.pid if birth.pid == birth.tgid else self.peer_birth(parent).parent
                 if (birth.uid != parent.uid or birth.parent != expected_parent
                         or (birth.pid != birth.tgid and (row['event'] != 3 or birth.tgid != parent.tgid))):
                     raise Refused('ledger child kernel identity')
@@ -292,6 +294,31 @@ class Ledger:
         return (process.born < process.exit[0] < process.terminal[0] < process.parent_wait[0]
                 and process.exit[1] == process.terminal[1] == process.parent_wait[1]
                 and process.terminal[2] == process.parent_wait[2])
+
+    def peer_birth(self, birth: Birth) -> Birth:
+        process=self.process(birth)
+        return Birth.read(process.adopted_identity) if process.adopted_identity is not None else birth
+
+    def adopt(self, birth: Birth, observed: dict) -> None:
+        process=self.process(birth)
+        actual=canonical(observed)
+        expected={**process.registered_identity,'ppid':1}
+        if (process.adopted_identity is not None or process.parent is None
+                or self.process(process.parent).exit is None or not process.new_session
+                or not process.session_complete or not self.body_ready(birth,process.token)
+                or actual!=expected or (actual['pgid'],actual['sid'])!=(birth.pid,birth.pid)):
+            raise Refused('ledger exact live namespace adoption')
+        process.adopted_identity=actual
+
+    def retire_adopted(self, birth: Birth, raw: int) -> None:
+        process=self.process(birth)
+        status(raw,os.waitstatus_to_exitcode(raw))
+        if (process.adopted_identity is None or process.init_wait is not None
+                or process.parent_wait is not None or process.exit is None or process.terminal is None
+                or not process.born<process.exit[0]<process.terminal[0]
+                or process.exit[1]!=raw or process.terminal[1]!=raw):
+            raise Refused('ledger actual namespace init terminal join')
+        process.init_wait=raw
 
     def body_ready(self, birth: Birth, token: str) -> bool:
         process = self.process(birth)

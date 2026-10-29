@@ -313,7 +313,7 @@ def worker(binding, metadata, raw_directory):
         raise
     finally:
         try:
-            record = {'schema': 'unrest.bootstrap-source-result.v4', 'wait_evidence': 'kernel-original-parent-terminal-wait4', 'source_checkpoint_ready': bool(result is not None and result['root_parent_wait_raw']==0 and observer is not None and unexcluded(metadata,binding) and observer.finished and failure is None),
+            record = {'schema': 'unrest.bootstrap-source-result.v5', 'wait_evidence': 'kernel-original-parent-terminal-wait4-and-explicit-namespace-init-wait', 'source_checkpoint_ready': bool(result is not None and result['root_parent_wait_raw']==0 and observer is not None and unexcluded(metadata,binding) and observer.finished and failure is None),
                       'git_value_provenance_proven':False, 'release_certified': False, 'completed': [] if observer is None else observer.completed,
                       'result': result, 'failure': failure, 'metadata': metadata,
                       'kernel': [] if trace is None else trace.records,
@@ -324,6 +324,7 @@ def worker(binding, metadata, raw_directory):
                           'reservation_causality_proven':False,'application_payload_proven':False,
                           'unix_pair_lineage_proven':False},
                       'cohort_observations': [] if observer is None else observer.cohort_observations,
+                      'adoptions': [] if observer is None else observer.adoptions,
                       'plan_observations': [] if observer is None else observer.plan_records,
                       'trace_poison': None if trace is None else trace.poison,
                       'output_base64': '' if observer is None else base64.b64encode(observer.output).decode()}
@@ -374,6 +375,8 @@ def supervise(binding,metadata,raw_directory,archive):
             while raw is None:
                 from cohort_controller import host_tick
                 host_tick(binding['profiles'],closeouts)
+                from composed_adoption import host_tick as adopted_tick
+                adopted_tick(binding['profiles'])
                 actual, status = os.waitpid(pid, os.WNOHANG)
                 if actual:
                     raw = status

@@ -833,3 +833,29 @@ The test now compares the entire 30-second projection with its original waiting
 row. Its real 60-second wait, timeout-continue result, later completion/refusal,
 identity and cleanup assertions remain. This repairs the obsolete oracle; it
 neither changes production timing nor certifies native-provider final timing.
+
+Composed restart custody records namespace adoption separately from immutable
+kernel birth and original-parent wait facts. Only the eight authored restart
+workers can acquire a current-parent fact: their admitted generation and READY,
+original parent's exit, unchanged UID/birth/session identity and actual PPid 1 in
+the private PID namespace must agree. Peer authentication uses that current
+parent only after acquisition; original ownership and original wait claims stay
+unchanged. A new thread observes its leader's current kernel parent.
+
+Upon the adopted worker's independent tracer terminal observation, the observer
+requests a passive numeric wait from the actual namespace init. This happens
+before original test teardown checks that the process group is empty. The
+20-second closeout starts at terminal observation, never at adoption while the
+worker legitimately runs. Root-owned receipts bind the same identity, namespace
+and status; case completion joins them with kernel exit and tracer terminal
+status. The v5 result labels these init waits separately. Missing or mismatched
+receipts, unknown adoption and emergency cleanup still fail certification.
+
+A replacement HTTP server has no synthetic Popen handle for this worker. Its
+separate resumed-signal request permits only an individual liveness probe or one
+SIGTERM to the verified worker session. The admitted run/control/generation/home
+and original worker identity grant scope; the owned cursor, using RunControl's
+SHA256 run-id filename, only corroborates it. Every affected admitted group member
+is rechecked before the signal is recorded. SIGKILL, foreign sessions and broader
+resumption remain refused. Existing provider denials and UNVERIFIED limitations
+are unaffected.

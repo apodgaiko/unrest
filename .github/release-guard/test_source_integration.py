@@ -104,7 +104,7 @@ def test_original_signal_enum_is_normalized_without_signal_substitution(monkeypa
     def request(kind, payload):
         requested.append((kind, payload))
         return {'ok': True, 'live': False}  # Actual terminal evidence forbids delivery.
-    policy = SimpleNamespace(profile={'role': role}, local=threading.local(),
+    policy = SimpleNamespace(profile={'role': role}, case='foreign', local=threading.local(),
         children={123: {'token': 'owned'}},
         client=SimpleNamespace(request=request))
     def refuse(code):
@@ -124,6 +124,23 @@ def test_original_signal_enum_is_normalized_without_signal_substitution(monkeypa
     with pytest.raises(Refused, match='outside owned children'):
         os.kill(124, signal.SIGTERM)
     assert len(requested) == 1
+
+
+def test_resumed_signal_uses_separate_observer_admission_without_fabricated_popen(monkeypatch):
+    import subprocess
+    from composed_cases import PARITY
+    requested=[]
+    def refuse(code):
+        raise Refused(code)
+    policy=SimpleNamespace(profile={'role':'mcp'},case=PARITY[0],local=threading.local(),children={},
+        refuse=refuse,client=SimpleNamespace(request=lambda kind,payload:requested.append((kind,payload)) or {'ok':True,'live':False}))
+    for obj,name in ((subprocess,'run'),(subprocess.Popen,'__init__'),(os,'kill'),(os,'killpg')):
+        monkeypatch.setattr(obj,name,getattr(obj,name))
+    Policy.install_process_hooks(policy)
+    with pytest.raises(ProcessLookupError):
+        os.killpg(123,signal.SIGTERM)
+    assert requested==[('resumed-signal',{'pid':123,'signal':15,'group':True})]
+    assert policy.children=={}
 
 
 @pytest.mark.skipif(sys.platform != 'linux', reason='actual Linux subreaper ownership')

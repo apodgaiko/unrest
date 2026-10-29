@@ -179,8 +179,11 @@ class Policy:
             if policy.profile['role'] not in PROCESS_OWNERS:
                 policy.refuse('source signal role')
             self_stop = policy.profile['role']=='session-adapter' and pid==os.getpid() and sig==15 and not group
-            if not self_stop and (type(pid) is not int or pid not in policy.children):
-                policy.refuse('source signal outside owned children')
+            resumed=not self_stop and type(pid) is int and pid not in policy.children
+            if not self_stop and (type(pid) is not int or resumed):
+                from composed_cases import ADOPT
+                if not resumed or policy.profile['role']!='mcp' or policy.case not in ADOPT:
+                    policy.refuse('source signal outside owned children')
             if self_stop is True:
                 if policy.client.request('self-stop', {'signal': sig}) != {'ok': True}:
                     policy.refuse('source self stop response')
@@ -189,10 +192,10 @@ class Policy:
                     return original_kill(pid, sig)
                 finally:
                     policy.local.signal = None
-            saved = policy.children[pid]
             try:
-                answer = policy.client.request('custody_signal', {'pid': pid, 'child_token': saved['token'],
-                                                                  'signal': sig, 'group': group})
+                answer = (policy.client.request('resumed-signal',{'pid':pid,'signal':sig,'group':group}) if resumed else
+                    policy.client.request('custody_signal', {'pid': pid, 'child_token': policy.children[pid]['token'],
+                                                              'signal': sig, 'group': group}))
             except Refused:
                 policy.refuse('source cleanup signal refused')
             if answer != {'ok': True, 'live': True}:
