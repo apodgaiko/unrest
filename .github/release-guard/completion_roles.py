@@ -46,7 +46,7 @@ CASES.update(dict.fromkeys(COMPOSED,('composed','orchestrator','')))
 ROOT_QUERIES={**SOURCE,**{case:int(role=='work') for case,(_,role,_) in RESTART.items()},**dict.fromkeys(BINDING,1)}
 HTTP=tuple(case for case,row in CASES.items() if row[0] not in ('setup','source','defect'))
 
-PINS={'tests/test_completion_ownership.py': '2b67510bdd8f40d584baab65837174b2f5a3935aff343b7d9eaccedf09b5df8b', 'tests/test_completion_setup.py': 'fe1a1c98792d1b30d81d975cb23ad9122ae74678295ef4ed8c5e532a7aa00b6a', 'tests/test_server.py': 'ece1638c115aa2055320bb0fb0c1b34359a8694ff6851fc289baf393e5523b72'}
+PINS={'tests/test_completion_ownership.py': '2b67510bdd8f40d584baab65837174b2f5a3935aff343b7d9eaccedf09b5df8b', 'tests/test_completion_setup.py': 'fe1a1c98792d1b30d81d975cb23ad9122ae74678295ef4ed8c5e532a7aa00b6a', 'tests/test_server.py': '0550689ff20fb183ea62b47606bd3e66c5fc1222b5d4166e57e74d546afbb286'}
 OWNER=20000
 
 

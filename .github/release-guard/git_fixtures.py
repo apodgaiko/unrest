@@ -38,7 +38,7 @@ MODULES={
     'tests/test_v04_activation.py':Fixture('activation',('init','-b','main'),'ACT-190 Activation','act190@example.test',('README.md',),'call'),
 }
 PINS={
-    'tests/test_server.py':'ece1638c115aa2055320bb0fb0c1b34359a8694ff6851fc289baf393e5523b72',
+    'tests/test_server.py':'0550689ff20fb183ea62b47606bd3e66c5fc1222b5d4166e57e74d546afbb286',
     MEASUREMENT_TEST:MEASUREMENT_PIN,
     CANDIDATE_TEST:CANDIDATE_PIN,
     'tests/test_foundation_authority.py':'c8f63d70d4dcc3d74215a9db538632fc9115086d32d42f633235135dcaea2c70',

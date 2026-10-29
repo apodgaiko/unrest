@@ -67,11 +67,26 @@ def test_worker_execution_requires_ready_and_authorized_signal(status):
     assert not host.completed_child(actor)
 
 
+@pytest.mark.parametrize('name',('executor_fixture','unrest_harness.api'))
+def test_fixed_loader_refuses_already_imported_module(monkeypatch,name):
+    import sys
+    monkeypatch.setitem(sys.modules,name,object())
+    binding={'kind':'undeliverable','path':'/owned/sitecustomize.py'} if name.endswith('.api') else {'path':'/owned/executor_fixture.py'}
+    def refuse(code):
+        raise Refused(code)
+    policy=SimpleNamespace(profile={'checkout':'/source','execution':{'fixture':binding}},refuse=refuse)
+    before=list(sys.meta_path)
+    with pytest.raises(Refused,match='imported before'):
+        worker.install_fixture(policy)
+    assert sys.meta_path==before
+
+
 @pytest.mark.parametrize('mutation',[None,'body','inode','symlink','pyc'])
 def test_single_executor_loader_compiles_only_acquired_source(tmp_path,monkeypatch,mutation):
     import importlib.util
     import sys
     from content_manifest import _key
+    monkeypatch.delitem(sys.modules,'executor_fixture',raising=False)
     source=tmp_path/'executor_fixture.py'
     source.write_text('from pathlib import Path\nlocation=Path(__file__)\nvalue=42\n')
     read=worker.read_regular

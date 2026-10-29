@@ -152,3 +152,54 @@ def test_actual_observer_owner_route_recognizes_worker_without_server_slot(fixtu
     actor['token']='foreign'
     with pytest.raises(Refused):
         Observer.launch_owner(host,actor)
+
+
+@pytest.mark.parametrize('mutation',(None,'shim','module','inode'))
+def test_fixed_delivery_loader_does_not_add_workspace_import_search(tmp_path,monkeypatch,mutation):
+    import importlib.util
+    import sys
+    import unrest_harness
+    import run_worker_launch
+    from content_manifest import read_regular,_key
+    from tests.test_server import _write_undeliverable_adapter
+    workspace=tmp_path/'workspace'
+    workspace.mkdir()
+    shim=_write_undeliverable_adapter(workspace)
+    module_path=tmp_path/'src/unrest_harness/api.py'
+    module_path.parent.mkdir(parents=True)
+    module_path.write_text('def apply_steering(store, request, **kwargs): return kwargs\n')
+    _,info,pin=read_regular(shim,4096)
+    _,_,module_pin=read_regular(module_path,4096)
+    binding={'kind':'undeliverable','path':str(shim),'sha256':pin,'identity':list(_key(info)),'module_sha256':module_pin}
+    before=list(sys.meta_path)
+    paths=list(sys.path)
+    def refuse(code):
+        raise Refused(code)
+    policy=SimpleNamespace(profile={'checkout':str(tmp_path),'execution':{'fixture':binding}},refuse=refuse)
+    monkeypatch.delitem(sys.modules,'unrest_harness.api',raising=False)
+    monkeypatch.setattr(run_worker_launch,'read_regular',lambda file,*args,**kwargs:read_regular(file,*args,**{**kwargs,'uid':os.getuid()}))
+    try:
+        run_worker_launch.install_fixture(policy)
+        loader=sys.meta_path[0]
+        assert loader.find_spec('foreign_fixture') is None
+        spec=loader.find_spec('unrest_harness.api')
+        module=importlib.util.module_from_spec(spec)
+        monkeypatch.setitem(sys.modules,'unrest_harness.api',module)
+        monkeypatch.setattr(unrest_harness,'api',module,raising=False)
+        if mutation=='shim':
+            shim.write_text(shim.read_text()+'\n')
+        elif mutation=='module':
+            module_path.write_text('raise AssertionError("foreign product body")\n')
+        elif mutation=='inode':
+            replacement=workspace/'replacement'
+            replacement.write_bytes(shim.read_bytes())
+            replacement.replace(shim)
+        if mutation is None:
+            loader.exec_module(module)
+            assert module.apply_steering(None,None,delivery_supported=True)=={'delivery_supported':False}
+            assert sys.path==paths
+        else:
+            with pytest.raises(Refused):
+                loader.exec_module(module)
+    finally:
+        sys.meta_path[:]=before

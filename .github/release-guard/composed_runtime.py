@@ -4,7 +4,7 @@ import os
 import re
 from pathlib import Path
 
-from composed_cases import CASES,STEPS,DIRECT,DIRECT_NODES,HTTP,ADOPT,nodes,query_count,targets
+from composed_cases import CASES,STEPS,DIRECT,DIRECT_NODES,HTTP,ADOPT,UNDELIVERABLE,nodes,query_count,targets
 from content_manifest import Refused,read_regular,_key
 from launch_policy import source_unit,render_string
 from measurement_runtime import record,running
@@ -17,14 +17,19 @@ def root(host):
     return Path(value[0])
 
 
+def literal_write(checkout,name,receiver):
+    from completion_roles import SERVER_TEST,PINS
+    owner=source_unit(checkout,SERVER_TEST,PINS[SERVER_TEST],(name,))
+    writes=[node for node in ast.walk(owner) if isinstance(node,ast.Call) and ast.unparse(node.func)==receiver+'.write_text']
+    if len(writes)!=1 or len(writes[0].args)!=1 or not isinstance(writes[0].args[0],ast.Constant) or type(writes[0].args[0].value) is not str:
+        raise Refused('composed sole original fixture literal')
+    return writes[0].args[0].value
+
+
 def adapter(host,parent):
     from completion_roles import SERVER_TEST,PINS
     checkout=Path(host.meta['checkout'])
-    owner=source_unit(checkout,SERVER_TEST,PINS[SERVER_TEST],('_write_composed_acp_adapter',))
-    writes=[node for node in ast.walk(owner) if isinstance(node,ast.Call) and ast.unparse(node.func)=='adapter.write_text']
-    if len(writes)!=1 or len(writes[0].args)!=1 or not isinstance(writes[0].args[0],ast.Constant) or type(writes[0].args[0].value) is not str:
-        raise Refused('composed sole original adapter literal')
-    body=writes[0].args[0].value
+    body=literal_write(checkout,'_write_composed_acp_adapter','adapter')
     if host.case in DIRECT:
         owner=source_unit(checkout,SERVER_TEST,PINS[SERVER_TEST],(host.case.split('::')[1].split('[')[0],))
         rows=[node.value for node in owner.body if isinstance(node,ast.Assign) and len(node.targets)==1
@@ -40,6 +45,21 @@ def adapter(host,parent):
     if actual!=body.encode() or host.fixture_roots.setdefault(('composed-script',host.case),(str(file),_key(info),pin))!=(str(file),_key(info),pin):
         raise Refused('composed original adapter bytes or generation')
     return file,pin
+
+
+
+def bootstrap(host,parent):
+    if host.case!=UNDELIVERABLE:
+        return None
+    checkout=Path(host.meta['checkout'])
+    expected=literal_write(checkout,'_write_undeliverable_adapter','shim').encode()
+    file=parent/'workspace/sitecustomize.py'
+    body,info,pin=read_regular(file,4096,uid=20000,mode=0o644)
+    if body!=expected:
+        raise Refused('composed exact delivery-blocked bootstrap bytes')
+    from content_manifest import native_digest
+    return {'kind':'undeliverable','path':str(file),'sha256':pin,'identity':list(_key(info)),
+        'module_sha256':native_digest(checkout/'src/unrest_harness/api.py')}
 
 
 def worker(host,actor,raw):
@@ -132,7 +152,7 @@ def nested(host,actor,raw):
     from node_launch import proposal
     return proposal(host,actor,raw,parent/'workspace',env,role,targets(host.case,node),file,pin,
         (str(parent/'workspace/.hermetic-acp-trace.jsonl'),),HTTP[host.case]+len(nodes(host.case)),
-        {'composed_node':node,'composed_role':role},'cleanup-acp')
+        {'composed_node':node,'composed_role':role,'execution_fixture':bootstrap(host,parent)},'cleanup-acp')
 
 
 

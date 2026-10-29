@@ -3671,7 +3671,7 @@ def test_composed_hermetic_acp_topology_uses_public_attached_control(
             {**timeout_rows[0], "action": "continue", "code": "timeout_continue"}
         ]
         assert thirty_second_projection is not None
-        assert thirty_second_projection["elapsed_nanoseconds"] >= 30_000_000_000
+        assert thirty_second_projection == worker
         assert thirty_second_projection["checkpoint_requests"] == 0
         assert thirty_second_projection["checkpoint_sequence"] == 1
 

@@ -824,3 +824,12 @@ sessions remain separate from nested MCP pipes and inherited worker groups.
 Original cleanup polling bounds native inventory counts; inventory never grants
 execution or signal authority. Restart adoption still requires its separate
 proof before those cases can complete.
+
+The composed wall-clock test contained one stale expectation from before the
+accepted waiting-clock repair: it required a published waiting snapshot's elapsed
+field to advance at 30 seconds. `docs/v5/08-mcp-surface.md` requires the complete
+published waiting row to remain unchanged while policy time advances privately.
+The test now compares the entire 30-second projection with its original waiting
+row. Its real 60-second wait, timeout-continue result, later completion/refusal,
+identity and cleanup assertions remain. This repairs the obsolete oracle; it
+neither changes production timing nor certifies native-provider final timing.

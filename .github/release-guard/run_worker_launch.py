@@ -65,20 +65,35 @@ def install_fixture(policy):
     import importlib.abc
     import importlib.util
     import sys
+    import types
+    delivery=binding.get('kind')=='undeliverable'
+    name='unrest_harness.api' if delivery else 'executor_fixture'
+    source_path=Path(policy.profile['checkout'])/'src/unrest_harness/api.py' if delivery else Path(binding['path'])
+    if name in sys.modules:
+        policy.refuse('fixed fixture module imported before its loader')
     class Loader(importlib.abc.MetaPathFinder,importlib.abc.Loader):
         def find_spec(self,fullname,path=None,target=None):
-            if fullname=='executor_fixture':
-                return importlib.util.spec_from_file_location(fullname,binding['path'],loader=self)
+            if fullname==name:
+                return importlib.util.spec_from_file_location(fullname,str(source_path),loader=self)
         def create_module(self,spec):
             return None
         def exec_module(self,module):
             try:
                 body,info,pin=read_regular(Path(binding['path']),16384,uid=20000,forbidden=0o6022)
                 if list(_key(info))!=binding['identity'] or pin!=binding['sha256']:
-                    raise Refused('worker executor import changed')
+                    raise Refused('fixed fixture import changed')
                 code=compile(body,binding['path'],'exec',dont_inherit=True)
+                if delivery:
+                    product,_,product_pin=read_regular(source_path,4*1024*1024,uid=0,forbidden=0o6022)
+                    if product_pin!=binding['module_sha256']:
+                        raise Refused('fixed bootstrap product module changed')
+                    exec(compile(product,str(source_path),'exec',dont_inherit=True),module.__dict__)
+                    module=types.ModuleType('sitecustomize')
+                    module.__file__=binding['path']
+                    exec(code,module.__dict__)
+                    return
             except BaseException:
-                policy.refuse('worker executor import refused')
+                policy.refuse('fixed fixture import refused')
             exec(code,module.__dict__)
     sys.meta_path.insert(0,Loader())
 

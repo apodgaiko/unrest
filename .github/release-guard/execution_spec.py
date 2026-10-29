@@ -17,12 +17,18 @@ def validate(profile,event,arguments,directory):
     if event!=value['event'] or arguments!=(value['argument'],):
         raise Refused('execution specification exact body or domain')
     if value['fixture'] is not None:
-        from run_worker_launch import WORKERS
         binding=value['fixture']
-        if (profile['case'] not in WORKERS or profile['role']!='fixed-inline'
-                or profile['argv'][3:5]!=['-m','unrest_harness.run_worker']
-                or binding['path']!=str(Path(profile['cwd'])/'executor_fixture.py')):
-            raise Refused('execution specification finite executor fixture')
+        if binding.get('kind')=='undeliverable':
+            from composed_cases import UNDELIVERABLE
+            if (profile['case']!=UNDELIVERABLE or profile['role'] not in ('mcp','cleanup-acp')
+                    or binding['path']!=str(Path(profile['cwd'])/'sitecustomize.py')):
+                raise Refused('execution specification fixed delivery bootstrap')
+        else:
+            from run_worker_launch import WORKERS
+            if (binding.get('kind') is not None or profile['case'] not in WORKERS or profile['role']!='fixed-inline'
+                    or profile['argv'][3:5]!=['-m','unrest_harness.run_worker']
+                    or binding['path']!=str(Path(profile['cwd'])/'executor_fixture.py')):
+                raise Refused('execution specification finite executor fixture')
     if profile['script'] is not None:
         file=Path(profile['script'])
         if (str(file.resolve())!=str(file)
