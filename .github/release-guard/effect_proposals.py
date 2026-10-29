@@ -301,7 +301,6 @@ def proposal(host, actor, raw):
         with snapshot.open('xb') as stream:
             stream.write(body)
         snapshot.chmod(0o444)
-        host.intents[answer['ticket']]['execution_data']=[[str(snapshot),hashlib.sha256(body).hexdigest()]]
     if answer is None:
         return None
     return {**answer,'translated':vector,'rule':expected.rule}

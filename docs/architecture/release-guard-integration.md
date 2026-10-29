@@ -494,3 +494,20 @@ the closed shared Git grammar and actual helper/wait custody. The evolution test
 admits exactly its two original start-project RunControl entries with retained
 request identity, fixed executor, complete environment and numeric status zero.
 This enables its provider-free state machine; it grants no ACP or provider launch.
+
+
+Immutable-input provenance belongs to the protected generation's issuer. The
+host measures and seals the source/runtime/dependencies and verifies their
+readonly mounts before dropping credentials. Every kernel exec is checked in
+the observer's actual mount/network namespace, and child bootstrap still checks
+its complete measured identity, namespace equality, zero capabilities and entry
+binding. Children no longer reinterpret the same readonly mount inventory.
+Archive acquisition still compares all original bytes, verifies every copied
+byte and seals observer-owned files444/directories555. The observer retains and
+rechecks the snapshot at exec; the leaf uses its already-bound snapshot cwd.
+The second serialized full-manifest file and child-side snapshot walk are
+removed. Cleanup/review JSON inputs likewise remain exclusive observer-owned
+444 files in protected ancestry with exact issued argv; children do not rehash
+those trusted issuer records. Mutable script compilation hashes and the
+original executor loader remain mandatory. Actual namespace and mixed-UID
+mutation negatives retain independent coverage of this custody boundary.

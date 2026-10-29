@@ -2,7 +2,6 @@
 
 from copy import deepcopy
 import hashlib
-from pathlib import Path
 
 import pytest
 
@@ -100,50 +99,3 @@ def test_spec_cannot_borrow_another_admitted_intent(tmp_path, field, value):
             None,
         )
 
-
-@pytest.mark.parametrize("mutation", [None, "path", "hash", "uid", "mode", "nlink", "argv"])
-@pytest.mark.parametrize("role", ["cleanup-acp", "review-wire"])
-def test_cleanup_data_requires_exact_synthetic_custody_model(tmp_path, monkeypatch, mutation, role):
-    import os
-
-    script = tmp_path / "fixture"
-    script.write_bytes(b"pass\n")
-    snapshot = tmp_path / "scenario.json"
-    snapshot.write_bytes(b"{}")
-    snapshot.chmod(0o444)
-    original_stat = Path.stat
-
-    def synthetic_stat(file, *args, **kwargs):
-        info = original_stat(file, *args, **kwargs)
-        if file == snapshot:
-            fields = list(info)
-            fields[4] = 500 if mutation == "uid" else 20001
-            if mutation == "mode":
-                fields[0] = 0o100644
-            if mutation == "nlink":
-                fields[3] = 2
-            return os.stat_result(fields)
-        return info
-
-    monkeypatch.setattr(Path, "stat", synthetic_stat)
-    vector = ["/python", "-I", "-S", str(script), str(snapshot)]
-    data = [[str(snapshot), hashlib.sha256(b"{}").hexdigest()]]
-    if mutation == "path":
-        foreign = tmp_path / "foreign.json"
-        foreign.write_bytes(b"{}")
-        data[0][0] = str(foreign)
-    if mutation == "hash":
-        data[0][1] = "a" * 64
-    if mutation == "argv":
-        vector[-1] = str(tmp_path / "foreign")
-    value = {
-        "role": role,
-        "argv": vector,
-        "script": str(script),
-        "execution": issue(role, vector, str(script), hashlib.sha256(b"pass\n").hexdigest(), data),
-    }
-    if mutation is None:
-        validate(value, "cpython.run_file", (str(script),), tmp_path)
-    else:
-        with pytest.raises(Refused, match="immutable data binding"):
-            validate(value, "cpython.run_file", (str(script),), tmp_path)

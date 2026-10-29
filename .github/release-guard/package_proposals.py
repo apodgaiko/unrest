@@ -1,6 +1,4 @@
 """Observer-selected distribution inputs and finite original process declarations."""
-import hashlib
-import json
 import os
 from pathlib import Path
 import stat
@@ -57,13 +55,7 @@ def snapshot(host,actor,payload):
     kind=NEGATIVE.get(case,'normal')
     sealed=acquire(source,data['extracted'],target,kind)
     document={'schema':'unrest.archive-snapshot.v1','case':case,'kind':kind,'root':str(target),'snapshot':sealed}
-    body=json.dumps(document,sort_keys=True,separators=(',',':')).encode()
-    file=host.directory/('archive-'+token+'.json')
-    with file.open('xb') as stream:
-        stream.write(body)
-    file.chmod(0o444)
-    host.fixture_roots[case]={'document':document,'reference':[str(file),hashlib.sha256(body).hexdigest()],
-        'parent':actor['birth'],'token':actor['token']}
+    host.fixture_roots[case]={'document':document,'parent':actor['birth'],'token':actor['token']}
     return {'ok':True,'path':str(target)}
 
 
@@ -105,7 +97,6 @@ def proposal(host,actor,raw):
     checkout,owned_root=Path(host.meta['checkout']),Path(host.meta['owned'])
     leaf=actor['role']=='archive-checker' or case in NEGATIVE
     archive_data=None
-    execution_data=[]
     if leaf:
         state=host.fixture_roots.get(case)
         if (state is None or state['parent']!=actor['birth'] or state['token']!=actor['token']
@@ -121,8 +112,7 @@ def proposal(host,actor,raw):
         env.update(PYTHONPATH='src',PYTEST_DISABLE_PLUGIN_AUTOLOAD='1')
         code=literal(checkout,'tools/check_distribution.py',None,'_PYTEST_PROBE')
         argv=(native,'-c',code,str(checkout))
-        vector=[native,'-I','-S','-c',LEAF_COMMAND,str(checkout),state['reference'][0]]
-        execution_data=[state['reference']]
+        vector=[native,'-I','-S','-c',LEAF_COMMAND,str(checkout)]
         role='archive-leaf'
     elif case==POSITIVE or case in MUTATIONS:
         host.root_only(actor)
@@ -173,7 +163,7 @@ def proposal(host,actor,raw):
     value=build_expected('package:'+role,case,native,pin,argv,tuple(sorted(env.items())),cwd,
         'native' if role=='archive-checker' else 'python-command')
     answer=admit_expected(host,actor,raw,value,role,vector,
-        fields={'execution_data':execution_data,'package_inputs':archive_data})
+        fields={'package_inputs':archive_data})
     if answer is not None and case==FIRST:
         row=host.intents[answer['ticket']]
         row.update(security_status=0,security_operation='provenance')

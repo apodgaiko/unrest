@@ -107,7 +107,7 @@ def test_wire_proposal_is_fixed_and_snapshot_is_byte_current(tmp_path, monkeypat
     def admit(*args, **kwargs):
         calls.append((args, kwargs))
         ticket = max(host.intents, default=0) + 1
-        host.intents[ticket] = {}
+        host.intents[ticket] = {"translated":args[3]}
         return {"ok": True, "ticket": ticket, "token": "owned"}
 
     host.admit_launch = admit
@@ -138,7 +138,7 @@ def test_wire_proposal_is_fixed_and_snapshot_is_byte_current(tmp_path, monkeypat
         snapshot = Path(answer["translated"][-1])
         assert snapshot.read_bytes() == file.read_bytes()
         assert snapshot.stat().st_mode & 0o777 == 0o444
-        assert host.intents[answer["ticket"]]["execution_data"][0][0] == str(snapshot)
+        assert host.intents[answer["ticket"]]["translated"][-1] == str(snapshot)
         file.write_text("changed original")
         assert json.loads(snapshot.read_bytes()) == {"events": [], "delay": 0, "raw_frame": None}
         assert calls[0][0][2] == "review-wire"

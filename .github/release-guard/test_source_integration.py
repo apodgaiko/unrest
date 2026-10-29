@@ -436,3 +436,16 @@ def test_constructor_receipt_is_not_execution_evidence(mutation):
         registered_generation=0 if mutation=='unregistered' else 1,exit=(1,0) if mutation=='exited' else None)
     observer.ledger=SimpleNamespace(process=lambda selected:process if selected is birth else pytest.fail('foreign birth'))
     assert observer.executed(intent)==(mutation in ('registered','exited'))
+
+
+@pytest.mark.parametrize('namespace',('mnt','net'))
+def test_observer_refuses_a_foreign_namespace_before_consuming_any_launch(monkeypatch,namespace):
+    import source_observer
+    observer=object.__new__(Observer)
+    observer.meta={'network_namespace':'expected-net'}
+    observer.consume=lambda trace:pytest.fail('foreign namespace reached launch consumption')
+    identities={'mnt':'expected-mount','net':'expected-net'}
+    identities[namespace]='foreign'
+    monkeypatch.setattr(source_observer,'process_identity',lambda pid:{'namespaces':identities})
+    monkeypatch.setattr(source_observer.os,'readlink',lambda path:'expected-mount')
+    assert observer.resolve(None,123,'/native',[],{},'/owned') is False

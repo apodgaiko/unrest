@@ -41,31 +41,8 @@ def inherited_descriptor(expected, descriptor, info, flags, uid):
     return [descriptor, info.st_dev, info.st_ino]
 
 
-def readonly_mounts(expected: dict, namespace: str) -> None:
-    if os.readlink('/proc/self/ns/mnt') != namespace:
-        raise Refused('source immutable generation')
-    observed = {}
-    for line in Path('/proc/self/mountinfo').read_text().splitlines():
-        fields = line.split()
-        if len(fields) < 10:
-            raise Refused('source mount ABI')
-        point = fields[4]
-        if point in expected:
-            info = os.stat(point, follow_symlinks=False)
-            observed[point] = [int(fields[0]), info.st_dev, info.st_ino]
-            if 'ro' not in fields[5].split(','):
-                raise Refused('source mutable input mount')
-    if observed != expected:
-        raise Refused('source mount generation changed')
-
-
 def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
     full=type(profile['cases']) is dict
-    expected_mounts = {profile['checkout'], profile['dependencies'], profile['runtime_root'], str(Path(__file__).parent)}
-    if '/native' in profile['mounts']:
-        expected_mounts.add('/native')
-    if set(profile['mounts']) != expected_mounts:
-        raise Refused('source exact mounted input inventory')
     if Path(profile['native']) != Path(profile['runtime_root']) / 'bin/python-unrest-guard-control':
         raise Refused('source native runtime root')
     actual = process_identity(os.getpid())
@@ -75,6 +52,7 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
             or (parent.uid != 20000 if full and profile['role']=='root' else parent != observer if profile['role'] == 'root' else parent.uid != 20000)
             or profile['network_namespace']!=os.readlink('/proc/self/ns/net')
             or actual['namespaces']['net']!=profile['network_namespace']
+            or actual['namespaces']['mnt']!=profile['mount_namespace']
             or actual['uids'] != [20000] * 4 or actual['gids'] != [20000] * 4
             or any(actual['capabilities'].values()) or actual['no_new_privs'] != 1 or actual['seccomp'] != 2
             or type(profile['generation']) is not int or profile['generation'] != 1
@@ -108,7 +86,6 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
                                                   fcntl.fcntl(descriptor, fcntl.F_GETFL), actual['uids'][0]))
         if seen != inherited:
             raise Refused('source missing inherited inventory')
-    readonly_mounts(profile['mounts'], profile['mount_namespace'])
     from execution_spec import validate as validate_execution
     validate_execution(profile,event,arguments,Path(__file__).parent.parent/'profiles')
     native = profile['native']

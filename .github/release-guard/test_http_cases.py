@@ -95,7 +95,7 @@ def test_ps_inventory_is_exact_and_follows_original_server_wait(prepared,monkeyp
         assert value.argv==('ps','-axo','pid=,ppid=,pgid=')
 
 
-@pytest.mark.parametrize('subject',['http','foreign-mcp','http-extra-fd'])
+@pytest.mark.parametrize('subject',['http','foreign-mcp','http-extra-fd','http-mount'])
 def test_http_authority_and_inherited_profile_descriptors_remain_closed(tmp_path,monkeypatch,subject):
     import os
     import source_profile as profiles
@@ -115,7 +115,7 @@ def test_http_authority_and_inherited_profile_descriptors_remain_closed(tmp_path
     def identity(pid,uid,parent):
         return {'pid':pid,'tgid':pid,'ppid':parent,'start_ticks':1,'boot_id':'boot',
             'uids':[uid]*4,'gids':[uid]*4,'pgid':pid,'sid':pid,'clock_ticks_per_second':100,
-            'capabilities':{},'no_new_privs':1,'seccomp':2,'namespaces':{'net':'net:[123]'}}
+            'capabilities':{},'no_new_privs':1,'seccomp':2,'namespaces':{'net':'net:[123]','mnt':'synthetic'}}
     actual=identity(os.getpid(),20000,os.getppid())
     parent=identity(os.getppid(),20000,1)
     observer=identity(os.getpid()+1000,20001,1)
@@ -136,14 +136,17 @@ def test_http_authority_and_inherited_profile_descriptors_remain_closed(tmp_path
     monkeypatch.setattr(profiles,'process_identity',lambda pid:actual)
     monkeypatch.setattr(profiles,'credential_identity',lambda pid:parent)
     monkeypatch.setattr(profiles,'digest',lambda path:'a'*64)
-    monkeypatch.setattr(profiles,'readonly_mounts',lambda *args:None)
     monkeypatch.setattr(profiles,'sys',SimpleNamespace(executable=native,orig_argv=vector,
         flags=SimpleNamespace(isolated=1,no_site=1,dont_write_bytecode=0,utf8_mode=1)))
     monkeypatch.setattr(profiles,'os',SimpleNamespace(getpid=os.getpid,getppid=os.getppid,
         readlink=lambda path:'net:[123]',getcwd=lambda:str(tmp_path),environ=environment,listdir=lambda path:['7'] if subject=='foreign-mcp' else [],fstat=lambda fd:object()))
     monkeypatch.setattr(profiles,'fcntl',SimpleNamespace(F_GETFL=3,fcntl=lambda *args:0))
     monkeypatch.setattr(profiles,'inherited_descriptor',lambda inherited,fd,*args:[fd,1,2])
-    if subject=='http':
+    if subject=='http-mount':
+        profile['mount_namespace']='foreign'
+        with pytest.raises(Refused,match='actual profile binding'):
+            profiles.validate(profile,'cpython.run_command',('pass\n',))
+    elif subject=='http':
         observed,pins=profiles.validate(profile,'cpython.run_command',('pass\n',))
         assert observed==actual and len(pins)==6
     else:
