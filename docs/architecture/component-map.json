@@ -127,6 +127,7 @@
         "src/unrest_harness/attention.py",
         "src/unrest_harness/coordinator.py",
         "src/unrest_harness/dispatcher.py",
+        "src/unrest_harness/effect_cancellation.py",
         "src/unrest_harness/experimental_broker.py",
         "src/unrest_harness/experimental_confinement.py",
         "src/unrest_harness/experimental_diagnostics.py",
@@ -153,6 +154,7 @@
         "tests/test_experimental_retained.py",
         "tests/test_experimental_session.py",
         "tests/test_experimental_startup_diagnostics.py",
+        "tests/test_role_effect_cleanup.py",
         "tests/test_runnable_selection.py",
         "tests/test_terminal_review.py"
       ]

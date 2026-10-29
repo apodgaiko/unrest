@@ -23,6 +23,7 @@ from .accepted_point_authority import (
     WorkspaceIntegrationPlan,
 )
 from .mutation_journal import request_fingerprint
+from .effect_cancellation import EffectCancellation, current_effect
 from .capability_policy import redact_credential_values
 from .dispatcher import (
     DispatchRequest,
@@ -986,45 +987,65 @@ class MissionCoordinator:
     ) -> Any:
         """Run one role effect in a bounded future while this coordinator polls."""
         future: concurrent.futures.Future[Any] = concurrent.futures.Future()
+        cancellation = EffectCancellation()
 
         def run_effect() -> None:
             if not future.set_running_or_notify_cancel():
                 return
+            token = current_effect.set(cancellation)
             try:
                 future.set_result(effect())
             except BaseException as exc:  # noqa: BLE001
                 future.set_exception(exc)
+            finally:
+                current_effect.reset(token)
 
         role_thread = threading.Thread(
             target=run_effect,
             name="unrest-role-effect",
-            daemon=True,
+            daemon=False,
         )
-        role_thread.start()
         poll_error: Exception | None = None
-        while True:
-            try:
-                result = future.result(timeout=_SUPERVISION_POLL_SECONDS)
-                if poll_error is not None:
-                    raise poll_error
-                role_thread.join()
-                return result
-            except concurrent.futures.TimeoutError:
-                if future.done():
-                    role_thread.join()
-                    raise
-                if poll_error is not None:
-                    continue
+        interruption: BaseException | None = None
+        try:
+            role_thread.start()
+            while True:
                 try:
-                    self.poll_supervision(
-                        mission_id,
-                        self.store.load_task_list(self.project_id, mission_id),
-                        now_nanoseconds=time.monotonic_ns(),
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    # The dispatched effect still owns the transition. Remember a
-                    # policy failure, but never return while it can publish later.
-                    poll_error = exc
+                    result = future.result(timeout=_SUPERVISION_POLL_SECONDS)
+                    if poll_error is not None:
+                        raise poll_error
+                    return result
+                except concurrent.futures.TimeoutError:
+                    if future.done():
+                        raise
+                    if poll_error is not None:
+                        continue
+                    try:
+                        self.poll_supervision(
+                            mission_id,
+                            self.store.load_task_list(self.project_id, mission_id),
+                            now_nanoseconds=time.monotonic_ns(),
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        # The dispatched effect still owns the transition. Remember a
+                        # policy failure, but never return while it can publish later.
+                        poll_error = exc
+        except BaseException as exc:
+            interruption = exc
+            cancellation.cancel()
+            raise
+        finally:
+            # Hard cancel interrupts this waiting thread while the role still owns
+            # its child waits. Exiting first would abandon daemon-thread cleanup.
+            while role_thread.is_alive():
+                try:
+                    role_thread.join()
+                except BaseException as exc:
+                    if interruption is None:
+                        interruption = exc
+                    cancellation.cancel()
+            if interruption is not None:
+                raise interruption
 
     def _bounded_dispatch_failure(self, prefix: str, exc: Exception) -> str:
         cause = redact_credential_values(str(exc), self.store.inventory)

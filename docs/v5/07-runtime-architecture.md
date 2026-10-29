@@ -460,6 +460,18 @@ Controlled dispatcher overlap tests exercise finalization against independent
 checkpoint writers. Ordinary ACP dispatch separately closes and reaps its adapter
 before returning, and the coordinator joins its effect thread; the controlled
 schedule does not establish an ordinary ACP teardown overlap.
+The role effect thread is owned, not daemonized. Its join runs on every exit
+from the coordinator's wait, including main-thread hard-cancel and other
+`BaseException` interruptions. Each invocation owns a cancellation scope; the
+blocking ACP bridge registers its actual loop and main task in that scope.
+Interruption requests cancellation of that task through its loop, not every
+task in the loop. Requests before registration prevent the coroutine from
+starting; repeated requests do not interrupt the shielded cleanup task.
+The coordinator retains the join through repeated main-thread interruptions.
+Cancellation cannot publish a terminal run and
+exit the worker while that role still owns adapter or MCP child cleanup. The
+original interruption propagates after the role thread finishes; it does not
+become a successful handoff or a new Mission transition.
 
 The waiter establishes its original absolute cutoff once. Admission,
 transaction and all nested snapshot contention share that cutoff, without

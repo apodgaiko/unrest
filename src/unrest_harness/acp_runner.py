@@ -2535,6 +2535,11 @@ def _run_coro_blocking(coro: Coroutine[Any, Any, Any]) -> Any:
     to wrap with `asyncio.to_thread`), execute the coroutine in a fresh
     loop on a worker thread instead of crashing.
     """
+    from .effect_cancellation import current_effect
+
+    owner = current_effect.get()
+    if owner is not None:
+        coro = owner.run(coro)
     try:
         asyncio.get_running_loop()
     except RuntimeError:
