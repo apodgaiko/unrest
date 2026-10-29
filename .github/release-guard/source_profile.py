@@ -153,8 +153,19 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
                 except OSError:
                     continue
                 info = os.fstat(descriptor)
-                seen.append(inherited_descriptor(inherited, descriptor, info,
-                                                  fcntl.fcntl(descriptor, fcntl.F_GETFL), actual['uids'][0]))
+                flags=fcntl.fcntl(descriptor, fcntl.F_GETFL)
+                try:
+                    seen.append(inherited_descriptor(inherited, descriptor, info,flags,actual['uids'][0]))
+                except Refused:
+                    target=os.readlink('/proc/self/fd/'+str(descriptor))
+                    label='other'
+                    for name in ('checkout','dependencies','runtime_root','owned'):
+                        if target.startswith(profile[name]+'/'):
+                            label=name+':'+str(Path(target).relative_to(profile[name]))
+                            break
+                    if target.startswith(('pipe:[','socket:[','anon_inode:')) or target in ('/dev/null','/dev/urandom'):
+                        label=target
+                    raise Refused('source ambient inherited descriptor '+str((descriptor,stat.S_IFMT(info.st_mode),flags,label))) from None
         if seen != inherited:
             raise Refused('source missing inherited inventory')
     readonly_mounts(profile['mounts'], profile['mount_namespace'])
