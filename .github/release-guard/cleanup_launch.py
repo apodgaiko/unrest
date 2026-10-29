@@ -16,7 +16,7 @@ SCRIPT = 'tests/fixtures/cleanup_acp_process.py'
 SERVER = 'src/unrest_harness/server.py'
 PINS = {PRODUCT: ACP_PINS[PRODUCT], TEST: '8903f87610c61684a4db0dcf22f771ed5a9f75bcade8ce4f1c528378b1c992ae',
     SCRIPT: 'f4b1c4ca59b7550e5bcd43210e487b0f979c3133196ff39470eae36b76726959',
-    SERVER: '166a002df8676817407a4345078e61135139e6a2ffc99e5bf3fa923117c07efc',
+    SERVER: 'd1abbe2f76ff874849d113919777efe1ccb8fee0a6327d5eaf27e87892fd886f',
     'tests/test_provider_review.py': 'dd9962020bcf265bc6a4e35de8ca7fe557666a1d0e63fa325b4ad955c2465a5e'}
 CASES = tuple(TEST + '::' + name for name in (
     'test_recorded_transport_failures[success-work]',

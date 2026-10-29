@@ -249,3 +249,11 @@ Existing schemas and other role catalogs retain their meanings. Blocking and
 missing/expired context report unavailable; they never direct a denied-action
 rerun. See [native approval recovery](../architecture/approval-recovery.md) for
 privacy, settlement, expiry, cancellation, one-use routing and acceptance limits.
+
+
+## Offline startup
+
+All MCP transports suppress the dependency startup banner. Starting an Unrest
+HTTP/SSE server must not query PyPI for FastMCP updates; startup needs only the
+selected local interface and its declared provider-independent configuration.
+Provider operations remain explicit task execution, separate from server startup.

@@ -21,7 +21,7 @@ CASES={**{OWNERSHIP+f'[{scenario}-{role}-targets{target}]':('ownership',role,sce
        for scenario in ('invalid-invalid','valid-invalid','valid-valid','distinct') for role,target in ROLES}}
 HTTP=tuple(case for case,row in CASES.items() if row[0]!='setup')
 
-PINS={'tests/test_completion_ownership.py': '2b67510bdd8f40d584baab65837174b2f5a3935aff343b7d9eaccedf09b5df8b', 'tests/test_completion_setup.py': 'fe1a1c98792d1b30d81d975cb23ad9122ae74678295ef4ed8c5e532a7aa00b6a', 'tests/test_server.py': '4524714474b49852af00d4533f30456b87839ed0d5bbd2d10ba5502717ddef4e'}
+PINS={'tests/test_completion_ownership.py': '2b67510bdd8f40d584baab65837174b2f5a3935aff343b7d9eaccedf09b5df8b', 'tests/test_completion_setup.py': 'fe1a1c98792d1b30d81d975cb23ad9122ae74678295ef4ed8c5e532a7aa00b6a', 'tests/test_server.py': 'ece1638c115aa2055320bb0fb0c1b34359a8694ff6851fc289baf393e5523b72'}
 OWNER=20000
 
 

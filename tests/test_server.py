@@ -5488,3 +5488,32 @@ def test_real_targetless_dispatch_consumption(
     assert store.load_task_state(project_id, "mission-001").status_of("measure") == "cleared"
     rows = [json.loads(line) for line in trace.read_text().splitlines()]
     assert [row["recorded"] for row in rows if row["event"] == "targetless_completion" and row["node"] == "measure"] == [True]
+
+
+@pytest.mark.parametrize("mode", ("orchestrator", "worker", "validator", "terminal-reviewer"))
+@pytest.mark.parametrize("transport", ("streamable-http", "sse"))
+def test_http_startup_never_queries_dependency_updates(
+    config: HarnessConfig,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    transport: str,
+) -> None:
+    import fastmcp
+    import fastmcp.utilities.cli as dependency_cli
+    import uvicorn
+
+    queries: list[str] = []
+    served: list[tuple[str, int]] = []
+    monkeypatch.setattr(fastmcp.settings, "show_server_banner", True)
+    monkeypatch.setattr(dependency_cli, "check_for_newer_version", lambda: queries.append("update"))
+    monkeypatch.setattr(HarnessConfig, "discover", lambda **kwargs: config)
+    monkeypatch.setattr(sys, "argv", ["unrest-server", "--mode", mode, "--transport", transport,
+                                      "--host", "127.0.0.1", "--port", "8765"])
+
+    async def serve(server: uvicorn.Server, sockets: object = None) -> None:
+        served.append((str(server.config.host), server.config.port))
+
+    monkeypatch.setattr(uvicorn.Server, "serve", serve)
+    server_module.main()
+    assert served == [("127.0.0.1", 8765)]
+    assert queries == []

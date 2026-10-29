@@ -1618,7 +1618,7 @@ def main(
     if args.transport == "stdio":
         server.run(transport="stdio", show_banner=False)
     else:
-        server.run(transport=args.transport, host=args.host, port=args.port)
+        server.run(transport=args.transport, host=args.host, port=args.port, show_banner=False)
 
 
 __all__ = [
