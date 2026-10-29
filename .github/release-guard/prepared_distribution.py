@@ -1,5 +1,6 @@
 """Real candidate build/install preparation; never a cached test verdict."""
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -19,6 +20,11 @@ def files(root):
     if len(rows)>20000 or any(path.is_symlink() or not (path.is_dir() or path.is_file()) for path in rows):
         raise Refused('prepared distribution member graph')
     return sorted(path.relative_to(root).as_posix() for path in rows if path.is_file())
+
+
+def tree(root):
+    return {'content':capture(root,files(root)),
+        'directories':sorted(path.relative_to(root).as_posix() for path in root.rglob('*') if path.is_dir())}
 
 
 def prepare(binding, source, source_manifest, dependencies):
@@ -75,13 +81,19 @@ def prepare(binding, source, source_manifest, dependencies):
         for name,origin in (('archives',work/'archives'),('installed',work/'installed')):
             capture(origin,files(origin))
             shutil.copytree(origin,target/name,symlinks=False)
+        specification=importlib.util.spec_from_file_location('prepared_archive_oracle',source/'tools/check_distribution.py')
+        oracle=importlib.util.module_from_spec(specification)
+        specification.loader.exec_module(oracle)
+        extracted=oracle._extract_sdist_safely(next((target/'archives').glob('*.tar.gz')),work/'extracted')
+        capture(extracted,files(extracted))
+        shutil.copytree(extracted,target/'extracted',symlinks=False)
         (target/'preparation.log').write_bytes(log)
     for path in (target,*sorted(target.rglob('*'))):
         os.chown(path,0,0)
         path.chmod(0o755 if path.is_dir() or path.stat().st_mode&0o111 else 0o644)
     receipt={'schema':'unrest.prepared-distribution.v1','source':source_manifest,
         'uv':binding['uv']['sha256'],'runtime':inventory(runtime),
-        **{name:capture(target/name,files(target/name)) for name in ('backend','archives','installed')}}
+        **{name:tree(target/name) for name in ('backend','archives','installed','extracted')}}
     (target/'receipt.json').write_bytes(json.dumps(receipt,sort_keys=True,separators=(',',':')).encode())
     (target/'receipt.json').chmod(0o644)
 
@@ -91,7 +103,7 @@ def inputs(policy):
     root=Path(profile['dependencies'])/NAME
     body,_,_=read_regular(root/'receipt.json',16*1024*1024,uid=OWNER,mode=0o644)
     receipt=json.loads(body,object_pairs_hook=unique)
-    if (type(receipt) is not dict or set(receipt)!={'schema','source','uv','runtime','backend','archives','installed'}
+    if (type(receipt) is not dict or set(receipt)!={'schema','source','uv','runtime','backend','archives','installed','extracted'}
             or receipt['schema']!='unrest.prepared-distribution.v1'
             or receipt['runtime']!=profile['runtime_sha256']
             or hashlib.sha256((Path(profile['runtime_root'])/'bin/uv').read_bytes()).hexdigest()!=receipt['uv']):
@@ -100,10 +112,10 @@ def inputs(policy):
     if (capture(Path(profile['checkout']),[row['path'] for row in source['files']])!=source
             or {row['path']:row['sha256'] for row in source['files']}!=policy.pins):
         raise Refused('prepared frozen source binding')
-    for name in ('backend','archives','installed'):
-        if capture(root/name,files(root/name))!=receipt[name]:
+    for name in ('backend','archives','installed','extracted'):
+        if tree(root/name)!=receipt[name]:
             raise Refused('prepared complete member bytes')
-    return {'dist':root/'archives','installed_site':root/'installed','dependency_site':Path(profile['dependencies'])}
+    return {'dist':root/'archives','installed_site':root/'installed','dependency_site':Path(profile['dependencies']),'extracted':root/'extracted'}
 
 
 class Provider:

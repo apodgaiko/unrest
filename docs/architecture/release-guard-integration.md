@@ -372,3 +372,15 @@ CLI still unconditionally execute the extracted restart oracle after complete
 content validation, and the membership-only mutation test targets that live call.
 The original distribution success and extracted fixture/import failure tests keep
 their real execution requirements. Prepared inputs alone certify none of them.
+
+Extracted input snapshots use observer-owned custody. The acquisition primitive
+compares the complete actual extracted tree against the prepared archive-derived
+reference and the selected original mutation (none, omitted corpus, or moved
+package). It rejects unknown members, links, special files, wrong owners,
+changed bytes and acquisition races. New snapshot files are copied from the
+acquired actual bytes, then sealed 0444 under 0555 directories owned by UID 20001
+inside observer-controlled ancestry. Retention checks bind the root generation
+and complete content/directory inventory. This establishes immutability to the
+capability-free source UID 20000 without granting another mount capability.
+Provenance must report the actual snapshot cwd and module paths; it may never be
+rewritten to pretend execution used the caller's mutable extraction directory.

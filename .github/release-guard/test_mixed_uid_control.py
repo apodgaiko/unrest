@@ -55,7 +55,68 @@ def credentials(uid, capabilities):
     assert identity['no_new_privs'] == 1
 
 
+def snapshot_custody():
+    import sys
+    sys.path.insert(0,str(Path(__file__).resolve().parent))
+    import tempfile
+    import shutil
+    from archive_snapshot import acquire
+
+    with tempfile.TemporaryDirectory(prefix='unrest-snapshot-custody-') as raw:
+        root=Path(raw)
+        root.chmod(0o755)
+        reference=root/'reference'
+        reference.mkdir(mode=0o755)
+        (reference/'member').write_bytes(b'actual extracted bytes')
+        (reference/'member').chmod(0o644)
+        source=root/'source'
+        shutil.copytree(reference,source)
+        for path in (source,source/'member'):
+            os.chown(path,20000,20000)
+        profiles=root/'profiles'
+        profiles.mkdir(mode=0o755)
+        os.chown(profiles,20001,20001)
+        target=profiles/'snapshot'
+        observer=os.fork()
+        if observer==0:
+            try:
+                credentials(20001,(2,19))
+                acquire(source,reference,target,'normal')
+            except BaseException:
+                traceback.print_exc()
+                os._exit(1)
+            os._exit(0)
+        assert os.waitpid(observer,0)==(observer,0)
+        source_process=os.fork()
+        if source_process==0:
+            try:
+                credentials(20000,())
+                assert (target/'member').read_bytes()==b'actual extracted bytes'
+                operations=(lambda:os.open(target/'member',os.O_RDWR),
+                    lambda:os.chmod(target/'member',0o600),
+                    lambda:target.rename(profiles/'replacement'),
+                    lambda:os.replace(source/'member',target/'member'))
+                for operation in operations:
+                    try:
+                        operation()
+                    except PermissionError:
+                        pass
+                    else:
+                        raise AssertionError('source changed observer-owned snapshot')
+                (source/'member').write_bytes(b'later original mutation')
+                assert (target/'member').read_bytes()==b'actual extracted bytes'
+            except BaseException:
+                traceback.print_exc()
+                os._exit(1)
+            os._exit(0)
+        assert os.waitpid(source_process,0)==(source_process,0)
+        print('mixed UID snapshot: immutable acquired bytes; both actual waits zero',flush=True)
+
+
 def worker(case):
+    if case=='snapshot_custody':
+        snapshot_custody()
+        return
     start_read, start_write = os.pipe()
     ready_read, ready_write = os.pipe()
     unrelated = os.fork()
@@ -142,7 +203,7 @@ def worker(case):
 
 def main():
     assert os.getuid() == 0 and os.uname().machine == 'x86_64'
-    for case in ('attached', 'running', 'birth', 'pending_birth', 'group_stop'):
+    for case in ('attached', 'running', 'birth', 'pending_birth', 'group_stop','snapshot_custody'):
         child = os.fork()
         if child == 0:
             try:

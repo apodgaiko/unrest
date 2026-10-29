@@ -20,13 +20,13 @@ def binding(tmp_path, monkeypatch):
     (runtime/"bin/uv").write_bytes(b"stock uv")
     dependencies=tmp_path/"dependencies"
     root=dependencies/prepared.NAME
-    for name in ("backend", "archives", "installed"):
+    for name in ("backend", "archives", "installed", "extracted"):
         (root/name).mkdir(parents=True)
         (root/name/"member").write_bytes(name.encode())
     source_manifest=capture(source,["pyproject.toml"])
     receipt={"schema":"unrest.prepared-distribution.v1", "source":source_manifest,
              "uv":hashlib.sha256(b"stock uv").hexdigest(), "runtime":"a"*64,
-             **{name:capture(root/name,["member"]) for name in ("backend","archives","installed")}}
+             **{name:prepared.tree(root/name) for name in ("backend","archives","installed","extracted")}}
     (root/"receipt.json").write_bytes(json.dumps(receipt,sort_keys=True).encode())
     (root/"receipt.json").chmod(0o644)
     policy=SimpleNamespace(profile={"dependencies":str(dependencies),"checkout":str(source),
@@ -38,11 +38,11 @@ def binding(tmp_path, monkeypatch):
 def test_real_content_measurements_select_only_fixed_prepared_paths(tmp_path, monkeypatch):
     policy,root,_,_=binding(tmp_path,monkeypatch)
     result=prepared.inputs(policy)
-    assert result=={"dist":root/"archives","installed_site":root/"installed","dependency_site":root.parent}
+    assert result=={"dist":root/"archives","installed_site":root/"installed","dependency_site":root.parent,"extracted":root/"extracted"}
     assert not {"checker_output","returncode","passed","restart_oracle"}&result.keys()
 
 
-@pytest.mark.parametrize("mutation", ["source", "pins", "tool", "runtime", "backend", "archives", "installed", "extra", "link", "receipt"])
+@pytest.mark.parametrize("mutation", ["source", "pins", "tool", "runtime", "backend", "archives", "installed", "extracted", "extra", "empty-directory", "link", "receipt"])
 def test_modified_or_unrelated_inputs_are_not_reused(tmp_path,monkeypatch,mutation):
     policy,root,source,runtime=binding(tmp_path,monkeypatch)
     if mutation=="source":
@@ -53,8 +53,10 @@ def test_modified_or_unrelated_inputs_are_not_reused(tmp_path,monkeypatch,mutati
         (runtime/"bin/uv").write_bytes(b"foreign uv")
     elif mutation=="runtime":
         policy.profile["runtime_sha256"]="b"*64
-    elif mutation in ("backend","archives","installed"):
+    elif mutation in ("backend","archives","installed","extracted"):
         (root/mutation/"member").write_bytes(b"changed")
+    elif mutation=="empty-directory":
+        (root/"installed/empty").mkdir()
     elif mutation=="extra":
         (root/"installed/foreign").write_bytes(b"extra")
     elif mutation=="link":
