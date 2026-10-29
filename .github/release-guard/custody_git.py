@@ -91,9 +91,11 @@ def repository(cwd, owned, *, initialize):
 
 
 def launch(host,actor,result,kind,expected):
-    host.root_only(actor)
+    from cohort_controller import parent
+    parent(host,actor)
     prior = [v for v in host.intents.values() if v['case'] == host.case and v['role'] == 'git-custody']
-    maximum=COHORT[host.case][1] if host.case in COHORT else 12+8*limits(host.case)[0]
+    from cohort_controller import CASES as CRASH
+    maximum=4 if host.case in CRASH else COHORT[host.case][1] if host.case in COHORT else 12+8*limits(host.case)[0]
     if len(prior) >= maximum:
         raise Refused('custody Git finite case command bound')
     if any(not v['consumed'] or not host.ledger.reaped(v['birth'],v['token']) for v in prior if v.get('repository')==result.cwd):

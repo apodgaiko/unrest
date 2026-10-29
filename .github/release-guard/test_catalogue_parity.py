@@ -23,9 +23,10 @@ PINS = {
 @pytest.mark.parametrize('name', PINS)
 def test_complete_ordered_mapping_is_identical(name):
     from cohort_cases import CAMPAIGNS
+    from cohort_controller import CASES as CRASH
     rows=getattr(catalogue,name).items()
     if name=='CASES':
-        rows=[(case,value) for case,value in rows if case not in CAMPAIGNS]
+        rows=[(case,value) for case,value in rows if case not in (*CAMPAIGNS,*CRASH)]
     body = json.dumps(list(rows), separators=(',', ':')).encode()
     assert hashlib.sha256(body).hexdigest() == PINS[name]
 

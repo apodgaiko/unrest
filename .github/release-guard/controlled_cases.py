@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from content_manifest import Refused
 from cohort_cases import CAMPAIGNS
+from cohort_controller import CASES as CRASH
 
 STARTUP_FAILURE = 'tests/test_experimental_startup_diagnostics.py::test_coordinator_persists_startup_and_separate_cleanup_failure'
 
@@ -90,7 +91,7 @@ POPULATED = {
               (f'{skills}-{servers}' for skills in (False,True) for servers in (False,True))),
 }
 CASES = {
-    **dict.fromkeys(CAMPAIGNS, STANDARD),
+    **dict.fromkeys((*CAMPAIGNS,*CRASH), STANDARD),
     **POPULATED, **FRESH,
     STARTUP_FAILURE: STANDARD,
     'tests/test_controlled_acp_cancel.py::test_owned_cancel_wire_and_cleanup[pending]':

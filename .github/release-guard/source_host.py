@@ -323,6 +323,7 @@ def worker(binding, metadata, raw_directory):
                           'tcp_peer_ownership_proven':False,'tcp_quotas_proven':False,
                           'reservation_causality_proven':False,'application_payload_proven':False,
                           'unix_pair_lineage_proven':False},
+                      'cohort_observations': [] if observer is None else observer.cohort_observations,
                       'plan_observations': [] if observer is None else observer.plan_records,
                       'poison': [] if observer is None else observer.ledger.poison,
                       'output_base64': '' if observer is None else base64.b64encode(observer.output).decode()}
@@ -410,9 +411,12 @@ def main():
                 (raw_directory / 'worker-failure.txt').write_text(traceback.format_exc())
                 os._exit(125)
             os._exit(0)
+        closeouts={}
         raw, deadline = None, time.monotonic() + (110 if archive else 1220 if unexcluded(metadata,binding) else 190)
         try:
             while raw is None:
+                from cohort_controller import host_tick
+                host_tick(binding['profiles'],closeouts)
                 actual, status = os.waitpid(pid, os.WNOHANG)
                 if actual:
                     raw = status

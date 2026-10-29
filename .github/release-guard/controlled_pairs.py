@@ -18,6 +18,9 @@ def limits(case: str) -> tuple[int, int]:
     from cohort_cases import CAMPAIGNS
     if case in CAMPAIGNS:
         return CAMPAIGNS[case][0], 0
+    from cohort_controller import CASES as CRASH
+    if case in CRASH:
+        return (0 if case==CRASH[0] else 1),0
     if case in ROOT_HTTP:
         return 1, 0 if 'initialized_owner' in case else 3
     if case == STARTUP_FAILURE or case in (*FRESH,*ADMISSION,*WARNING_REFUSALS,*NOTIFICATION_STARTUP,*NOTIFICATION_SIGNALS):

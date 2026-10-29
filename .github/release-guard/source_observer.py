@@ -64,6 +64,7 @@ class Observer:
         self.git = Git(self)
         self.actors, self.intents, self.mp_pipes = {}, {}, {}
 
+        self.cohort_observations=[]
         self.fixture_roots = {}
         self.plan_records: list[dict] = []
         self.frames, self.controls, self.completed = [], [], []
@@ -139,6 +140,11 @@ class Observer:
                         continue
                     if actor is None or actor['role'] not in ('root', 'mcp', 'git-command', 'session-adapter', 'fixed-inline','desktop','archive-checker','uv-cli') or len(candidates) != 1:
                         raise Refused('source fork without a unique original launch intent')
+            if row['kind']=='original_parent_wait4':
+                from cohort_controller import WAIVED
+                for value in self.intents.values():
+                    if self.case in WAIVED and value.get('cohort_controller') and value.get('pid')==row['child']:
+                        value.setdefault('closeout_started',time.monotonic())
             if row['kind'] == 'kernel_exit' and row.get('raw') == 86 << 8:
                 self.ledger.poison.append('native guard refusal')
             if row['kind'] == 'kernel_root' and not self.full:
@@ -264,6 +270,10 @@ class Observer:
             if self.case==CASE:
                 return
         if actor['role'] == 'fixed-inline' and actor['case'] == self.case and not self.finished:
+            from cohort_controller import CASES as CRASH,owner
+            if self.case in CRASH:
+                owner(self,actor)
+                return
             if self.case in ROLE_CASES:
                 actor_slot(self,actor)
                 return
@@ -447,10 +457,15 @@ class Observer:
                 if skipped:
                     if children:
                         raise Refused('skipped source case launched children')
+                from cohort_controller import CASES as CRASH,closeout
+                waived=closeout(self,children) if self.case in CRASH else set()
+                if waived is None:
+                    return None
+                ordinary=children if not waived else [value for value in children if value['birth'] not in waived]
                 if (payload['case'] != self.case
-                        or any(not self.completed_child(value) for value in children)
+                        or any(not self.completed_child(value) for value in ordinary)
                         or any(not value['consumed'] for value in self.intents.values() if value['case'] == self.case)
-                        or any(not (self.git.reaped(value) if value['role']=='git-helper' else self.ledger.reaped(value['birth'], value['token'])) for value in children)):
+                        or any(not (self.git.reaped(value) if value['role']=='git-helper' else self.ledger.reaped(value['birth'], value['token'])) for value in ordinary)):
                     raise Refused('source original case actual cleanup incomplete')
                 if self.full:
                     self.outcomes.append(dict(payload))
@@ -590,6 +605,9 @@ class Observer:
                             raise Refused('source undischarged empty control EOF')
                     continue
                 admitted=self.admission.admit(frame)
+                from cohort_controller import WAIVED
+                if actor['role']=='root' and admitted['kind']=='case-finish' and self.case in WAIVED:
+                    frame.seconds=22
                 channel['request'] = admitted
                 self.controls.append({**admitted, 'observed_monotonic_ns': time.monotonic_ns()})
             if frame.output is None:

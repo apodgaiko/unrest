@@ -83,6 +83,9 @@ def proposal(host, actor, raw):
         return descendant(host,actor,raw)
     if case in RUN_WORKERS and argv[1:3]==['-m','unrest_harness.run_worker']:
         return run_proposal(host,actor,raw)
+    from cohort_controller import CASES as CRASH, proposal as crash_proposal
+    if case in CRASH and argv[1:2]==['-c']:
+        return crash_proposal(host,actor,raw)
     if case in GIT_CASES:
         from git_proposals import prepare
         return prepare(host,actor,raw)
@@ -242,7 +245,8 @@ def proposal(host, actor, raw):
         from cleanup_launch import OFFLINE
         extra_environment={**dict(expected.environment),**(OFFLINE if role=='mcp' else {})}
     elif case in (*BOOTSTRAP,*CONTROLLED):
-        host.root_only(actor)
+        from cohort_controller import parent
+        parent(host,actor)
         from controlled_pairs import scope,before_spawn
         from bootstrap_cases import declaration
         if case in CONTROLLED:

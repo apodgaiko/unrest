@@ -578,3 +578,23 @@ but initialize one owned controlled pair before the next send-boundary check.
 Their admission ceiling therefore permits that single startup pair; the original
 zero-prompt assertions still verify no turn was sent. This does not apply to the
 intentional controller crash at reservation.
+
+The four original cohort controller-crash parameters have a separate exact
+controller descriptor. Its admitted body and environment are byte-bound to the
+unchanged original case; only that consumed controller Birth/token can construct
+its four setup Git children and (except at reservation) one controlled backend/ACP
+pair. The controller must have authenticated READY and an original-parent wait73.
+Reservation admits no transport child and has no exception.
+
+For the other three parameters, the previously approved two-child exception uses
+passive adoptive closeout. A protected observer request names only those two
+registered READY children, after all four Git waits and controller wait73. The
+host subreaper verifies each adopted PID's stable birth and actual parent before
+an exact nonblocking wait, and atomically publishes a root-owned receipt. The
+observer joins each raw receipt status to its traced terminal status within one
+20-second deadline beginning at the observed controller wait. This never writes
+an original-parent ledger join. Child numeric status and final timing remain
+UNVERIFIED, and the evidence labels original-parent cleanup as unproven. There
+is no successful-path signal or cancellation; expiry retains failed status and
+the existing failure cleanup. Only these authenticated case-finish RPCs receive
+22 seconds for transport; the provenance deadline itself remains20 seconds.
