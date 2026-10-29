@@ -6,7 +6,7 @@ import os
 from content_manifest import Refused,read_regular,native_digest,_capture
 from control_transport import unique
 from console_entries import normalized,script
-from launch_policy import build_expected,source_unit
+from launch_policy import admit_expected,build_expected,source_unit
 from owned_fixture import acquire
 
 TEST='tests/test_v04_activation.py'
@@ -64,19 +64,17 @@ def proposal(host,actor,raw):
         raise Refused('stock uv original request bytes and unused home')
     env={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)',
         'UNREST_HOME':str(home),'UNREST_PROJECTS_DIR':str(home/'projects')}
-    if raw['executable']!='uv' or raw['cwd']!=host.meta['checkout'] or raw['environment']!=env:
-        raise Refused('stock uv original environment and cwd')
+    if raw['executable']!='uv':
+        raise Refused('stock uv original command')
     runtime=Path(host.meta['runtime_root'])
     executable=runtime/'bin/uv'
     pin=uv_digest(executable)
     if {'path':str(executable),'sha256':pin}!=host.binding['uv']:
         raise Refused('stock uv current native bytes')
     file,file_pin=script(host,'unrest')
-    value=build_expected('console:uv',case,str(executable),pin,tuple(args),tuple(sorted(env.items())),raw['cwd'],'native')
-    answer=host.admit_launch(actor,value,'uv-cli',args,None,maximum=len(COMMANDS[case]))
-    if answer is not None:
-        host.intents[answer['ticket']].update(uv_console={'argv':['unrest',*args[3:]],'pin':file_pin,'script':str(file)})
-    return None if answer is None else {**answer,'translated':args,'rule':value.rule}
+    value=build_expected('console:uv',case,str(executable),pin,tuple(args),tuple(sorted(env.items())),host.meta['checkout'],'native')
+    return admit_expected(host,actor,raw,value,'uv-cli',args,maximum=len(COMMANDS[case]),
+        fields={'uv_console':{'argv':['unrest',*args[3:]],'pin':file_pin,'script':str(file)}})
 
 
 def reserve_child(host,intent,birth):

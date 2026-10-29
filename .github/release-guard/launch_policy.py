@@ -171,3 +171,15 @@ def literal(unit,name):
     if not isinstance(value,ast.Constant) or type(value.value) is not str:
         raise Refused('original string literal')
     return value.value
+
+
+def admit_expected(host,actor,raw,value,role,vector,script_pin=None,*,fields=None,**options):
+    """Finalize an independently reconstructed declaration; never infer one."""
+    if raw['argv']!=list(value.argv) or raw['environment']!=dict(value.environment) or raw['cwd']!=value.cwd:
+        raise Refused('original launch operands differ from declaration')
+    answer=host.admit_launch(actor,value,role,vector,script_pin,**options)
+    if answer is None:
+        return None
+    if fields is not None:
+        host.intents[answer['ticket']].update(fields)
+    return {**answer,'translated':vector,'rule':value.rule}

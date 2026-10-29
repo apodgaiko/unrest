@@ -4,7 +4,7 @@ import stat
 
 from content_manifest import Refused
 from git_observer import image
-from launch_policy import build_expected
+from launch_policy import admit_expected,build_expected
 from multiprocess_routes import TRANSACTIONS
 from cleanup_launch import EXECUTION_CASES, OFFLINE
 
@@ -81,9 +81,6 @@ def stdio(host,pid,row):
 
 def proposal(host,actor,raw):
     value,role,port = expected(host,actor,raw)
-    if raw['argv']!=list(value.argv) or raw['environment']!=dict(value.environment) or raw['cwd']!=value.cwd:
-        raise Refused('HTTP original command operands')
     vector = [value.executable,*value.argv[1:]] if role=='ps' else [value.executable,'-I','-S',*value.argv[1:]]
-    answer = host.admit_launch(actor,value,role,vector,None,port=port,
+    return admit_expected(host,actor,raw,value,role,vector,port=port,
         environment={**dict(value.environment),**OFFLINE} if role=='mcp' else None)
-    return None if answer is None else {**answer,'translated':vector,'rule':value.rule}

@@ -7,7 +7,7 @@ import stat
 from types import SimpleNamespace
 
 from content_manifest import Refused, read_regular, _directory_key, _key
-from launch_policy import build_expected
+from launch_policy import admit_expected,build_expected
 from package_cases import POSITIVE, NEGATIVE, MUTATIONS, FIRST, LIFECYCLE, literal, CONTRACT
 from archive_leaf import CHECKER_COMMAND, LEAF_COMMAND
 
@@ -175,9 +175,5 @@ def proposal(host,actor,raw):
         raise Refused('package exact original launch case')
     value=build_expected('package:'+role,case,native,pin,argv,tuple(sorted(env.items())),cwd,
         'native' if role=='archive-checker' else 'python-command')
-    if raw['argv']!=list(value.argv) or raw['environment']!=dict(value.environment) or raw['cwd']!=value.cwd:
-        raise Refused('package original process operands')
-    answer=host.admit_launch(actor,value,role,vector,None)
-    if answer is not None:
-        host.intents[answer['ticket']].update(execution_data=execution_data,package_inputs=archive_data)
-    return None if answer is None else {**answer,'translated':vector,'rule':value.rule}
+    return admit_expected(host,actor,raw,value,role,vector,
+        fields={'execution_data':execution_data,'package_inputs':archive_data})

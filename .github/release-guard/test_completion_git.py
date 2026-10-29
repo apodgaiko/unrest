@@ -86,7 +86,7 @@ def test_foreign_or_changed_git_inputs_never_become_query_authority(fixture,muta
     if mutation in ('argv','env'):
         host,actor,raw,wait,workspace=fixture
         argv=('git','status') if mutation=='argv' else git.FIXTURE[0]
-        with pytest.raises(Refused,match='original Git operands'):
+        with pytest.raises(Refused,match='original launch operands'):
             git.proposal(host,actor,raw(argv,{'PATH':'foreign'} if mutation=='env' else None))
         assert not host.intents
         return

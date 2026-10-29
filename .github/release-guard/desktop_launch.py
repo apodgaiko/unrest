@@ -5,7 +5,7 @@ import stat
 from content_manifest import Refused
 from owned_fixture import acquire
 from git_observer import image
-from launch_policy import build_expected
+from launch_policy import admit_expected,build_expected
 
 CASE = 'tests/test_v046_desktop_fixture.py::test_actual_stdio_response_binds_fixture_process_and_candidate'
 TOOL = 'tools/v046_desktop_fixture.py'
@@ -63,8 +63,5 @@ def proposal(host,actor,raw):
         environment={'HOME':str(root/'user'),'PATH':'/usr/bin:/bin'}
         reference=PIN
     value=build_expected('desktop:'+role,CASE,exe,pin,argv,tuple(sorted(environment.items())),str(root),kind,reference)
-    if raw['argv']!=list(value.argv) or raw['environment']!=dict(value.environment) or raw['cwd']!=value.cwd:
-        raise Refused('desktop exact original operands')
     vector=[exe,*argv[1:]] if query else [exe,'-I','-S',*argv[2:]]
-    answer=host.admit_launch(actor,value,role,vector,reference)
-    return None if answer is None else {**answer,'translated':vector,'rule':value.rule}
+    return admit_expected(host,actor,raw,value,role,vector,reference)

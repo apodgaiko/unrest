@@ -594,3 +594,10 @@ Package preparation imports stay out of the source profile's prebody import
 closure. In particular, importing tempfile there can open a cached random-device
 descriptor before inherited-FD validation. Those imports are deferred to preparation
 and already admitted console construction; ambient descriptors are still rejected.
+
+Proposal finalization is shared: independently constructed original argv,
+environment and cwd must match before the existing observer admission runs. The
+family builders retain source pins, parent relationships, schedules, quotas,
+fixture custody and status requirements; the shared helper infers none of them.
+Only observer-constructed intent fields are attached. Exec-time byte/vector and
+kernel ownership checks remain separate from this mechanical finalization.

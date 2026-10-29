@@ -75,7 +75,7 @@ def standalone_environment(metadata):
 
 def proposal(host,actor,raw):
     from owned_fixture import acquire
-    from launch_policy import build_expected
+    from launch_policy import admit_expected,build_expected
     host.root_only(actor)
     if host.case!=CASE or raw['stdin'] is not None:
         raise Refused('console exact unrelated-workspace case')
@@ -104,12 +104,9 @@ def proposal(host,actor,raw):
     file,file_pin=script(host,'unrest-server')
     value=build_expected('console:server',CASE,str(executable),pin,tuple(vector),
         tuple(sorted(environment.items())),str(cwd),'native')
-    if raw['argv']!=vector or raw['executable']!='unrest-server' or raw['environment']!=environment:
-        raise Refused('console exact original registered operands')
-    answer=host.admit_launch(actor,value,'fixed-inline',vector,file_pin)
-    if answer is not None:
-        effective=normalized(runtime,Path(host.meta['dependencies']),'unrest-server',vector[1:])
-        if effective[3]!=str(file):
-            raise Refused('console prepared normalized script identity')
-        host.intents[answer['ticket']]['python_vector']=effective
-    return None if answer is None else {**answer,'translated':vector,'rule':value.rule}
+    if raw['executable']!='unrest-server':
+        raise Refused('console exact registered command')
+    effective=normalized(runtime,Path(host.meta['dependencies']),'unrest-server',vector[1:])
+    if effective[3]!=str(file):
+        raise Refused('console prepared normalized script identity')
+    return admit_expected(host,actor,raw,value,'fixed-inline',vector,file_pin,fields={'python_vector':effective})

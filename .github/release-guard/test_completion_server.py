@@ -65,7 +65,7 @@ def test_each_concurrent_http_constructor_consumes_one_exact_reservation(host):
         with pytest.raises(Refused,match='unconsumed advisory'):
             server.probe(host)
         changed={**command,'environment':{**command['environment'],'FOREIGN':'not admitted'}}
-        with pytest.raises(Refused,match='original role server operands'):
+        with pytest.raises(Refused,match='original launch operands'):
             server.proposal(host,actor,changed)
         answer=server.proposal(host,actor,command)
         assert host.probe_ports[host.case]['server_ticket']==answer['ticket']

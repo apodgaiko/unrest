@@ -7,7 +7,7 @@ from custody_git import repository
 from git_commands import Command
 from git_observer import HOME_CONFIG,image,regular
 from git_values import digest
-from launch_policy import build_expected
+from launch_policy import admit_expected,build_expected
 
 FIXTURE=(('git','init','-q'),('git','-c','user.name=Test','-c','user.email=test@example.invalid',
     'commit','--allow-empty','-qm','base'))
@@ -79,10 +79,8 @@ def proposal(host,actor,raw):
         environment=dict(actor['profile']['environment'])
     expected=build_expected('completion:git',case,'/usr/bin/git',image(),vector,
         tuple(sorted(environment.items())),str(workspace),'native')
-    if raw['argv']!=list(vector) or raw['environment']!=dict(expected.environment) or raw['cwd']!=expected.cwd:
-        raise Refused('completion original Git operands')
     translated=['/usr/bin/git',*vector[1:]]
-    answer=host.admit_launch(actor,expected,'git-command',translated,None,
+    answer=admit_expected(host,actor,raw,expected,'git-command',translated,
         maximum=2+sum(row[2] for row in schedule(case)))
     if answer is None:
         return None
@@ -90,5 +88,5 @@ def proposal(host,actor,raw):
     intent.update(command=command,repository=str(workspace),operation='completion-fixture' if head is None else 'completion-head',
         fixture_git=head is None,fixture_head=head,fixture_stdio=head is None)
     host.git.commands[intent['token']]=intent
-    return {**answer,'translated':translated,'rule':expected.rule,
+    return {**answer,
         'command':{'stdin':None,'produces':None if command.produces is None else [command.produces[0],command.produces[1],list(command.produces[2])]}}
