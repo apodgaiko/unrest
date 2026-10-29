@@ -31,7 +31,7 @@ IMPORT_CASES = tuple(TEST + '::' + name for name in (
     'test_repository_command_is_the_lazy_positive_control', 'test_mcp_help_does_not_import_repository_modules',
     'test_real_entrypoint_import_boundary'))
 SEQUENCES = dict(zip(IMPORT_CASES, (('help',), ('init',), ('list',), ('check',), ('mcp',), ('help','init','list','mcp','check')), strict=True))
-PINS = {'tests/test_repository_contract.py': '1cbd5eadccc55dbdce16eaa0ff1434e2694c716cfe5c7f3ed252e74672b19aeb', 'src/unrest_harness/repository_contract.py': '619255f96649e14a931e6e0dbf888c1589f023dde96c3a977cda473f08404b86'}
+PINS = {'tests/test_repository_contract.py': 'f6b284b53f2c9f4f307ace30ce17c48fe4c8f33dd9035fcc36ab6edeb0623c44', 'src/unrest_harness/repository_contract.py': '619255f96649e14a931e6e0dbf888c1589f023dde96c3a977cda473f08404b86'}
 
 
 STDIO_TEST = 'tests/test_stdio_startup.py'

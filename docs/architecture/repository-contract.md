@@ -52,6 +52,13 @@ not treated as constant. Commands inside a line-bounded literal
 `if false; then` ... `fi` block without nested or alternate branches also do
 not count. This is not general shell or GitHub expression evaluation.
 
+Mutation tests replace the actual required executable line in either an inline
+`run:` value or a YAML block scalar; equivalent quoting of the Python version
+does not change the lane. Their historical parameter IDs and the exact
+`LEAN-REPO-CI` rejection remain. Disposable repository copies exclude
+`.unrest-runtime` so private runtime records and caches never enter these source
+fixtures.
+
 ## Diagnostics
 
 Failures use exactly these bounded codes with a repository-relative path or

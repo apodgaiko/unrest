@@ -38,6 +38,7 @@ def _copy_repository(tmp_path: Path) -> Path:
             ".mypy_cache",
             ".pytest_cache",
             ".ruff_cache",
+            ".unrest-runtime",
             ".validation",
             ".venv",
             "dist",
@@ -256,7 +257,15 @@ def test_ci_required_executable_and_lane_families_are_candidate_bound(
     repository = _copy_repository(tmp_path)
     path = repository / ".github/workflows/ci.yml"
     text = path.read_text(encoding="utf-8")
+    # YAML block scalars keep executable lines without an inline `run:` prefix.
+    # Mutate the same required command, preserving the historical parameter IDs.
+    if old not in text and old.startswith("run: "):
+        old, new = old.removeprefix("run: "), new.removeprefix("run: ")
+        assert any(line.strip() == old for line in text.splitlines())
+    elif family == "python-3.13" and old not in text:
+        old, new = old.replace('"', "'"), new.replace('"', "'")
     assert old in text, f"candidate no longer contains the {family} binding"
+    assert text.count(old) == 1
     path.write_text(text.replace(old, new), encoding="utf-8")
 
     error = _error(repository)

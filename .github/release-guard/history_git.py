@@ -23,7 +23,7 @@ CATALOG={
     V045:('test_v040_release_carriers_remain_exact_tag_bytes',),
 }
 CASES=(*tuple(file+'::'+name for file,names in CATALOG.items() for name in names),CLI,REPOSITORY)
-PINS={'tests/test_repository_contract.py':'1cbd5eadccc55dbdce16eaa0ff1434e2694c716cfe5c7f3ed252e74672b19aeb', 'tests/test_release_binding.py': '2db77fb31af6b7e536420a16aaa92fc237404570d0f97df37f374fed788c2d0f', 'tests/test_v021_release_records.py': '7d5f90c969295c019e515133cca6abbb2458882c53b43a7bee3c59ca44a95ee5', 'tests/test_v045_release_records.py': 'be9693d6ad6937f0080f6022d3db602ad8530c0d24f8528b85ebc3ee4c492da4'}
+PINS={'tests/test_repository_contract.py':'f6b284b53f2c9f4f307ace30ce17c48fe4c8f33dd9035fcc36ab6edeb0623c44', 'tests/test_release_binding.py': '2db77fb31af6b7e536420a16aaa92fc237404570d0f97df37f374fed788c2d0f', 'tests/test_v021_release_records.py': '7d5f90c969295c019e515133cca6abbb2458882c53b43a7bee3c59ca44a95ee5', 'tests/test_v045_release_records.py': 'be9693d6ad6937f0080f6022d3db602ad8530c0d24f8528b85ebc3ee4c492da4'}
 
 
 def commands(checkout,case):
