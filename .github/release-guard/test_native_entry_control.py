@@ -434,6 +434,9 @@ def main():
     os.chown(profiles, 20001, 20001)
     success = False
     try:
+        from test_namespace_supervisor import actual_namespace_control
+        actual_namespace_control(profiles/'namespace-init-failure.txt')
+        print('native namespace PID1 adoption and actual numeric waits verified',flush=True)
         filesystem_access(binding, profiles)
         ownership_controls(profiles)
         for case in CASES:

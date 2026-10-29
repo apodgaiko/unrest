@@ -732,3 +732,12 @@ collection and the helper call sites. The five actual-runner scenarios remain a
 separate family; their handoff/receipt schema is not admitted by the wire-only
 boundary. The repository contract's two readonly status commands use its pinned
 source owner and the existing public-history projection, without helper authority.
+
+A trusted namespace supervisor primitive is being validated separately from
+source certification. A childless root driver forks a holder, which creates the
+PID namespace; its init mounts private procfs before executing its fixed host
+callback. The outer driver remains outside that namespace and waits only for its
+own child. Failed or interrupted waits never signal a PID already reaped, and the
+first private failure record is retained. The native primitive control proves
+real PPid1 adoption and numeric waits17/23. This primitive alone grants no source
+case an adoption exception, resumed signaling scope or release eligibility.
