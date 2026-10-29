@@ -268,6 +268,11 @@ class Observer:
             if self.case in ROLE_CASES:
                 actor_slot(self,actor)
                 return
+            from run_worker_launch import MEASUREMENT_PROJECT
+            if self.case==MEASUREMENT_PROJECT:
+                from measurement_runtime import owner
+                owner(self,actor)
+                return
             from run_worker_launch import DESCENDANT
             if self.case==DESCENDANT and any(value.get('run_worker') and value.get('birth')==actor['birth'] and value['token']==actor['token'] for value in self.intents.values()):
                 return
@@ -326,6 +331,10 @@ class Observer:
         from completion_launch import CASES as COMPLETION_CASES
         from run_worker_launch import ALL_CASES as RUN_WORKERS
         from history_git import CLI as BINDING_CLI
+        from run_worker_launch import MEASUREMENT_PROJECT
+        if actor['case']==MEASUREMENT_PROJECT and actor['role'] in ('mcp','mock-acp'):
+            return (terminal is not None and actor['body_ready'] and (terminal[2]==0
+                or actor['role']=='mcp' and terminal[2] in (-9,-15) and -terminal[2] in actor['signals']))
         if actor['role']=='fixed-inline' and actor['case']==BINDING_CLI:
             rows=[row for row in self.intents.values() if row.get('birth')==actor['birth'] and row['token']==actor['token'] and 'binding_status' in row]
             return len(rows)==1 and terminal is not None and actor['body_ready'] and terminal[2]==rows[0]['binding_status']

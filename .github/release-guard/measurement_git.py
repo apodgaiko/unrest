@@ -22,6 +22,10 @@ REAL={TEST+'::'+NAMES[-4]:(11,16),TEST+'::'+NAMES[-3]:(1,6)}
 
 
 def proposal(host,actor,raw):
+    from run_worker_launch import MEASUREMENT_PROJECT
+    if host.case==MEASUREMENT_PROJECT and actor['role']!='root':
+        from measurement_runtime import nested
+        return nested(host,actor,raw)
     host.root_only(actor)
     checkout=Path(host.meta['checkout'])
     source_unit(checkout,TEST,PIN)
@@ -97,20 +101,26 @@ def cold_root(host,path):
 
 def worker(host,actor,raw):
     import os
-    from run_worker_launch import admit_worker,MEASUREMENT_EVOLUTION
-    if host.case!=MEASUREMENT_EVOLUTION:
+    from run_worker_launch import admit_worker,MEASUREMENT_EVOLUTION,MEASUREMENT_PROJECT
+    if host.case not in (MEASUREMENT_EVOLUTION,MEASUREMENT_PROJECT):
         raise Refused('measurement worker exact case')
     source_unit(Path(host.meta['checkout']),TEST,PIN)
     records=[row for row in host.intents.values() if row['case']==host.case and row.get('run_worker')]
-    if len(records)>=2 or any(not row['consumed'] or not host.ledger.reaped(row['birth'],row['token']) for row in records):
+    from measurement_runtime import PROJECT_STEPS
+    steps=((11,'start_project',()),(16,'start_project',())) if host.case==MEASUREMENT_EVOLUTION else PROJECT_STEPS
+    if len(records)>=len(steps) or any(not row['consumed'] or not host.ledger.reaped(row['birth'],row['token']) for row in records):
         raise Refused('measurement worker original sequence and waits')
+    repetition,operation,nodes=steps[len(records)]
     home=Path(raw['cwd'])
     cold_root(host,home.parent/'workspace')
-    if home.name!='harness-home' or home.resolve()!=home or home.parent.name!=f'rep-{REAL[host.case][len(records)]:02d}':
+    if home.name!='harness-home' or home.resolve()!=home or home.parent.name!=f'rep-{repetition:02d}':
         raise Refused('measurement worker original repetition home')
     native=host.binding['entry']['path']
     command=native+' '+str(Path(host.meta['checkout'])/'tests/mock_measurement_acp.py')
     env={'LANG':'C.UTF-8','PATH':os.defpath,'PYTHONPATH':str(Path(host.meta['checkout'])/'src'),
         'UNREST_APPROVAL_RECOVERY':'0','UNREST_HOME':str(home),'UNREST_PROJECTS_DIR':str(home/'projects'),
         'UNREST_WORKER_ACP_COMMAND':command,'UNREST_VALIDATOR_ACP_COMMAND':command}
-    return admit_worker(host,actor,raw,home,'start_project',env,2,0)
+    answer=admit_worker(host,actor,raw,home,operation,env,len(steps),0)
+    if answer is not None:
+        host.intents[answer['ticket']]['measurement_nodes']=nodes
+    return answer

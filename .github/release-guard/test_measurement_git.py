@@ -32,21 +32,21 @@ def raw(host,args):
 def test_every_original_source_fixture_has_exact_commands(host,case):
     host.case=case
     for args in (['init','-q'],['add','.'],['ls-files','-z','--stage']):
-        result=measurement.proposal(host,{},raw(host,args))
+        result=measurement.proposal(host,{'role':'root'},raw(host,args))
         assert result['translated']==['/usr/bin/git',*args]
         assert host.seen[-1][1]==('init' if args[0]=='init' else 'measurement-command')
 
 @pytest.mark.parametrize('args',(['add','USER'],['commit','-m','fixture'],['config','user.name','extra'],['ls-files','--others']))
 def test_other_commands_refuse_before_any_launch(host,args):
     with pytest.raises(Refused,match='original source Git command'):
-        measurement.proposal(host,{},raw(host,args))
+        measurement.proposal(host,{'role':'root'},raw(host,args))
     assert not host.seen
 
 def test_provider_or_other_environment_cannot_be_inherited(host):
     request=raw(host,['init','-q'])
     request['environment']['OPENAI_API_KEY']='canary'
     with pytest.raises(Refused,match='original Git environment'):
-        measurement.proposal(host,{},request)
+        measurement.proposal(host,{'role':'root'},request)
     assert not host.seen
 
 
@@ -102,13 +102,17 @@ def test_evolution_workers_are_two_fixed_start_operations(host,monkeypatch,mutat
         host.intents[2]=dict(previous)
     monkeypatch.setattr(measurement,'cold_root',lambda host,path:None)
     seen=[]
-    monkeypatch.setattr(run_worker_launch,'admit_worker',lambda *args:seen.append(args) or {'ok':True})
+    def admit(*args):
+        seen.append(args)
+        host.intents[99]={}
+        return {'ok':True,'ticket':99}
+    monkeypatch.setattr(run_worker_launch,'admit_worker',admit)
     repetition=16 if host.intents else 11
     if mutation=='repetition':
         repetition=1
     request={'cwd':f'/owned/home/cold-roots/rep-{repetition:02d}/harness-home'}
     if mutation is None:
-        assert measurement.worker(host,{},request)=={'ok':True}
+        assert measurement.worker(host,{},request)=={'ok':True,'ticket':99}
         assert seen[0][4]=='start_project' and seen[0][6:8]==(2,0)
         assert seen[0][5]['UNREST_APPROVAL_RECOVERY']=='0'
         assert set(seen[0][5])=={'LANG','PATH','PYTHONPATH','UNREST_HOME','UNREST_PROJECTS_DIR','UNREST_APPROVAL_RECOVERY','UNREST_WORKER_ACP_COMMAND','UNREST_VALIDATOR_ACP_COMMAND'}

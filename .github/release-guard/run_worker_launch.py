@@ -36,7 +36,8 @@ WORKERS={TEST+'::test_'+name: ('end_mission' if name.endswith('[end_mission]') e
          'advance_project' if name.endswith('[advance_project]') else 'start_project') for name in NAMES}
 EXITS=dict(zip(WORKERS,((0,),(2,),(2,),(2,),(2,0),(0,),(17,0),(-9,),(-9,),(0,),(0,),(0,)),strict=True))
 MEASUREMENT_EVOLUTION='tests/test_measurement.py::test_evolution_cases_use_real_public_state_machine_and_cold_state'
-ALL_CASES=(*CASES,*WORKERS,MEASUREMENT_EVOLUTION)
+MEASUREMENT_PROJECT='tests/test_measurement.py::test_project_cases_use_real_run_control_and_nested_acp'
+ALL_CASES=(*CASES,*WORKERS,MEASUREMENT_EVOLUTION,MEASUREMENT_PROJECT)
 DESCENDANT=TEST+'::test_'+NAMES[5]
 
 
@@ -98,7 +99,7 @@ def descendant(host,actor,raw):
 def proposal(host,actor,raw):
     host.root_only(actor)
     case=host.case
-    if case==MEASUREMENT_EVOLUTION:
+    if case in (MEASUREMENT_EVOLUTION,MEASUREMENT_PROJECT):
         from measurement_git import worker
         return worker(host,actor,raw)
     custom=case in WORKERS

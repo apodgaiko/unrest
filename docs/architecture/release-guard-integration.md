@@ -520,3 +520,14 @@ environment (including disabled features/skills/MCP controls), owned cwd, actual
 native identity and native no-launch negatives remain admission requirements.
 This removes a second application-behavior oracle; it grants no provider launch,
 permission override, alternative method or recovery of a denied review.
+
+
+The project measurement test declares its original eight RunControl operations
+across repetitions 01/06. Only the three advance workers receive the corresponding
+six fixed work/validator node identities. Nested MCP/mock-ACP pairs bind the
+actual worker Birth/token/exec, one owned project record, running node cursor,
+exact attempt path, original targets, complete environment and isolated native
+entry. Each prior pair must be actually reaped before the next node. MCP retains
+its exact inherited pipe and local port; only the source-pinned mock script may
+act as ACP. Mock exit0 and MCP exit0/authorized TERM/KILL retain explicit
+completion checks. No native provider acceptance or live benchmark follows.
