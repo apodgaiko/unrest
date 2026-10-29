@@ -169,3 +169,44 @@ def test_original_nested_command_keeps_exact_two_nodes_and_no_descendant_role():
     policy.case = CASE
     with pytest.raises(Refused, match="undeclared process role"):
         policy.popen(("/native/python", [], None, {}))
+
+
+def test_hermetic_literal_environment_and_selection_match_original_source():
+    import importlib.util
+    from pathlib import Path
+    from fixed_inline import expected, translated
+    from nested_pytest import HERMETIC, HERMETIC_TEST, CASES
+    root = next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
+    spec = importlib.util.spec_from_file_location('original_environment_probe',root/HERMETIC_TEST)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    environment = {'PATH':'/bin:/usr/bin','PYTEST_CURRENT_TEST':HERMETIC+' (call)'}
+    value = expected(HERMETIC,'pytest','/native/python','a'*64,root,environment)
+    assert value.argv == ('/native/python','-c',module._PYTEST_RESTORE_PROBE,'-q',
+        *(str(root/node) for node in CASES[HERMETIC][:2]),CASES[HERMETIC][2])
+    assert dict(value.environment) == {**environment,**module._adversarial_environment(),
+        module._UNRELATED_ENV:'outer-unrelated-value'}
+    assert translated(value) == ('/native/python','-I','-S',*value.argv[1:])
+    with pytest.raises(Refused):
+        expected(HERMETIC,'pytest','/native/python','a'*64,root,environment,query=True)
+
+
+def test_hermetic_child_seals_all_three_nodes_without_advancing_outer_case(monkeypatch):
+    from nested_pytest import HERMETIC, CASES
+    calls = []
+    policy = SimpleNamespace(profile={'cases':[HERMETIC]},case=HERMETIC,poison=False,
+        client=SimpleNamespace(request=lambda *args:calls.append(args)))
+    proof = make_selected(policy)
+    nodes = CASES[HERMETIC]
+    items = [SimpleNamespace(nodeid=node) for node in nodes]
+    monkeypatch.setattr(source_root,'Function',SimpleNamespace)
+    proof.pytest_collection_finish(SimpleNamespace(items=items))
+    for item in items:
+        protocol = proof.pytest_runtest_protocol(item,None)
+        next(protocol)
+        for phase in ('setup','call','teardown'):
+            proof.pytest_runtest_logreport(SimpleNamespace(nodeid=item.nodeid,when=phase,outcome='passed',failed=False))
+        with pytest.raises(StopIteration):
+            next(protocol)
+        assert policy.case == HERMETIC
+    assert calls == [('preselected-finish',case_seal(nodes))]

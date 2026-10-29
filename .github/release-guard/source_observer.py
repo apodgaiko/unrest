@@ -614,12 +614,12 @@ class Observer:
                 raise Refused('archive actual original result')
             actor['archive_result']=dict(payload)
         elif kind == 'preselected-finish':
-            from nested_pytest import CASE,NODES
+            from nested_pytest import CASES
             from source_profile import case_seal
             rows=[row for row in self.intents.values() if row.get('birth')==actor['birth'] and row['token']==actor['token']
                   and row['consumed'] and row['role']==actor['role'] and row['case']==self.case]
-            if (actor['role']!='pytest-regression' or actor['case']!=self.case or self.case!=CASE
-                    or not actor['body_ready'] or actor.get('preselected_complete') or payload!=case_seal(NODES) or len(rows)!=1):
+            if (actor['role']!='pytest-regression' or actor['case']!=self.case or self.case not in CASES
+                    or not actor['body_ready'] or actor.get('preselected_complete') or payload!=case_seal(CASES[self.case]) or len(rows)!=1):
                 raise Refused('preselected child completion scope')
             actor['preselected_complete']=True
         elif kind == 'fixture-root':

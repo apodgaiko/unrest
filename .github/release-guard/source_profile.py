@@ -30,7 +30,7 @@ from review_wire import CASES as REVIEW_CASES
 from product_audit import CASES as AUDIT_CASES
 from postbuild_root import CASES as ARCHIVE_CASES, COMMAND as ARCHIVE_COMMAND
 from package_cases import CASES as PACKAGE_CASES,GROUPS as PACKAGE_GROUPS,POSITIVE,MUTATIONS,NEGATIVE,FIRST,LIFECYCLE
-from fixed_inline import CASES as FIXED_CASES, GROUPS as FIXED_GROUPS, NESTED_CASE, DESKTOP_CASE
+from fixed_inline import CASES as FIXED_CASES, GROUPS as FIXED_GROUPS, NESTED_CASES, DESKTOP_CASE
 
 ROOT_COMMAND = 'from source_root import main;raise SystemExit(main())'
 METHODS = frozenset({'collection-finish', 'collection', 'core-ready', 'body-ready', 'case-start', 'case-finish', 'root-finish',
@@ -164,7 +164,7 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
         'root': ('<bootstrap>',), 'backend': (*BOOTSTRAP,*CONTROLLED), 'acp': (*BOOTSTRAP,*CONTROLLED),
         'delayed-backend': tuple(case for case in BOOTSTRAP if wrapper(case) is not None),
         'archive-checker':(POSITIVE,*MUTATIONS),'archive-leaf':(POSITIVE,*NEGATIVE),'archive-installed':(FIRST,LIFECYCLE),
-        'desktop':(DESKTOP_CASE,), 'pytest-regression': (NESTED_CASE,), 'fixed-inline': tuple(case for case in FIXED_CASES if case not in (NESTED_CASE,DESKTOP_CASE)), 'plan-python': (PLAN_PYTHON,),
+        'desktop':(DESKTOP_CASE,), 'pytest-regression': tuple(NESTED_CASES), 'fixed-inline': tuple(case for case in FIXED_CASES if case not in (*NESTED_CASES,DESKTOP_CASE)), 'plan-python': (PLAN_PYTHON,),
         'session-adapter': tuple(case for case in LIVE if case not in (*INVALID,inline_session)),
         'session-inline': (inline_session,), 'session-child': (TIMEOUT,),
         'workspace-owned': (GIT_CASES[7],), 'cleanup-inline': tuple(DECLARATIONS),

@@ -424,3 +424,11 @@ original lifecycle, restart, corruption and CLI behavior assertions still execut
 Local pytest cursors share their phase-accounting implementation while retaining
 the enclosing actor/case authority; only the full release root can seal release
 completion.
+
+The hermetic environment regression retains its original inline pytest probe,
+three exact inner tests and complete seeded HarnessConfig inventory. Its child
+uses the same non-launching pytest role as the two-node speed regression; it
+cannot start descendants or advance the outer case. The observer reconstructs
+its byte-pinned literal body and adversarial environment, and requires all three
+setup/call/teardown outcomes before accepting the child seal. The probe's own
+parent-environment restoration assertions still execute normally.
