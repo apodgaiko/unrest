@@ -253,26 +253,3 @@ def encode(manifest: Manifest) -> bytes:
             raise Refused("manifest_byte_bound")
         result.extend(block)
     return bytes(result) + b"\n"
-
-
-def verify(root: Path, body: bytes, expected_sha256: str,
-           paths: Sequence[str]) -> Manifest:
-    """Require an external digest and inventory, then remeasure current files."""
-    from control_transport import unique
-    names = _inventory(paths)
-    if (type(body) is not bytes or len(body) > MAX_MANIFEST_BYTES
-            or not is_sha256(expected_sha256)
-            or hashlib.sha256(body).hexdigest() != expected_sha256):
-        raise Refused("manifest_reference")
-    try:
-        value = json.loads(body, object_pairs_hook=unique)
-    except Refused:
-        raise
-    except (UnicodeError, ValueError, RecursionError):
-        raise Refused("manifest_encoding") from None
-    manifest = validate(value, names)
-    if body != encode(manifest):
-        raise Refused("noncanonical_manifest")
-    if manifest != capture(root, names):
-        raise Refused("content_drift")
-    return manifest

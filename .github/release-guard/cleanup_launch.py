@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 import stat
 
-from content_manifest import Refused, capture, native_digest
+from content_manifest import Refused, native_digest
 from launch_policy import build_expected
 from ordinary_acp import PRODUCT, PINS as ACP_PINS
 
@@ -59,10 +59,6 @@ def child_count(case):
 def git_completion(case):
     recorded, _, role = selection(case)
     return recorded and role == 'work'
-
-
-def digest(path):
-    return capture(path.parent, [path.name])['files'][0]['sha256']
 
 
 def base_path(value, owned):

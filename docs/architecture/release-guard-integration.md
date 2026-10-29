@@ -210,6 +210,13 @@ ENOEXEC retains generation zero and the actual numeric parent wait; it never
 fabricates Python READY or protocol completion. Provider configuration and native
 pin-refusal cases remain unchanged.
 
+Unused Python instance/namespace introspection is removed with the retired
+application-context wrappers. Its obsolete guard-only model controls are removed;
+original product tests are unchanged. The manifest round-trip verifier is now a
+test-local oracle, retaining all byte/schema/race controls. Production uses the
+unchanged bounded capture/validation primitives and authenticated input references;
+no production admission or enforcement imports that test oracle.
+
 ## Verification and retired model controls
 
 Every original product/source test and its real completion, status and cleanup

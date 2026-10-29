@@ -14,6 +14,28 @@ sys.path.insert(0, str(Path(__file__).parent))
 import content_manifest as content
 
 
+def verify(root: Path, body: bytes, expected_sha256: str,
+           paths: Sequence[str]) -> content.Manifest:
+    """Require an external digest and inventory, then remeasure current files."""
+    from control_transport import unique
+    names = content._inventory(paths)
+    if (type(body) is not bytes or len(body) > content.MAX_MANIFEST_BYTES
+            or not content.is_sha256(expected_sha256)
+            or hashlib.sha256(body).hexdigest() != expected_sha256):
+        raise content.Refused("manifest_reference")
+    try:
+        value = json.loads(body, object_pairs_hook=unique)
+    except content.Refused:
+        raise
+    except (UnicodeError, ValueError, RecursionError):
+        raise content.Refused("manifest_encoding") from None
+    manifest = content.validate(value, names)
+    if body != content.encode(manifest):
+        raise content.Refused("noncanonical_manifest")
+    if manifest != content.capture(root, names):
+        raise content.Refused("content_drift")
+    return manifest
+
 @pytest.fixture
 def source(tmp_path):
     root = tmp_path.resolve() / "source"
@@ -37,7 +59,7 @@ def reference(source):
 
 def test_roundtrip_sorted_content_not_inode_or_run_identity(source, tmp_path, capsys):
     value, body, pin = reference(source)
-    assert content.verify(source, body, pin, list(reversed(NAMES))) == value
+    assert verify(source, body, pin, list(reversed(NAMES))) == value
     other = tmp_path.resolve() / "other"
     other.mkdir()
     (other / "src").mkdir()
@@ -92,7 +114,7 @@ def test_current_files_and_aliases_refuse(source, mutation):
         if not target.lstat().st_mode & 0o4000:
             pytest.skip("filesystem strips setid; actual mutation requires Linux certification")
     with pytest.raises(content.Refused):
-        content.verify(source, body, pin, NAMES)
+        verify(source, body, pin, NAMES)
 
 
 def test_root_alias_refused(source):
@@ -136,21 +158,21 @@ def test_strict_schema_even_with_matching_external_hash(source, mutation):
         changed["files"][0][field] = new
     body = json.dumps(changed, sort_keys=True, separators=(",", ":")).encode() + b"\n"
     with pytest.raises(content.Refused):
-        content.verify(source, body, hashlib.sha256(body).hexdigest(), NAMES)
+        verify(source, body, hashlib.sha256(body).hexdigest(), NAMES)
 
 
 def test_digest_inventory_duplicates_and_encoding_are_independently_bound(source):
     value, body, pin = reference(source)
     with pytest.raises(content.Refused, match="manifest_reference"):
-        content.verify(source, body, "0" * 64, NAMES)
+        verify(source, body, "0" * 64, NAMES)
     with pytest.raises(content.Refused):
-        content.verify(source, body, pin, ["tool.py"])
+        verify(source, body, pin, ["tool.py"])
     noncanonical = json.dumps(value, indent=2).encode()
     with pytest.raises(content.Refused, match="noncanonical_manifest"):
-        content.verify(source, noncanonical, hashlib.sha256(noncanonical).hexdigest(), NAMES)
+        verify(source, noncanonical, hashlib.sha256(noncanonical).hexdigest(), NAMES)
     duplicate = body.replace(b'{"files":', b'{"schema":"duplicate","files":', 1)
     with pytest.raises(content.Refused, match="duplicate field"):
-        content.verify(source, duplicate, hashlib.sha256(duplicate).hexdigest(), NAMES)
+        verify(source, duplicate, hashlib.sha256(duplicate).hexdigest(), NAMES)
 
 
 @pytest.mark.parametrize("limit", ["MAX_FILE_BYTES", "MAX_TOTAL_BYTES", "MAX_FILES",
@@ -159,7 +181,7 @@ def test_bounds_refuse(source, monkeypatch, limit):
     _, body, pin = reference(source)
     monkeypatch.setattr(content, limit, 1)
     with pytest.raises(content.Refused):
-        content.verify(source, body, pin, NAMES)
+        verify(source, body, pin, NAMES)
 
 
 @pytest.mark.parametrize("replacement", ["leaf", "parent", "root", "ancestor", "inplace"])
@@ -257,7 +279,7 @@ def test_encoded_unicode_size_bound_is_symmetric(monkeypatch):
 def test_oversized_json_integer_has_closed_refusal(source):
     body = b'{"schema":"unrest.guard-content.v1","files":' + b"9" * 10000 + b"}"
     with pytest.raises(content.Refused, match="manifest_encoding"):
-        content.verify(source, body, hashlib.sha256(body).hexdigest(), NAMES)
+        verify(source, body, hashlib.sha256(body).hexdigest(), NAMES)
 
 
 @pytest.mark.parametrize("value", [None, {}, {"files": None}, {"files": [None]},

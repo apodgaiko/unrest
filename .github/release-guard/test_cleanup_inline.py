@@ -123,37 +123,6 @@ def test_preflight_only_command_never_matches_a_child_rule(case):
     assert result.argv != ("/native", "-c", "pass")
 
 
-def test_native_instance_dictionary_ignores_custom_accessors():
-    from operands import instance_fields
-
-    callbacks = []
-
-    class Meta(type):
-        def __getattribute__(self, name):
-            callbacks.append("metaclass")
-            raise AssertionError("custom metaclass access")
-
-    class Instance(metaclass=Meta):
-        def __getattribute__(self, name):
-            callbacks.append("instance")
-            raise AssertionError("custom instance access")
-
-    value = Instance()
-    object.__setattr__(value, "expected", 7)
-    callbacks.clear()
-    assert instance_fields(value)["expected"] == 7 and callbacks == []
-
-    class Property:
-        @property
-        def __dict__(self):
-            callbacks.append("property")
-            raise AssertionError("custom dictionary property")
-
-    with pytest.raises(Refused, match="instance dictionary"):
-        instance_fields(Property())
-    assert callbacks == []
-
-
 def negative_probe(tmp_path, monkeypatch):
     from dataclasses import replace
     from types import SimpleNamespace
