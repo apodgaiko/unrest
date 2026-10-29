@@ -210,3 +210,17 @@ def test_hermetic_child_seals_all_three_nodes_without_advancing_outer_case(monke
             next(protocol)
         assert policy.case == HERMETIC
     assert calls == [('preselected-finish',case_seal(nodes))]
+
+
+
+def test_each_bounded_nested_frontier_is_independently_closed():
+    import ast
+    from pathlib import Path
+    from fixed_inline import GROUPS
+    from nested_pytest import HERMETIC
+    from source_host import main
+    import inspect
+    declared={node.value for node in ast.walk(ast.parse(inspect.getsource(main)))
+              if isinstance(node,ast.Constant) and type(node.value) is str}
+    assert {'nested-speed1','hermetic1'} <= declared
+    assert (CASE,) in GROUPS and (HERMETIC,) in GROUPS

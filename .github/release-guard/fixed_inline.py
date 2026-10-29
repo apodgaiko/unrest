@@ -13,6 +13,8 @@ from speed_inline import CASES as SPEED_CASES, PRELUDE, CLI_CASE, cli_expected
 from nested_pytest import CASE as NESTED_CASE, NODES, PYTEST_PIN, CASES as NESTED_CASES, HERMETIC, hermetic
 from desktop_launch import CASE as DESKTOP_CASE
 
+from storage_launch import CASES as STORAGE_CASES, DIRECTORY as STORAGE_DIRECTORY
+
 TEST = 'tests/test_repository_contract.py'
 REMOVED = ('unrest_harness.baseline', 'unrest_harness.governance', 'unrest_harness.repository_contract')
 ARGUMENTS = {'help': ('--help',), 'init': ('init', '--help'), 'list': ('list-projects',), 'check': ('check-repository',)}
@@ -54,12 +56,13 @@ DETACHED_CASE = RELOAD_TEST+'::test_detached_socket_descriptor_is_preflight_evid
 NETWORK_CASES = (*NETWORK,DETACHED_CASE)
 ISOLATED = {RELOAD_CASE:'reload', DETACHED_CASE:'detached', **dict(zip(METHOD_CASES,METHODS,strict=True)),
             **{case:case for case in (*NETWORK,*SPEED_CASES)}}
-CASES = (*IMPORT_CASES,*STDIO,OBSERVATION_CASE,CLI_CASE,*NESTED_CASES,DESKTOP_CASE,*ISOLATED)
-GROUPS = (IMPORT_CASES,tuple(STDIO),(OBSERVATION_CASE,),(RELOAD_CASE,),METHOD_CASES,NETWORK_CASES,SPEED_CASES,(CLI_CASE,),tuple(NESTED_CASES),(DESKTOP_CASE,),CASES)
+CASES = (*IMPORT_CASES,*STDIO,OBSERVATION_CASE,CLI_CASE,*NESTED_CASES,DESKTOP_CASE,*STORAGE_CASES,*ISOLATED)
+GROUPS = (IMPORT_CASES,tuple(STDIO),(OBSERVATION_CASE,),(RELOAD_CASE,),METHOD_CASES,NETWORK_CASES,SPEED_CASES,(CLI_CASE,),*(tuple([case]) for case in NESTED_CASES),(DESKTOP_CASE,),tuple(STORAGE_CASES),CASES)
 SEQUENCES.update({case:('startup',) for case in STDIO})
 SEQUENCES[OBSERVATION_CASE] = OBSERVATION_OPERATIONS
 SEQUENCES[CLI_CASE] = tuple('run-'+str(i) for i in range(5))
 SEQUENCES.update({case:('pytest',) for case in NESTED_CASES})
+SEQUENCES.update({case:('read0','read1') if case==STORAGE_DIRECTORY else ('read0',) for case in STORAGE_CASES})
 SEQUENCES[DESKTOP_CASE] = ('serve','ps')
 SEQUENCES.update({case:(operation,) for case,operation in ISOLATED.items()})
 PINS[STDIO_TEST] = '588e6f2128c32f4020cae0dfaf00182bdc117ea640760da1790dd687f5246105'

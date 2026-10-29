@@ -442,3 +442,10 @@ There is no readiness polling, extra cleanup grace, group relocation or timeout
 change: the original 0.3-second request, terminate/wait(0.5)/kill/wait(0.5), stopped
 marker, numeric waits and adapter self-SIGTERM remain. A focused control sends real
 group TERM during deliberately delayed child startup and proves marker plus wait0.
+
+Atomic-write storage regressions retain16 original cases and17 actual fresh
+interpreter reads. Each reader is bound to its original literal body, exact
+state-file operand and owned pytest-directory generation. Relative operands stay
+relative with the original changed cwd. The directory-fsync case retains two
+sequential children; no read child receives descendant permission. The parent
+still asserts the actual bytes, modes, cleanup and error behavior.
