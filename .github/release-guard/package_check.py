@@ -1,6 +1,5 @@
 """Run the unchanged archive oracle through the native fifteen-case domain."""
 import base64
-import importlib.util
 import json
 from pathlib import Path
 import subprocess
@@ -12,9 +11,8 @@ def main():
     checkout=Path.cwd().resolve()
     binding_file=Path(sys.argv[1]).resolve(strict=True)
     binding=json.loads(binding_file.read_bytes())
-    spec=importlib.util.spec_from_file_location('distribution_oracle',checkout/'tools/check_distribution.py')
-    module=importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    from archive_leaf import oracle
+    module=oracle(checkout)
     def guarded(argv,*,cwd,env,check,capture_output,text,timeout):
         if (argv!=[sys.executable,'-c',module._PYTEST_PROBE,str(checkout)]
                 or check or not capture_output or not text or timeout!=120):

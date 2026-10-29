@@ -21,7 +21,7 @@ def setup():
     birth = Birth.read(actual)
     ledger = Ledger('a' * 64)
     ledger.kernel(0, {'kind': 'kernel_root', 'identity': actual})
-    ledger.register(birth, 'root', (('runtime', 'b' * 64),), 'c' * 64,
+    ledger.register(birth, 'root', (('runtime', 'b' * 64),),
                     case='control', command_class='root')
     request = {'pid': birth.pid, 'nonce': ledger.nonce, 'token': 'root', 'generation': 0,
                'id': 'd' * 32, 'kind': 'ready', 'payload': {}}
@@ -134,7 +134,7 @@ def test_distinct_processes_authenticate_each_other_before_consuming_reply(tmp_p
             ledger.kernel(0, {'kind': 'kernel_root', 'identity': process_identity(os.getpid())})
             ledger.kernel(1, {'kind': 'kernel_child', 'parent': os.getpid(), 'child': child,
                               'event': 1, 'identity': actual})
-            ledger.register(child_birth, 'child', (('runtime', 'b' * 64),), 'c' * 64,
+            ledger.register(child_birth, 'child', (('runtime', 'b' * 64),),
                             case='peer-control', command_class='control')
             incoming = Frame(stream, REQUEST_LIMIT)
             incoming.capture(ledger, child_birth, 'child', os.getgid())

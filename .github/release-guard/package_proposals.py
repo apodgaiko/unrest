@@ -5,7 +5,7 @@ import stat
 
 from content_manifest import Refused, read_regular, _directory_key, _key
 from launch_policy import admit_expected,build_expected
-from package_cases import POSITIVE, NEGATIVE, MUTATIONS, FIRST, LIFECYCLE, literal, CONTRACT, SECURITY_CASES
+from package_cases import CASES as CASES, POSITIVE, NEGATIVE, MUTATIONS, FIRST, LIFECYCLE, literal, CONTRACT, SECURITY_CASES
 from archive_leaf import CHECKER_COMMAND, LEAF_COMMAND
 
 SOURCE_UID=20000

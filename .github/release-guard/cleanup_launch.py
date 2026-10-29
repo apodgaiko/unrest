@@ -7,7 +7,8 @@ import os
 from pathlib import Path
 import stat
 
-from content_manifest import Refused, native_digest
+from content_manifest import Refused
+from git_observer import image as system_git
 from launch_policy import build_expected
 from ordinary_acp import PRODUCT, PINS as ACP_PINS
 
@@ -129,17 +130,6 @@ def read_pipe(pid, descriptor):
         raise Refused('cleanup original inventory pipe')
     return [descriptor, before.st_dev, before.st_ino]
 
-
-def system_git():
-    path = Path('/usr/bin/git')
-    for member in (Path('/'), Path('/usr'), Path('/usr/bin'), path):
-        info = member.lstat()
-        if info.st_uid != 0 or stat.S_IMODE(info.st_mode) & 0o6022:
-            raise Refused('cleanup system Git custody')
-        if (member == path and (not stat.S_ISREG(info.st_mode) or not info.st_mode & 0o111)
-                or member != path and not stat.S_ISDIR(info.st_mode)):
-            raise Refused('cleanup system Git type')
-    return native_digest(path)
 
 
 def expected(case, role, base, native, native_pin, checkout, root_environment, *, port=None, descriptor=None):

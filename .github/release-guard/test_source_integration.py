@@ -179,7 +179,7 @@ def test_poisoned_cleanup_retains_actual_parent_wait_without_restoring_authority
     root_id = process_identity(os.getpid())
     birth = Birth.read(root_id)
     ledger.kernel(0, {'kind': 'kernel_root', 'identity': root_id})
-    ledger.register(birth, 'root-token', (('pin', 'a' * 64),), 'seal', case='case', command_class='bootstrap-root', expected_generation=1)
+    ledger.register(birth, 'root-token', (('pin', 'a' * 64),), case='case', command_class='bootstrap-root', expected_generation=1)
     ledger.process(birth).generation = 1  # Reducer epoch setup, not kernel-exec evidence.
     held_read, held_write = os.pipe()
     child = os.fork()
@@ -192,7 +192,7 @@ def test_poisoned_cleanup_retains_actual_parent_wait_without_restoring_authority
         child_id = process_identity(child)
         child_birth = Birth.read(child_id)
         ledger.kernel(1, {'kind': 'kernel_child', 'parent': birth.pid, 'child': child, 'event': 1, 'identity': child_id})
-        ledger.register(child_birth, 'child-token', (('pin', 'a' * 64),), 'seal', case='case', command_class='child')
+        ledger.register(child_birth, 'child-token', (('pin', 'a' * 64),), case='case', command_class='child')
         os.close(held_write)
         held_write = -1
         actual, raw = os.waitpid(child, 0)

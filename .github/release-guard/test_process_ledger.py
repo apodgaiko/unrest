@@ -30,9 +30,9 @@ def setup(*, new_session=False):
     root_id, child_id = identity(100, 99), identity(101, 100)
     root, child = Birth.read(root_id), Birth.read(child_id)
     emit(ledger, 'kernel_root', identity=root_id)
-    ledger.register(root, 'root-token', PINS, SEAL, case='case[one]', command_class='root')
+    ledger.register(root, 'root-token', PINS, case='case[one]', command_class='root')
     emit(ledger, 'kernel_child', parent=100, child=101, event=1, identity=child_id)
-    ledger.register(child, 'child-token', PINS, SEAL, case='case[one]', command_class='child',
+    ledger.register(child, 'child-token', PINS, case='case[one]', command_class='child',
                     new_session=new_session)
     return ledger, root, child
 
@@ -118,17 +118,15 @@ def test_tracer_wait_does_not_retire_without_original_parent_wait4():
     assert ledger.reaped(child, 'child-token')
 
 
-def test_readiness_needs_registration_core_and_execution_seal():
+def test_readiness_needs_registered_current_execution():
     ledger, root, child = setup()
     assert not ledger.body_ready(root, 'root-token')
-    ledger.ready(root, 'core-ready', {'pins': PINS})
-    assert not ledger.body_ready(root, 'root-token')
-    ledger.ready(root, 'body-ready', {'seal': SEAL})
+    ledger.ready(root, 'body-ready', {})
     assert ledger.body_ready(root, 'root-token')
     emit(ledger, 'kernel_exec', pid=root.pid)
     assert not ledger.body_ready(root, 'root-token')
     with pytest.raises(Refused, match='stale readiness epoch'):
-        ledger.ready(root, 'body-ready', {'seal': SEAL})
+        ledger.ready(root, 'body-ready', {})
     assert not ledger.body_ready(root, 'root-token')
 
 
@@ -137,27 +135,21 @@ def test_delayed_wait_fact_from_prior_exec_epoch_is_joined_but_never_restores_re
     terminal(ledger, child, 0)
     wait4(ledger, root, child, 0)
     emit(ledger, 'kernel_exec', pid=root.pid)
-    ledger.register(root, 'root-epoch2', PINS, SEAL, case='case[one]', command_class='root')
+    ledger.register(root, 'root-epoch2', PINS, case='case[one]', command_class='root')
     assert ledger.reaped(child, 'child-token')
     assert not ledger.body_ready(root, 'root-token')
     assert not ledger.body_ready(root, 'root-epoch2')
 
 
-@pytest.mark.parametrize('bad', ['body_before_core', 'wrong_pins', 'wrong_seal', 'replay'])
-def test_readiness_or_stream_errors_poison(bad):
+@pytest.mark.parametrize('bad', ['old_core', 'wrong_payload', 'replay'])
+def test_readiness_rejects_old_protocol_extra_payload_and_replay(bad):
     ledger, root, child = setup()
-    if bad in ('wrong_seal', 'replay'):
-        ledger.ready(root, 'core-ready', {'pins': PINS})
+    if bad=='replay':
+        ledger.ready(root,'body-ready',{})
     with pytest.raises(Refused):
-        if bad == 'body_before_core':
-            ledger.ready(root, 'body-ready', {'seal': SEAL})
-        elif bad == 'wrong_pins':
-            ledger.ready(root, 'core-ready', {'pins': (('runtime', 'c' * 64),)})
-        elif bad == 'wrong_seal':
-            ledger.ready(root, 'body-ready', {'seal': 'wrong'})
-        else:
-            ledger.ready(root, 'core-ready', {'pins': PINS})
-    assert not ledger.body_ready(root, 'root-token')
+        ledger.ready(root,'core-ready' if bad=='old_core' else 'body-ready',
+                     {'seal':'wrong'} if bad=='wrong_payload' else {})
+    assert ledger.body_ready(root,'root-token') == (bad=='replay')
 
 
 def test_preexec_intent_can_only_become_ready_in_its_actual_exec_generation():
@@ -165,10 +157,9 @@ def test_preexec_intent_can_only_become_ready_in_its_actual_exec_generation():
     root_id = identity(100, 99)
     root = Birth.read(root_id)
     emit(ledger, 'kernel_root', identity=root_id)
-    ledger.register(root, 'root-token', PINS, SEAL, case='case[one]', command_class='root', expected_generation=1)
+    ledger.register(root, 'root-token', PINS, case='case[one]', command_class='root', expected_generation=1)
     emit(ledger, 'kernel_exec', pid=root.pid)
-    ledger.ready(root, 'core-ready', {'pins': PINS})
-    ledger.ready(root, 'body-ready', {'seal': SEAL})
+    ledger.ready(root, 'body-ready', {})
     assert ledger.body_ready(root, 'root-token')
 
 
@@ -179,8 +170,7 @@ def test_session_transition_changes_only_registered_view_not_original_birth():
     ledger.session(child, current)
     assert ledger.process(child).identity == original
     assert ledger.process(child).registered_identity == current
-    ledger.ready(child, 'core-ready', {'pins': PINS})
-    ledger.ready(child, 'body-ready', {'seal': SEAL})
+    ledger.ready(child, 'body-ready', {})
     assert ledger.body_ready(child, 'child-token')
 
 
@@ -222,8 +212,7 @@ def test_root_actual_parent_wait_does_not_become_descendant_parent_wait():
 @pytest.mark.parametrize('operation', ['body-ready', 'core-ready', 'exec'])
 def test_observed_exit_fences_authority_before_actual_terminal_wait(operation):
     ledger, root, child = setup()
-    ledger.ready(root, 'core-ready', {'pins': PINS})
-    ledger.ready(root, 'body-ready', {'seal': SEAL})
+    ledger.ready(root, 'body-ready', {})
     assert ledger.body_ready(root, 'root-token')
     emit(ledger, 'kernel_exit', pid=root.pid, raw=0)
     assert ledger.process(root).terminal is None and not ledger.body_ready(root, 'root-token')
@@ -231,7 +220,7 @@ def test_observed_exit_fences_authority_before_actual_terminal_wait(operation):
         if operation == 'exec':
             emit(ledger, 'kernel_exec', pid=root.pid)
         else:
-            ledger.ready(root, operation, {'seal': SEAL} if operation == 'body-ready' else {'pins': PINS})
+            ledger.ready(root, operation, {} if operation == 'body-ready' else {'pins': PINS})
     assert not ledger.body_ready(root, 'root-token')
 
 
@@ -275,7 +264,7 @@ def test_duplicate_stream_facts_raise_without_overwriting_history(duplicate):
         elif duplicate == 'wait':
             wait4(ledger, root, child, 0)
         else:
-            ledger.register(child, 'root-token', PINS, SEAL, case='case[one]', command_class='child')
+            ledger.register(child, 'root-token', PINS, case='case[one]', command_class='child')
     assert ledger.process(child).parent_wait==previous
 
 
@@ -287,7 +276,7 @@ def test_many_children_keep_individual_parent_joins_beyond_epoch_bound(missing_w
             data = identity(101 + index, root.pid)
             child = Birth.read(data)
             emit(ledger, 'kernel_child', parent=root.pid, child=child.pid, event=1, identity=data)
-            ledger.register(child, f'child-{index}', PINS, SEAL, case='case[one]', command_class='child')
+            ledger.register(child, f'child-{index}', PINS, case='case[one]', command_class='child')
         raw = (index % 2) << 8
         terminal(ledger, child, raw)
         if not (missing_wait and index == 128):
@@ -306,10 +295,10 @@ def test_exec_epoch_bound_is_independent_of_parent_wait_count():
     assert MAX_EXEC_EPOCHS == 128
     for generation in range(1, MAX_EXEC_EPOCHS):
         emit(ledger, 'kernel_exec', pid=child.pid)
-        ledger.register(child, f'epoch-{generation}', PINS, SEAL, case='case[one]', command_class='child')
+        ledger.register(child, f'epoch-{generation}', PINS, case='case[one]', command_class='child')
     emit(ledger, 'kernel_exec', pid=child.pid)
     with pytest.raises(Refused, match='unbounded exec epoch'):
-        ledger.register(child, 'overflow-epoch', PINS, SEAL, case='case[one]', command_class='child')
+        ledger.register(child, 'overflow-epoch', PINS, case='case[one]', command_class='child')
 
 
 @pytest.mark.parametrize(

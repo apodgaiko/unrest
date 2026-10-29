@@ -44,7 +44,7 @@ def resolve(host,pid,path,vector,env,cwd):
         pin=uv_digest(Path(path))
         if host.binding['uv']!={'path':path,'sha256':pin}:
             return False
-        host.ledger.register(birth,os.urandom(16).hex(),(('uv',pin),),pin,
+        host.ledger.register(birth,os.urandom(16).hex(),(('uv',pin),),
             case='<full-launcher>',command_class='native-full-uv',expected_generation=2)
         return True
     if (process.parent is None or process.parent.pid!=host.launcher or process.generation!=0
@@ -67,7 +67,7 @@ def collection(host,actor,payload):
     if pin!=payload['sha256']:
         raise Refused('full source collection current bytes')
     value=document(json.loads(body,object_pairs_hook=unique))
-    if (not value['cases'] or value['skips'] or value['source']!=host.meta['source_sha256']
+    if (not value['cases'] or value['source']!=host.meta['source_sha256']
             or value['dependency']!=host.meta['dependency_sha256']):
         raise Refused('full source complete discovery binding')
     host.cases=tuple(identity(node) for node in value['cases'])

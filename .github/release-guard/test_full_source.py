@@ -217,7 +217,7 @@ def test_observer_collection_reply_carries_success_and_closed_reference(tmp_path
     monkeypatch.setattr(full_launch, "seal", lambda value, directory: dict(reference))
     node = "tests/test_wire.py::test_large[" + "x" * 70000 + "]"
     body = json.dumps(
-        {"cases": [node], "skips": [], "source": "a" * 64, "dependency": "b" * 64}
+        {"cases": [node], "source": "a" * 64, "dependency": "b" * 64}
     ).encode()
     path = tmp_path / "collection.json"
     path.write_bytes(body)

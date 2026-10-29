@@ -25,7 +25,7 @@ def bindings(*, child=False):
         case="case",
         exit=None,
         terminal=None,
-        stage="core-ready" if child else "body-ready",
+        stage="registered" if child else "body-ready",
         parent=root if child else None,
     )
     host = SimpleNamespace(
@@ -73,7 +73,7 @@ def test_local_inherited_record_compares_actual_file_description(monkeypatch, mu
             pipe.local_record(saved)
 
 
-@pytest.mark.parametrize("mutation", [None, "parent", "ticks", "role", "cookie", "fd", "core"])
+@pytest.mark.parametrize("mutation", [None, "parent", "ticks", "role", "cookie", "fd", "already_ready"])
 def test_observer_reacquires_child_before_body_ready(monkeypatch, mutation):
     host, actor, process = bindings(child=True)
     saved = [11, 1, 50, 2, 900, 100, 10]
@@ -88,8 +88,8 @@ def test_observer_reacquires_child_before_body_ready(monkeypatch, mutation):
         observed[4] += 1
     elif mutation == "fd":
         observed[0] += 1
-    elif mutation == "core":
-        process.stage = "registered"
+    elif mutation == "already_ready":
+        process.stage = "body-ready"
     monkeypatch.setattr(pipe, "acquire", lambda birth, fd: observed)
     if mutation is None:
         pipe.retained(host, actor, saved, body=False)
@@ -98,21 +98,20 @@ def test_observer_reacquires_child_before_body_ready(monkeypatch, mutation):
             pipe.retained(host, actor, saved, body=False)
 
 
-def test_actual_core_ready_dispatch_precedes_independent_recensus(monkeypatch):
+def test_actual_body_ready_follows_independent_recensus(monkeypatch):
     from source_observer import Observer
 
     host, actor, _ = bindings(child=True)
-    actor["pins"] = ()
     stages = []
-    host.ledger.ready = lambda *args: stages.append("core-ready")
+    host.ledger.ready = lambda *args: stages.append("body-ready")
     host.mp_pipes = {(actor["birth"], 11): [11, 1, 50, 2, 900, 100, 10]}
 
     def retained(host, actor, row, *, body):
-        assert stages == ["core-ready"] and body is False
+        assert stages == [] and body is False
         stages.append("independent-recensus")
 
     monkeypatch.setattr(pipe, "retained", retained)
-    assert Observer.dispatch(host, actor, {"kind": "core-ready", "payload": {"pins": []}}) == {
+    assert Observer.dispatch(host, actor, {"kind": "body-ready", "payload": {}}) == {
         "ok": True
     }
-    assert stages == ["core-ready", "independent-recensus"]
+    assert stages == ["independent-recensus", "body-ready"] and actor["body_ready"] is True

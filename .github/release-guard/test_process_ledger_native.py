@@ -96,7 +96,7 @@ def test_real_original_parent_wait_joins_once_and_missing_wait_remains_incomplet
             if row['kind'] in ('kernel_root', 'kernel_child'):
                 birth = Birth.read(row['identity'])
                 token = 'root' if row['kind'] == 'kernel_root' else 'child-' + str(birth.pid)
-                ledger.register(birth, token, (('runtime', allowed[0]['sha256']),), hashlib.sha256(BODY.encode()).hexdigest(),
+                ledger.register(birth, token, (('runtime', allowed[0]['sha256']),),
                                 case='native-ledger', command_class='source-free-control',
                                 expected_generation=1 if row['kind'] == 'kernel_root' else 0)
                 if row['kind'] == 'kernel_root':

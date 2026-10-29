@@ -63,8 +63,8 @@ cannot retire or admit a child.
 No Python return code receipt supplies parent-wait proof. Tracer or fallback
 cleanup does not stand in for the original parent. Existing SIGKILL thread-group
 terminal handling does not fabricate a missing process exit or parent reap.
-Native status86 retains its refusal meaning. Case completion still requires all
-expected children, consumed intents, actual statuses and original-parent joins.
+Native status86 retains its refusal meaning. Case completion still requires every
+admitted child, consumed intents, actual statuses and original-parent joins.
 
 ## IPC admission model
 
@@ -142,8 +142,9 @@ Additional foundation, project, improvement and activation Git fixtures use the
 same repository admission. Exact collected case IDs declare repository slots,
 original setup argv and setup/call phase. Their complete source files are pinned;
 owned pytest directory generations cannot change between slots. Plain-init
-foundation fixtures acquire either `main` or `master` once and reject a changed
-HEAD branch. Proposals must match that acquired branch. These declarations grant
+fixtures permit the authored `main` or `master` reference forms; other fixtures
+retain their fixed branch forms. Observed HEAD continuity is an application-test
+responsibility. These declarations grant
 no native provider execution or new application-level Git proof.
 The two activation CLI routes reuse the stock-uv image and single console-child
 admission. Their request files are bounded JSON at exact owned fixture paths;
@@ -251,8 +252,9 @@ nofollow file descriptors and checked against the original pinned test fixture;
 its original path and inode generation remain bound through import. No owned cwd
 is appended to the import path and cached bytecode is never used. The restart
 case alone admits its exact one sleeping descendant, owned by the admitted worker
-and retaining its actual numeric parent wait. Cancellation (exit two following TERM), crash and explicit SIGKILL cases
-keep their authored per-worker-ordinal statuses; ordinary completion remains exit zero plus READY.
+and retaining its actual numeric parent wait. Retirement requires actual guarded
+execution and the matching original-parent numeric wait; negative termination
+also requires its recorded authorized signal.
 The main script profile now derives from the admitted effective vector rather
 than a parallel role-to-script catalogue; the delayed-backend auxiliary script
 retains its independent pin.
@@ -492,7 +494,8 @@ each genuine library test, one acquired run UUID and stable owned directory
 generations. Setup has three exact forms; workspace/evolution operations reuse
 the closed shared Git grammar and actual helper/wait custody. The evolution test
 admits exactly its two original start-project RunControl entries with retained
-request identity, fixed executor, complete environment and numeric status zero.
+request identity, fixed executor, complete environment, actual guarded execution
+and original-parent numeric wait.
 This enables its provider-free state machine; it grants no ACP or provider launch.
 
 
@@ -529,8 +532,9 @@ actual worker Birth/token/exec, one owned project record, running node cursor,
 exact attempt path, original targets, complete environment and isolated native
 entry. Each prior pair must be actually reaped before the next node. MCP retains
 its exact inherited pipe and local port; only the source-pinned mock script may
-act as ACP. Mock exit0 and MCP exit0/authorized TERM/KILL retain explicit
-completion checks. No native provider acceptance or live benchmark follows.
+act as ACP. Both children require authenticated READY, actual terminal status
+and original-parent waits; negative termination requires its recorded authorized
+signal. No native provider acceptance or live benchmark follows.
 
 Unused digest tables left by retired focused-driver validation are removed from
 controlled_cases/git_sites and unused startup/custody constants. They supplied
@@ -552,10 +556,10 @@ to seal concurrently. Every observed child still needs its actual completion and
 original-parent wait at case closeout; this does not admit controller crash cases.
 
 The real measurement project's local ACP mocks terminate through their owning
-RunControl worker's authorized SIGTERM cleanup. Their actual numeric status stays
--15; completion requires authenticated body readiness and that exact signal in
-the child's custody record. A missing signal, missing READY, unrelated nonzero
-exit or missing original-parent wait remains a failure.
+RunControl worker's authorized SIGTERM cleanup. The observed fixture behavior is
+-15; completion requires authenticated body readiness and the exact authorized
+signal for negative termination. A missing signal, missing READY or missing
+original-parent wait remains a failure.
 
 Native metadata is constructed once in a fresh protected host directory from the
 original complete archive/member SHA256 pins. Each written member is reread for
@@ -687,3 +691,30 @@ all guard pytest cases, the three bounded standalone native isolation controls,
 full unexcluded Python 3.13 source validation, archive and installed lifecycle
 checks, and always uploads encrypted native/source/archive evidence. Earlier
 successful and failed diagnostic evidence remains private and unchanged.
+
+The failed first unexcluded checkpoint exposed the two original inventory-FD
+regressions as undeclared process families. Their declarations retain the exact
+worker/reviewer modes, original private inventory pipe, literal Git setup/HEAD
+commands, acquired pytest root, complete environments and actual parent waits.
+The fixture disables optional detached Git maintenance explicitly; no Git helper
+permission or original assertion is added or removed by that setup change.
+
+Python readiness now has one authenticated BODY_READY acknowledgement after
+actual profile/argv/environment/script validation and hook installation. For MP
+children, independent inherited-description recensus precedes the one-time
+registered-to-ready transition. Birth/token/current exec generation, completed
+session transition, nonterminal state and exact empty payload remain mandatory.
+The old intermediate handshake and issuer-hash echoes are retired; native Git's
+pin comparisons remain. The native entry releases no candidate body before ACK.
+
+Bounded JSON work validation belongs to frame decoding/encoding; internal launch
+builders no longer repeat it. Inventory custody belongs to the immediately
+following held-file read. Discovery records no synthetic empty skips list;
+actual pytest outcomes still retain every real skip separately. Closed literal
+client leaves retain exact source-unit/program bytes, ambient operands and quota
+one; only the original SIGTERM-ignoring fixture gets a new session. Repeated
+launch routing and directory retention share their existing exact validators.
+
+The diagnostic workflow is temporarily restored while repairing the failed
+checkpoint's missing families. Its selected runs never certify an unexcluded
+source checkpoint or release; it will be retired again before final freeze.

@@ -54,19 +54,16 @@ def standalone_environment(metadata):
 
 
 def proposal(host,actor,raw):
-    from owned_fixture import acquire
+    from owned_fixture import retain
     from launch_policy import admit_expected,build_expected
     host.root_only(actor)
     if host.case!=CASE or raw['stdin'] is not None:
         raise Refused('console exact unrelated-workspace case')
     runtime=Path(host.meta['runtime_root'])
     cwd=Path(raw['cwd'])
-    parent,info=acquire(str(cwd.parent),Path(host.meta['owned']),CASE.split('::')[-1][:30],20000)
+    parent=retain(host,cwd.parent,CASE.split('::')[-1][:30],20000)
     if cwd!=parent/'unrelated workspace' or cwd.resolve()!=cwd:
         raise Refused('console original unrelated workspace')
-    generation=(str(parent),info.st_dev,info.st_ino)
-    if host.fixture_roots.setdefault(CASE,generation)!=generation:
-        raise Refused('console changed original fixture')
     config=parent/'home/.codex/config.toml'
     body,_,_=read_regular(config,65536,uid=20000)
     registration=tomllib.loads(body.decode())['mcp_servers']['unrest']

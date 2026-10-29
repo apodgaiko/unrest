@@ -7,7 +7,7 @@ from content_manifest import Refused,read_regular,native_digest,_capture
 from control_transport import unique
 from console_entries import normalized,script
 from launch_policy import admit_expected,build_expected,source_unit
-from owned_fixture import acquire
+from owned_fixture import retain
 
 TEST='tests/test_v04_activation.py'
 INVALID=TEST+'::test_subprocess_commands_reject_private_invalid_requests_without_effect'
@@ -46,9 +46,7 @@ def proposal(host,actor,raw):
     if len(args)!=6 or args[:5]!=['uv','run','unrest',command,'--request']:
         raise Refused('stock uv exact original command')
     path=Path(args[5])
-    parent,info=acquire(str(path.parent),Path(host.meta['owned']),case.split('::')[-1][:30],20000)
-    if host.fixture_roots.setdefault(case,(str(parent),info.st_dev,info.st_ino))!=(str(parent),info.st_dev,info.st_ino):
-        raise Refused('stock uv changed original fixture')
+    parent=retain(host,path.parent,case.split('::')[-1][:30],20000)
     if case==INVALID:
         home=parent/(command+'-invalid-home')
         file=parent/(command+'-invalid.json')

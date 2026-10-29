@@ -5,7 +5,6 @@ Kernel births/execs and actual waits remain independent of source-side reports.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -99,22 +98,18 @@ class Observer:
         from execution_spec import issue, admitted
         source['execution'],intent = ((issue(role,vector,None,None),None) if role=='root' else
             admitted(self.intents,role,case,pid,token,vector,environment,cwd,script))
-        source['seal'] = hashlib.sha256(json.dumps(source, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
         target = self.directory / (str(pid) + '.json')
         with target.open('x') as stream:
             stream.write(json.dumps(source, sort_keys=True))
         target.chmod(0o444)
-        pins = tuple(sorted((('entry', source['entry_sha256']), ('native', source['native_sha256']),
-            ('source', source['source_sha256']), ('support', source['support_sha256']),
-            ('runtime', source['runtime_sha256']), ('dependency', source['dependency_sha256']))))
         actor = {'birth': Birth.read(actual), 'role': role, 'case': case, 'token': token,
-                 'profile': source, 'pins': pins, 'intent':intent, 'body_ready': False, 'signals': set()}
+                 'profile': source, 'intent':intent, 'body_ready': False, 'signals': set()}
         self.actors[pid] = actor
         command_class = {'root': 'bootstrap-root', 'acp': 'controlled-acp',
                          'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline','plan-python':'plan-python','mp-child':'mp-child','mp-tracker':'mp-tracker','review-wire':'review-wire','pytest-regression':'pytest-regression','desktop':'desktop',**dict.fromkeys(('archive-checker','archive-leaf','archive-installed'),'archive-python')}[role]
         from run_worker_launch import ALL_CASES as RUN_WORKERS
         new_session = role in ('backend','delayed-backend','acp','workspace-owned','session-adapter','session-inline') or role=='mcp' and case in HTTP_CASES or role=='fixed-inline' and case in (*ROLE_CASES,*RUN_WORKERS)
-        self.ledger.register(actor['birth'], token, pins, source['seal'], case=case,
+        self.ledger.register(actor['birth'], token, (), case=case,
                              command_class=command_class, new_session=new_session, expected_generation=1)
         if new_session:
             self.ledger.session(actor['birth'], actual)
@@ -242,7 +237,7 @@ class Observer:
             actual = process_identity(pid)
             birth = Birth.read(actual)
             pins = (('native-fixture', intent['executable_sha256']),)
-            self.ledger.register(birth, intent['token'], pins, intent['executable_sha256'],
+            self.ledger.register(birth, intent['token'], pins,
                                  case=intent['case'], command_class=native_class(intent['role']), expected_generation=0 if intent['role'] == 'session-invalid' else 1)
             self.actors[pid] = {'birth': birth, 'role': intent['role'], 'case': intent['case'], 'token': intent['token'],
                 'body_ready': False, 'signals': set(), 'kernel_admitted': True,'intent':intent}
@@ -363,17 +358,12 @@ class Observer:
 
     def dispatch(self, actor, request):
         kind, payload = request['kind'], request['payload']
-        if kind == 'core-ready':
-            shape(payload, ('pins',))
-            if payload['pins'] != [list(pair) for pair in actor['pins']]:
-                raise Refused('source exact READY pins')
-            self.ledger.ready(actor['birth'], kind, {'pins': actor['pins']})
+        if kind == 'body-ready':
             if actor['role']=='mp-child':
                 from multiprocess_pipe import retained
                 for (birth,_),row in self.mp_pipes.items():
                     if birth==actor['birth']:
                         retained(self,actor,row,body=False)
-        elif kind == 'body-ready':
             self.ledger.ready(actor['birth'], kind, payload)
             actor['body_ready'] = True
         elif kind == 'collection-finish':

@@ -10,8 +10,8 @@ CHECKER_COMMAND='from archive_leaf import checker_main;checker_main()'
 LEAF_COMMAND='from archive_leaf import main;raise SystemExit(main())'
 
 
-def oracle(policy):
-    path=Path(policy.profile['checkout'])/'tools/check_distribution.py'
+def oracle(checkout):
+    path=checkout/'tools/check_distribution.py'
     from source_profile import digest
     if digest(path)!=PINS['tools/check_distribution.py']:
         raise Refused('archive original checker bytes')
@@ -26,7 +26,7 @@ def checker_main():
     from prepared_distribution import Provider
     if ACTIVE is None or ACTIVE.profile['role']!='archive-checker':
         raise Refused('archive checker native role')
-    module=oracle(ACTIVE)
+    module=oracle(Path(ACTIVE.profile['checkout']))
     original=module._run_extracted_restart_oracle
     def run(root,**kwargs):
         return original(Provider(ACTIVE).snapshot(root),**kwargs)

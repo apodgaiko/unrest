@@ -84,7 +84,7 @@ def test_deadline_never_resets_on_partial_progress(channels, monkeypatch):
     left, _, frame = channels
     left.sendall(b'\0')
     assert frame.read() is None
-    monkeypatch.setattr(control.time, 'monotonic', lambda: frame.started + control.CHANNEL_SECONDS + .001)
+    monkeypatch.setattr(control.time, 'monotonic', lambda: frame.started + frame.seconds + .001)
     with pytest.raises(Refused, match='deadline'):
         frame.read()
     assert frame.stream.fileno() == -1

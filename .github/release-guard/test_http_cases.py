@@ -147,8 +147,8 @@ def test_http_authority_and_inherited_profile_descriptors_remain_closed(tmp_path
         with pytest.raises(Refused,match='actual profile binding'):
             profiles.validate(profile,'cpython.run_command',('pass\n',))
     elif subject=='http':
-        observed,pins=profiles.validate(profile,'cpython.run_command',('pass\n',))
-        assert observed==actual and len(pins)==6
+        observed=profiles.validate(profile,'cpython.run_command',('pass\n',))
+        assert observed==actual
     else:
         with pytest.raises(Refused,match='finite inherited inventory'):
             profiles.validate(profile,'cpython.run_command',('pass\n',))

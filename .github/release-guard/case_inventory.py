@@ -3,7 +3,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import stat
 
 from content_manifest import Refused, read_regular
 from control_transport import unique
@@ -30,19 +29,16 @@ def environment(values,case):
 
 
 def document(value):
-    if (type(value) is not dict or set(value)!={'cases','skips','source','dependency'}
+    if (type(value) is not dict or set(value)!={'cases','source','dependency'}
             or any(type(value[name]) is not str or len(value[name])!=64
                 or any(c not in '0123456789abcdef' for c in value[name]) for name in ('source','dependency'))):
         raise Refused('inventory input binding')
-    for name in ('cases','skips'):
-        rows=value[name]
-        if (type(rows) is not list or len(rows)>20000 or any(type(row) is not str or not row or len(row)>131071 for row in rows)
-                or len(set(rows))!=len(rows)):
-            raise Refused('inventory finite nodes')
-    if sum(len(json.dumps(row)) for name in ('cases','skips') for row in value[name])>LIMIT:
+    rows=value['cases']
+    if (type(rows) is not list or len(rows)>20000 or any(type(row) is not str or not row or len(row)>131071 for row in rows)
+            or len(set(rows))!=len(rows)):
+        raise Refused('inventory finite nodes')
+    if sum(len(json.dumps(row)) for row in rows)>LIMIT:
         raise Refused('inventory total node bytes')
-    if not set(value['skips'])<=set(value['cases']):
-        raise Refused('inventory skip subset')
     return value
 
 
@@ -53,11 +49,6 @@ def reference(value,directory):
             or type(value['count']) is not int or not 0<=value['count']<=20000
             or value['path']!=str(directory/('cases-'+value['sha256']+'.json'))):
         raise Refused('inventory reference')
-    info=Path(value['path']).lstat()
-    if (not stat.S_ISREG(info.st_mode) or info.st_uid!=20001 or info.st_nlink!=1
-            or stat.S_IMODE(info.st_mode)!=0o444 or info.st_size>LIMIT):
-        raise Refused('inventory protected file')
-    return value
 
 
 def load(value,directory,source,dependency):

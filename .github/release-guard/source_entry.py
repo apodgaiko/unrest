@@ -214,7 +214,7 @@ class Policy:
 
 def activate(directory, profile, event, arguments):
     global ACTIVE
-    actual, pins = validate(profile, event, arguments)
+    actual = validate(profile, event, arguments)
     client = Client(directory, profile)
     policy = Policy(directory, profile, actual, client)
     if profile['role'] in ('root', 'mcp', 'cleanup-acp', 'session-adapter', 'session-child', 'fixed-inline', 'plan-python','mp-child','mp-tracker','review-wire','pytest-regression','desktop','archive-checker','archive-leaf','archive-installed'):
@@ -246,11 +246,10 @@ def activate(directory, profile, event, arguments):
         policy.sockets = Hooks(policy)
     from run_worker_launch import install_fixture
     install_fixture(policy)
-    client.request('core-ready', {'pins': [list(pair) for pair in pins]})
     if policy.sockets is not None:
         policy.sockets.install()
     policy.install_process_hooks()
-    client.request('body-ready', {'seal': profile['seal']})
+    client.request('body-ready', {})
     sys.dont_write_bytecode = True
     ACTIVE = policy
     return policy.audit

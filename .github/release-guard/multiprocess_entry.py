@@ -6,7 +6,6 @@ import fcntl
 import ctypes
 
 from content_manifest import Refused
-from control_transport import finite
 from launch_policy import build_expected
 from multiprocess_routes import ROUTES,Spawn,plan as route_plan
 
@@ -123,7 +122,6 @@ def counterpart(pid,record):
 
 
 def expected(case,argv,passfds,target,native,pin,checkout,environment):
-    finite({'case':case,'argv':argv,'passfds':passfds,'target':target})
     if (type(case) is not str or case not in ALL_CASES or case==ZERO or type(argv) is not list
             or any(type(arg) is not str for arg in argv) or argv[:4]!=[native,'-S','-I','-c'] or type(passfds) is not list
             or any(type(fd) is not int or not 2<=fd<=1024 for fd in passfds)
@@ -203,7 +201,6 @@ def inherited_record(host,actor,fd,resources):
 def proposal(host,actor,raw):
     from source_observer import shape
     host.root_only(actor)
-    finite(raw)
     shape(raw,('case','argv','passfds','target','executable','cwd','environment'))
     native=host.binding['entry']['path']
     if raw['case']!=host.case or raw['executable']!=native or raw['cwd']!=host.meta['checkout']:

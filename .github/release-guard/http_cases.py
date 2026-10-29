@@ -1,5 +1,6 @@
 """Finite real-MCP supervision fixtures; provider command strings grant no launch."""
 from pathlib import Path
+from mcp_inventory import CASES as INVENTORY
 import stat
 
 from content_manifest import Refused
@@ -12,7 +13,7 @@ from completion_roles import HTTP as ROLE_HTTP
 
 SUPERVISION = tuple(TRANSACTIONS)[:9]
 CASES = (*SUPERVISION, *ROLE_HTTP)
-TRANSPORT = (*EXECUTION_CASES, *CASES)
+TRANSPORT = (*EXECUTION_CASES, *CASES, *INVENTORY)
 
 
 def expected(host, actor, raw):

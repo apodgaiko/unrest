@@ -9,7 +9,7 @@ def owner(host,actor,*,body):
     if (process.token!=actor['token']
             or process.registered_generation!=process.generation or process.case!=actor['case']
             or actor['case']!=host.case or process.exit is not None or process.terminal is not None
-            or process.stage not in (('body-ready',) if body else ('core-ready','body-ready'))):
+            or process.stage not in (('body-ready',) if body else ('registered',))):
         raise Refused('spawn inherited Pipe current owner')
     return process
 

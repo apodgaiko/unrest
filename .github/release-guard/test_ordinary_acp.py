@@ -51,7 +51,7 @@ def test_original_mock_agent_bare_sleep_is_bound_to_actual_owned_fixture(tmp_pat
     elif mutation=='program':
         raw['argv'][1]='1'
     elif mutation=='generation':
-        host.fixture_roots[('ordinary-mock',MOCK_CASE)]=('different',0,0)
+        host.fixture_roots[MOCK_CASE]=('different',0,0)
     if mutation is None:
         assert proposal(host,{'role':'root'},raw)['translated']==['sleep','30']
         assert calls[0][1].executable=='/usr/bin/sleep'

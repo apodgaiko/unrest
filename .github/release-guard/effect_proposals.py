@@ -9,7 +9,7 @@ import hashlib
 from content_manifest import Refused
 from plan_launch import CASES as PLANS, expected as plan_expected
 from session_launch import CASES as SESSIONS, expected as session_expected
-from fixed_inline import CASES as FIXED, SEQUENCES, NESTED_CASES, STORAGE_CASES, INSPECTION_CASES, MEASUREMENT_CASE, COMPLETION_CASES, DRAIN_CASE, CONSOLE_CASE, UV_CASES, READINESS_CASES, TERMINAL_CASES, expected as fixed_expected, STDIO, startup_expected, translated as fixed_translated
+from fixed_inline import CASES as FIXED, SEQUENCES, NESTED_CASES, STORAGE_CASES, INSPECTION_CASES, MEASUREMENT_CASE, COMPLETION_CASES, DRAIN_CASE, expected as fixed_expected, STDIO, startup_expected, translated as fixed_translated
 from ordinary_acp import EXECUTION_CASES as ORDINARY, expected as ordinary_expected
 from cleanup_launch import EXECUTION_CASES as CLEANUP, expected as cleanup_expected, base_path, translated as cleanup_vector
 from cleanup_inline import DECLARATIONS, INFLIGHT, expected as inline_expected
@@ -21,10 +21,8 @@ from bootstrap_cases import BOOTSTRAP
 
 def proposal_operands(raw,case):
     from source_observer import shape
-    from control_transport import finite
-    finite(raw)
     shape(raw, ('case','executable','argv','cwd','environment','stdin'))
-    if raw['case'] != case or type(raw['executable']) is not str or type(raw['argv']) is not list:
+    if type(raw['case']) is not str or raw['case'] != case or type(raw['executable']) is not str or type(raw['argv']) is not list:
         raise Refused('finite process proposal case or vector')
     argv = raw['argv']
     if (not 0 < len(argv) <= 256 or any(type(arg) is not str for arg in argv)
@@ -51,33 +49,12 @@ def proposal(host, actor, raw):
     host.launch_owner(actor)
     argv=proposal_operands(raw,host.case)
     case=host.case
-    from git_sites import CASES as GIT_CASES
-    from http_cases import CASES as HTTP_CASES,proposal as http_proposal
-    from package_cases import CASES as PACKAGE_CASES
-    if case in PACKAGE_CASES:
-        from package_proposals import proposal as package_proposal
-        return package_proposal(host,actor,raw)
-    from desktop_launch import CASE as DESKTOP_CASE,proposal as desktop_proposal
-    if case==DESKTOP_CASE:
-        return desktop_proposal(host,actor,raw)
-    from completion_roles import CASES as ROLE_CASES
-    if case in ROLE_CASES:
-        from completion_server import proposal as role_proposal
-        return role_proposal(host,actor,raw)
-    if case in TERMINAL_CASES:
-        from terminal_leaves import proposal as terminal_proposal
-        return terminal_proposal(host,actor,raw)
-    if case in READINESS_CASES:
-        from readiness_launch import proposal as readiness_proposal
-        return readiness_proposal(host,actor,raw)
-    if case in UV_CASES and argv[0]=='uv':
-        from uv_cli import proposal as uv_proposal
-        return uv_proposal(host,actor,raw)
-    if case==CONSOLE_CASE:
-        from console_entries import proposal as console_proposal
-        return console_proposal(host,actor,raw)
-    if case in HTTP_CASES:
-        return http_proposal(host,actor,raw)
+    for name in ('mcp_inventory','package_proposals','desktop_launch','completion_server',
+                 'terminal_leaves','readiness_launch','uv_cli','console_entries','http_cases'):
+        module=__import__(name)
+        selected=module.CASES if hasattr(module,'CASES') else (module.CASE,)
+        if case in selected and (name!='uv_cli' or argv[0]=='uv'):
+            return module.proposal(host,actor,raw)
     from run_worker_launch import ALL_CASES as RUN_WORKERS,proposal as run_proposal,descendant,DESCENDANT
     if case==DESCENDANT and actor['role']=='fixed-inline':
         return descendant(host,actor,raw)
@@ -86,6 +63,7 @@ def proposal(host, actor, raw):
     from cohort_controller import CASES as CRASH, proposal as crash_proposal
     if case in CRASH and argv[1:2]==['-c']:
         return crash_proposal(host,actor,raw)
+    from git_sites import CASES as GIT_CASES
     if case in GIT_CASES:
         from git_proposals import prepare
         return prepare(host,actor,raw)
@@ -143,7 +121,7 @@ def proposal(host, actor, raw):
                 raise Refused('pipe drain child has no descendants')
             import ast
             from fixed_inline import DRAIN_TEST,PINS
-            from owned_fixture import acquire
+            from owned_fixture import retain
             from launch_policy import source_unit,build_expected
             unit=source_unit(checkout,DRAIN_TEST,PINS[DRAIN_TEST],(case.split('::')[-1],))
             calls=[node for node in ast.walk(unit) if isinstance(node,ast.Call)
@@ -151,9 +129,8 @@ def proposal(host, actor, raw):
             if len(calls)!=1 or len(calls[0].args)!=3:
                 raise Refused('pipe drain sole original child')
             body=ast.literal_eval(calls[0].args[2])
-            parent,info=acquire(str(Path(cwd).parent),owned,case.split('::')[-1][:30],20000)
-            generation=(str(parent),info.st_dev,info.st_ino)
-            if host.fixture_roots.setdefault(case,generation)!=generation or Path(cwd)!=parent/'workspace':
+            parent=retain(host,Path(cwd).parent,case.split('::')[-1][:30],20000)
+            if Path(cwd)!=parent/'workspace':
                 raise Refused('pipe drain original workspace generation')
             expected=build_expected(case,native,pin,(native,'-c',body),
                 (('PATH',root_environment['PATH']),),cwd,'python-command')
@@ -199,13 +176,10 @@ def proposal(host, actor, raw):
         from ordinary_acp import MOCK_CASE,STARTUP_CASES
         base=None
         if case==MOCK_CASE:
-            from owned_fixture import acquire
+            from owned_fixture import retain
             candidate=(Path(raw['environment'].get('UNREST_HANDOFF_PATH','')).parents[7]
                        if argv[0]=='sleep' else Path(cwd).parent)
-            base,info=acquire(str(candidate),owned,case.split('::')[1][:30],20000)
-            generation=(str(base),info.st_dev,info.st_ino)
-            if host.fixture_roots.setdefault(('ordinary-mock',case),generation)!=generation:
-                raise Refused('mock-agent fixture generation changed')
+            base=retain(host,candidate,case.split('::')[1][:30],20000)
         role='sleep' if argv[0] in ('/bin/sleep','sleep') else 'session-invalid' if case in STARTUP_CASES else 'mock-acp'
         maximum=2 if case==ORDINARY[2] and role=='sleep' else 1
         expected = ordinary_expected(case,role,cwd,checkout,native,pin,root_environment,owned,base=base)

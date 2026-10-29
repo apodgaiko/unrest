@@ -82,7 +82,6 @@ class Process:
     token: str | None = None
     life_token: str | None = None
     pins: tuple[tuple[str, str], ...] = ()
-    expected_seal: str | None = None
     generation: int = 0
     registered_generation: int = 0
     stage: str = 'born'
@@ -107,7 +106,7 @@ class Ledger:
             raise Refused('unknown ledger birth')
         return self.processes[birth]
 
-    def register(self, birth: Birth, token: str, pins: tuple[tuple[str, str], ...], seal: str,
+    def register(self, birth: Birth, token: str, pins: tuple[tuple[str, str], ...],
                  *, case: str, command_class: str, new_session: bool = False,
                  expected_generation: int | None = None) -> None:
         process = self.process(birth)
@@ -122,7 +121,7 @@ class Ledger:
             raise Refused('ledger registration')
         pins = tuple(sorted(pins))
         self.by_token[token] = birth
-        process.token, process.pins, process.expected_seal = token, pins, seal
+        process.token, process.pins = token, pins
         if process.life_token is None:
             process.life_token = token
         process.registered_generation = expected_generation
@@ -134,21 +133,11 @@ class Ledger:
         process = self.process(birth)
         if process.registered_generation != process.generation:
             raise Refused('stale readiness epoch')
-        if kind in ('core-ready', 'body-ready') and (process.exit is not None or process.terminal is not None):
-            raise Refused('readiness after terminal')
-        if kind == 'core-ready':
-            if (process.stage != 'registered' or set(payload) != {'pins'}
-                    or type(payload['pins']) is not tuple or payload['pins'] != process.pins):
-                raise Refused('ledger core readiness')
-            process.stage = 'core-ready'
-        elif kind == 'body-ready':
-            if ((process.new_session and not process.session_complete)
-                    or process.stage != 'core-ready' or set(payload) != {'seal'}
-                    or type(payload['seal']) is not str or payload['seal'] != process.expected_seal):
-                raise Refused('ledger execution seal')
-            process.stage = 'body-ready'
-        else:
-            raise Refused('ledger control operation')
+        if (kind!='body-ready' or payload!={} or process.stage!='registered'
+                or process.exit is not None or process.terminal is not None
+                or process.new_session and not process.session_complete):
+            raise Refused('ledger body readiness')
+        process.stage='body-ready'
 
     def wait_entry(self, caller: Birth, requested: int) -> None:
         process = self.process(caller)
@@ -221,7 +210,6 @@ class Ledger:
                 process.generation += 1
                 if process.registered_generation != process.generation:
                     process.stage = 'exec-unregistered'
-                    process.expected_seal = None
             elif kind == 'kernel_exit':
                 raw = integer(row.get('raw'), maximum=65535)
                 status(raw, os.waitstatus_to_exitcode(raw))
@@ -280,7 +268,7 @@ class Ledger:
     def session(self, birth: Birth, observed: dict) -> None:
         process = self.process(birth)
         if (not process.new_session or process.session_complete or process.parent is None
-                or process.stage not in ('registered','core-ready')):
+                or process.stage != 'registered'):
             raise Refused('ledger session transition')
         current = canonical(observed)
         original = process.identity

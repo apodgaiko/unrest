@@ -9,7 +9,7 @@ from content_manifest import Refused
 import plan_launch
 import plan_observer
 from plan_launch import CASES,expected
-from test_process_ledger import identity,emit,PINS,SEAL
+from test_process_ledger import identity,emit,PINS
 from process_ledger import Ledger,Birth
 
 
@@ -28,7 +28,7 @@ def state(tmp_path,monkeypatch):
     parent_identity,child_identity=identity(100,99),identity(101,100)
     parent,child=Birth.read(parent_identity),Birth.read(child_identity)
     emit(ledger,'kernel_root',identity=parent_identity)
-    ledger.register(parent,'root-token',PINS,SEAL,case=CASES[4],command_class='root')
+    ledger.register(parent,'root-token',PINS,case=CASES[4],command_class='root')
     emit(ledger,'kernel_child',parent=100,child=101,event=1,identity=child_identity)
     value={'case':CASES[4],'role':'plan-native','parent':parent,'translated':list(model.vector),
            'environment':dict(model.expected.environment),'cwd':str(root),'token':'plan-token',

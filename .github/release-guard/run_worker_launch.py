@@ -8,7 +8,7 @@ from content_manifest import Refused,read_regular,native_digest
 from control_transport import unique
 from git_fixtures import root as repository_root
 from launch_policy import build_expected,admit_expected,source_unit,literal
-from owned_fixture import acquire
+from owned_fixture import retain
 from content_manifest import _key
 
 CASES={
@@ -42,9 +42,7 @@ DESCENDANT=TEST+'::test_'+NAMES[5]
 
 
 def fixture(host,home):
-    base,info=acquire(str(home),Path(host.meta['owned']),host.case.split('::')[-1].split('[')[0][:30],20000)
-    if host.fixture_roots.setdefault(host.case,(str(base),info.st_dev,info.st_ino))!=(str(base),info.st_dev,info.st_ino):
-        raise Refused('worker original fixture generation')
+    retain(host,home,host.case.split('::')[-1].split('[')[0][:30],20000)
     unit=source_unit(Path(host.meta['checkout']),TEST,PIN)
     body=literal(unit,'_EXECUTOR_SOURCE')
     if host.case==TEST+'::test_'+NAMES[-2]:

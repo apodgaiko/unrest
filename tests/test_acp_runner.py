@@ -213,6 +213,7 @@ async def test_real_mcp_inventory_fd_redacts_before_crash_and_restart(
         ):
             git_process = await asyncio.create_subprocess_exec(
                 "git",
+                "-c", "maintenance.auto=false", "-c", "gc.auto=0",
                 *git_args,
                 cwd=workspace,
                 env=git_environment,

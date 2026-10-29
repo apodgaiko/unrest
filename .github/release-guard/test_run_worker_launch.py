@@ -5,6 +5,7 @@ import json
 import os
 
 import pytest
+import owned_fixture
 
 from content_manifest import Refused
 import run_worker_launch as worker
@@ -127,8 +128,8 @@ def test_each_original_worker_fixture_is_pinned_and_no_cwd_import_is_added(tmp_p
     elif name==worker.NAMES[-1]:
         body="import pathlib,time\nwhile not pathlib.Path(__file__).with_name('allow-start').exists(): time.sleep(0.01)\n"+body
     (home/'executor_fixture.py').write_text(body)
-    acquire=worker.acquire
-    monkeypatch.setattr(worker,'acquire',lambda path,owned,prefix,uid:acquire(path,owned,prefix,os.getuid()))
+    acquire=owned_fixture.acquire
+    monkeypatch.setattr(owned_fixture,'acquire',lambda path,owned,prefix,uid:acquire(path,owned,prefix,os.getuid()))
     read=worker.read_regular
     monkeypatch.setattr(worker,'read_regular',lambda path,*args,**kwargs:read(path,*args,**{**kwargs,'uid':os.getuid()}))
     host=SimpleNamespace(case=case,meta={'checkout':str(checkout),'owned':str(tmp_path)},fixture_roots={})

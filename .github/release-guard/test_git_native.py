@@ -134,7 +134,7 @@ def test_real_git_native_parent_wait_and_distinct_python_parent_numeric_join(tmp
                 target = producers if birth.parent == child else helpers
                 command_class = 'root' if birth == root else 'native-git-command' if birth.parent == child else 'native-git-helper'
                 ledger.register(birth, 'root' if birth == root else 'child-' + str(birth.pid),
-                    (('native-fixture', git_pin),), 'b' * 64, case='native-git-control',
+                    (('native-fixture', git_pin),), case='native-git-control',
                     command_class=command_class, expected_generation=1)
                 if birth != root:
                     target.append(birth)

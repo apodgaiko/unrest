@@ -15,7 +15,7 @@ from linux_observation import credential_identity, process_identity
 from process_ledger import Birth, canonical
 from postbuild_root import CASES as ARCHIVE_CASES, COMMAND as ARCHIVE_COMMAND
 
-METHODS = frozenset({'collection-finish', 'collection', 'core-ready', 'body-ready', 'case-start', 'case-finish', 'root-finish',
+METHODS = frozenset({'collection-finish', 'collection', 'body-ready', 'case-start', 'case-finish', 'root-finish',
     'archive-snapshot','archive-result','preselected-finish','fixture-root','multiprocess-proposal','launch-proposal',
     'custody_signal', 'custody_close', 'self-stop', 'guard-refusal'})
 
@@ -41,7 +41,7 @@ def inherited_descriptor(expected, descriptor, info, flags, uid):
     return [descriptor, info.st_dev, info.st_ino]
 
 
-def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
+def validate(profile: dict, event: str, arguments: tuple) -> dict:
     full=type(profile['cases']) is dict
     if Path(profile['native']) != Path(profile['runtime_root']) / 'bin/python-unrest-guard-control':
         raise Refused('source native runtime root')
@@ -99,7 +99,4 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
             raise Refused('archive fixed original oracle body')
     elif role == 'root' and not full:
         raise Refused('source unknown root domain')
-    pins = tuple(sorted((('entry', profile['entry_sha256']), ('native', profile['native_sha256']),
-                        ('source', profile['source_sha256']), ('support', profile['support_sha256']),
-                        ('runtime', profile['runtime_sha256']), ('dependency', profile['dependency_sha256']))))
-    return actual, pins
+    return actual

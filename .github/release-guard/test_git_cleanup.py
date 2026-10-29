@@ -5,7 +5,7 @@ import pytest
 
 from git_observer import Git
 from process_ledger import Birth,Ledger
-from test_process_ledger import identity,emit,terminal,wait4,PINS,SEAL
+from test_process_ledger import identity,emit,terminal,wait4,PINS
 
 CASE="case[one]"
 
@@ -15,9 +15,9 @@ def setup(*, command_class='native-git-command', execute=True, pins=(('native-fi
     root_id, child_id = identity(100, 99), identity(101, 100)
     root, child = Birth.read(root_id), Birth.read(child_id)
     emit(ledger, 'kernel_root', identity=root_id)
-    ledger.register(root, 'root-token', PINS, SEAL, case=CASE, command_class='root')
+    ledger.register(root, 'root-token', PINS, case=CASE, command_class='root')
     emit(ledger, 'kernel_child', parent=100, child=101, event=1, identity=child_id)
-    ledger.register(child, 'child-token', pins, SEAL, case=CASE, command_class=command_class, expected_generation=1)
+    ledger.register(child, 'child-token', pins, case=CASE, command_class=command_class, expected_generation=1)
     if execute:
         emit(ledger, 'kernel_exec', pid=child.pid)
     return ledger, root, child
@@ -35,7 +35,7 @@ def native_descendant(ledger, parent, pid=102):
     data = identity(pid, parent.pid)
     birth = Birth.read(data)
     emit(ledger, 'kernel_child', parent=parent.pid, child=pid, event=1, identity=data)
-    ledger.register(birth, f'helper-{pid}', (('native-fixture', 'a' * 64),), SEAL,
+    ledger.register(birth, f'helper-{pid}', (('native-fixture', 'a' * 64),),
         case=CASE, command_class='native-git-helper', expected_generation=1)
     emit(ledger, 'kernel_exec', pid=pid)
     return birth

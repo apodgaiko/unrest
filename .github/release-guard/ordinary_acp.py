@@ -18,7 +18,7 @@ PRODUCT = 'src/unrest_harness/acp_runner.py'
 TEST = 'tests/test_acp_runner.py'
 MOCK = 'tests/mock_acp_agent.py'
 PINS = {PRODUCT: '5698d40663b23bf23f832a3e3f69732fe31004d8b1cf305d5bc5870e11f39a2f',
-        TEST: '0edac8224b6b1760230026567fb1c3a1d591dc70d0b70e9990b0b52d68a71561',
+        TEST: '558010a851595fece4c186cb30b717ff38dad4fa075705dbc316cfd8537910b4',
         MOCK: '8141170328ff5fc28acf10dfd70bbf22f4062cceb1b2de8b8ea11ab0c17a48b6'}
 CASES = tuple(TEST + '::' + name for name in (
     'test_owned_node_launch_uses_one_identical_plan[work]',

@@ -15,7 +15,6 @@ from content_manifest import Refused
 def value():
     return {
         "cases": ["tests/test_many.py::test_case[" + str(i) + "]" for i in range(6000)],
-        "skips": [],
         "source": "a" * 64,
         "dependency": "b" * 64,
     }
@@ -86,7 +85,7 @@ def test_inventory_reference_rejects_aliases_and_wrong_custody(tmp_path, monkeyp
     else:
         os.link(ref["path"], tmp_path / "alias")
     with pytest.raises(Refused):
-        inventory.reference(bad, tmp_path)
+        inventory.load(bad, tmp_path, "a" * 64, "b" * 64)
 
 
 def test_oversized_pytest_parameter_ids_keep_parameters_out_of_control_frames():
@@ -94,7 +93,7 @@ def test_oversized_pytest_parameter_ids_keep_parameters_out_of_control_frames():
     from source_profile import case_seal
 
     node = "tests/test_wire.py::test_oversized[" + "x" * 70000 + "]"
-    data = {"cases": [node], "skips": [], "source": "a" * 64, "dependency": "b" * 64}
+    data = {"cases": [node], "source": "a" * 64, "dependency": "b" * 64}
     assert inventory.document(data)["cases"] == [node]
     name = inventory.identity(node)
     assert name != node and len(name) < 80

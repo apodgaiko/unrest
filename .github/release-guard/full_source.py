@@ -35,7 +35,7 @@ class FullCases(OriginalCases):
         from case_inventory import document,load
         nodes=[item.nodeid for item in session.items]
         profile=self.policy.profile
-        value=document({'cases':nodes,'skips':[], 'source':profile['source_sha256'], 'dependency':profile['dependency_sha256']})
+        value=document({'cases':nodes,'source':profile['source_sha256'], 'dependency':profile['dependency_sha256']})
         body=json.dumps(value,sort_keys=True,separators=(',',':')).encode()
         path=Path(profile['owned'])/'collection.json'
         with path.open('xb') as stream:

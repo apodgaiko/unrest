@@ -18,7 +18,6 @@ from process_ledger import Birth, Ledger, integer
 
 REQUEST_LIMIT = 8192
 RESPONSE_LIMIT = 16384
-CHANNEL_SECONDS = 4
 # Control framing uses captured I/O so source payload mediation cannot recurse
 # into the private, independently peer-authenticated observer channel.
 _SEND, _RECV, _CLOSE = socket.socket.send, socket.socket.recv, socket.socket.close

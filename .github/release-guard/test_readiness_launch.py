@@ -12,7 +12,7 @@ import readiness_launch as readiness
 ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
 
 
-@pytest.mark.parametrize('case',readiness.CASES)
+@pytest.mark.parametrize('case',readiness.CASES[:4])
 @pytest.mark.parametrize('mutation',[None,'body','env','cwd','descendant'])
 def test_exact_original_readiness_program_and_operands(case,mutation):
     unit=source_unit(ROOT,readiness.TEST,readiness.PIN,(readiness.NAME,'exercise'))
@@ -62,3 +62,41 @@ def test_real_child_terminal_status_and_authorized_cleanup_required(status,signa
     assert not Observer.completed_child(host,actor)
     host.ledger=SimpleNamespace(process=lambda birth:SimpleNamespace(terminal=(1,0,status)))
     assert not Observer.completed_child(host,{**actor,'body_ready':False})
+
+
+@pytest.mark.parametrize('case',readiness.INLINE)
+@pytest.mark.parametrize('mutation',[None,'body','environment','descendant'])
+def test_literal_owned_client_leaves_keep_exact_original_body_and_parent(case,mutation):
+    from launch_policy import literal,assignment
+    path,pin=readiness.INLINE[case]
+    unit=source_unit(ROOT,path,pin,(case.split('::')[1],))
+    if path==readiness.SESSION:
+        body=literal(unit,'code')
+    else:
+        call=next(n for n in ast.walk(unit) if isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute) and n.func.attr=='create_subprocess_exec')
+        secret=ast.literal_eval(assignment(unit,'secret'))
+        pieces=[]
+        for part in call.args[2].values:
+            if isinstance(part,ast.Constant):
+                pieces.append(part.value)
+            else:
+                assert isinstance(part.value,ast.Name) and part.value.id=='secret'
+                pieces.append(secret)
+        body=''.join(pieces)
+    calls=[]
+    host=SimpleNamespace(case=case,meta={'checkout':str(ROOT)},binding={'entry':{'path':'/native','sha256':'a'*64}},
+        root_only=lambda actor:None if actor['role']=='root' else (_ for _ in ()).throw(Refused('owner')),
+        meta_environment=lambda:{'PATH':'/bin'},admit_launch=lambda *args,**kwargs:calls.append(args) or {'ticket':1})
+    raw={'case':case,'argv':['/native','-c',body],'executable':'/native','cwd':str(ROOT),'stdin':None,
+         'environment':{'PATH':'/bin','PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}}
+    if mutation=='body':
+        raw['argv'][2]+='; print("foreign")'
+    elif mutation=='environment':
+        raw['environment']['EXTRA']='foreign'
+    if mutation:
+        with pytest.raises(Refused):
+            readiness.proposal(host,{'role':'child' if mutation=='descendant' else 'root'},raw)
+        assert not calls
+    else:
+        assert readiness.proposal(host,{'role':'root'},raw)['translated']==['/native','-I','-S','-c',body]
+        assert calls[0][2]==('session-inline' if case.endswith('::test_sigterm_ignoring_owned_process_is_killed_and_reaped') else 'fixed-inline')

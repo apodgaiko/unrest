@@ -85,7 +85,7 @@ def worker(case, binding, output):
         ledger = Ledger(nonce)
         failures=[]
         pins = (('entry', binding['bootstrap']['sha256']), ('native', native['sha256']))
-        admission = Admission(ledger, frozenset({'core-ready', 'body-ready'}))
+        admission = Admission(ledger, frozenset({'body-ready'}))
         server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         server.bind(str(root / 'control.sock'))
         os.chmod(root / 'control.sock', 0o666)
@@ -136,7 +136,7 @@ def worker(case, binding, output):
                 row = trace.records[ledger.next_kernel]
                 ledger.kernel(ledger.next_kernel, row)
                 if row['kind'] == 'kernel_root':
-                    ledger.register(birth, token, pins, seal, case=case, command_class='native-control', expected_generation=1)
+                    ledger.register(birth, token, pins, case=case, command_class='native-control', expected_generation=1)
             while len(clients) < 4:
                 try:
                     stream, _ = server.accept()
@@ -153,10 +153,6 @@ def worker(case, binding, output):
                     try:
                         request = admission.admit(frame)
                         payload = request['payload']
-                        if request['kind'] == 'core-ready':
-                            if payload != {'pins': [list(pair) for pair in pins]}:
-                                raise ValueError('native actual READY pins')
-                            payload = {'pins': pins}
                         ledger.ready(birth, request['kind'], payload)
                         next_control += 1
                         answer = {'ok': True}
@@ -209,7 +205,7 @@ def worker(case, binding, output):
         if raw != expected_status or result['poison']:
             raise RuntimeError('native controlled return or trace refused')
         if case in BODIES:
-            if next_control != 2 or failures:
+            if next_control != 1 or failures:
                 raise RuntimeError('native readiness order incomplete')
             marker = b'NATIVE_BODY_OK' if case in ('positive','fastpath-positive','product-order-positive','product-order-resolver-positive') else b'REFUSAL_CAUGHT'
             if marker not in captured:

@@ -88,11 +88,8 @@ def consume(directory, event, arguments):
     if observer.uid != 20001 or observer.pid != os.getppid():
         raise ValueError('native observer parent')
     client = Client(root, profile)
-    for kind, payload in (
-            ('core-ready', {'pins': [['entry', profile['entry_sha256']], ['native', profile['native_sha256']]]}),
-            ('body-ready', {'seal': profile['seal']})):
-        if client.request(kind, payload) != {'ok': True}:
-            raise ValueError('native readiness refused')
+    if client.request('body-ready', {}) != {'ok': True}:
+        raise ValueError('native readiness refused')
     sys.path.pop(0)
     sys.dont_write_bytecode = True
     if case in ('fastpath-positive','compile-bytes','compile-current'):

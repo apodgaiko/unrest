@@ -1,6 +1,5 @@
 """Real candidate build/install preparation; never a cached test verdict."""
 import hashlib
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -80,10 +79,8 @@ def prepare(binding, source, source_manifest, dependencies):
         for name,origin in (('archives',work/'archives'),('installed',work/'installed')):
             capture(origin,files(origin))
             shutil.copytree(origin,target/name,symlinks=False)
-        specification=importlib.util.spec_from_file_location('prepared_archive_oracle',source/'tools/check_distribution.py')
-        oracle=importlib.util.module_from_spec(specification)
-        specification.loader.exec_module(oracle)
-        extracted=oracle._extract_sdist_safely(next((target/'archives').glob('*.tar.gz')),work/'extracted')
+        from archive_leaf import oracle
+        extracted=oracle(source)._extract_sdist_safely(next((target/'archives').glob('*.tar.gz')),work/'extracted')
         capture(extracted,files(extracted))
         shutil.copytree(extracted,target/'extracted',symlinks=False)
         (target/'preparation.log').write_bytes(log)
