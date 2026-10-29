@@ -601,3 +601,9 @@ family builders retain source pins, parent relationships, schedules, quotas,
 fixture custody and status requirements; the shared helper infers none of them.
 Only observer-constructed intent fields are attached. Exec-time byte/vector and
 kernel ownership checks remain separate from this mechanical finalization.
+
+The stock-uv environment uses `UV_NO_PROJECT=1` without the redundant
+`UV_NO_SYNC`. Combining them prints uv's no-effect warning and contaminates the
+original exact CLI stderr assertion. Removing the inert flag keeps project
+resolution/synchronization disabled; it neither suppresses diagnostics nor changes
+the refusal assertion. Both measured environment-depth transformations remain.
