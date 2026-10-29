@@ -180,6 +180,7 @@ class Observer:
                 'PYTEST_DISABLE_PLUGIN_AUTOLOAD': '1'}
 
     def stdio(self, pid, role, *, input_pipe=False, intent=None):
+        from storage_launch import CASES as STORAGE_CASES
         if role=='mcp' and self.case in HTTP_CASES:
             from http_cases import stdio
             return stdio(self,pid,intent)
@@ -196,7 +197,8 @@ class Observer:
             info = (Path('/proc') / str(pid) / 'fd' / str(descriptor)).stat()
             inline = role == 'cleanup-inline'
             terminal = inline and self.case in INFLIGHT and os.readlink(Path('/proc') / str(pid) / 'cwd') != self.meta['checkout']
-            inherited = inline and (descriptor == 0 if terminal or self.case in STARTUP else descriptor == 2)
+            inherited = (inline and (descriptor == 0 if terminal or self.case in STARTUP else descriptor == 2)
+                or role=='fixed-inline' and self.case in STORAGE_CASES and descriptor==2)
             if terminal and descriptor == 2:
                 other = (Path('/proc') / str(pid) / 'fd/1').stat()
                 if (info.st_dev, info.st_ino) != (other.st_dev, other.st_ino):

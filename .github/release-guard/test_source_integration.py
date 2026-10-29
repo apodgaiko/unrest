@@ -273,7 +273,7 @@ def test_caught_cleanup_signal_refusal_stays_poisoned(monkeypatch):
 
 
 @pytest.mark.skipif(sys.platform != 'linux', reason='actual proc descriptor ownership')
-@pytest.mark.parametrize('role,input_pipe', (('git-init', False), ('git-helper', False), ('git-command', True)))
+@pytest.mark.parametrize('role,input_pipe', (('git-init', False), ('git-helper', False), ('git-command', True), ('fixed-inline',False)))
 def test_fixture_git_inherits_exact_descriptors_and_rejects_substitution(tmp_path, role, input_pipe):
     command_read, command_write = os.pipe()
     ready_read, ready_write = os.pipe()
@@ -286,6 +286,8 @@ def test_fixture_git_inherits_exact_descriptors_and_rejects_substitution(tmp_pat
                 os.dup2(command_read, 0)
                 os.dup2(ready_write, 1)
                 os.dup2(ready_write, 2)
+            if role=='fixed-inline':
+                os.dup2(ready_write,1)
             if role == 'git-helper':
                 with open('/dev/null', 'rb') as null:
                     os.dup2(null.fileno(), 0)
@@ -305,6 +307,8 @@ def test_fixture_git_inherits_exact_descriptors_and_rejects_substitution(tmp_pat
         assert os.read(ready_read, 1) == b'1'
         observer = object.__new__(Observer)
         observer.full, observer.outcomes = False, []
+        from storage_launch import CASES as STORAGE_CASES
+        observer.case=next(iter(STORAGE_CASES))
         observer.stdio(child, role, input_pipe=input_pipe)
         os.write(command_write, b'1')
         assert os.read(ready_read, 1) == b'2'
