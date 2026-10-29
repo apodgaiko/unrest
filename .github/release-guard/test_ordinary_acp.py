@@ -280,3 +280,40 @@ def test_no_launch_cases_have_no_process_route(tmp_path, case):
         proposal(observer, actor, {'case':case,'executable':'/pinned/python','argv':['/pinned/python'],
             'cwd':'/source','environment':{},'stdin':None})
     assert observer.intents == {}
+
+
+@pytest.mark.parametrize('case',ordinary_acp.STARTUP_CASES)
+@pytest.mark.parametrize('mutation',[None,'bytes','mode','outside'])
+def test_startup_failure_uses_exact_original_owned_non_executable_format(tmp_path,monkeypatch,case,mutation):
+    import os
+    import owned_fixture
+    import content_manifest
+
+    acquire=owned_fixture.acquire
+    monkeypatch.setattr(owned_fixture,'acquire',lambda path,owned,prefix,owner:acquire(path,owned,prefix,os.getuid()))
+    read=content_manifest.read_regular
+    monkeypatch.setattr(content_manifest,'read_regular',lambda path,*args,**kwargs:read(path,*args,**{**kwargs,'uid':os.getuid()}))
+    base=tmp_path/'pytest'/(case.split('::')[1][:30]+'0')
+    workspace=base/'workspace'
+    workspace.mkdir(parents=True)
+    suffix='work' if case==ordinary_acp.STARTUP_CASES[0] else 'validate' if case==ordinary_acp.STARTUP_CASES[1] else 'reviewer'
+    file=workspace/('invalid-format-'+suffix)
+    file.write_bytes(b'mode executable, intentionally invalid format\n')
+    file.chmod(0o700)
+    if mutation=='bytes':
+        file.write_bytes(b'#!/bin/sh\nexit 0\n')
+    elif mutation=='mode':
+        file.chmod(0o600)
+    elif mutation=='outside':
+        workspace=tmp_path
+    if mutation is None:
+        value=expected(case,'session-invalid',str(workspace),Path('/checkout'),'/native','a'*64,
+            {'HOME':'/home','TMPDIR':'/tmp','PATH':'/usr/bin:/bin'},tmp_path)
+        assert value.argv==('./invalid-format-'+suffix,) and value.executable==str(file)
+        assert value.payload_kind=='expected-exec-failure'
+        assert value.payload_sha256==hashlib.sha256(file.read_bytes()).hexdigest()
+        assert not any(key.startswith('CODEX') for key,_ in value.environment)
+    else:
+        with pytest.raises((Refused,OSError)):
+            expected(case,'session-invalid',str(workspace),Path('/checkout'),'/native','a'*64,
+                {'HOME':'/home','TMPDIR':'/tmp','PATH':'/usr/bin:/bin'},tmp_path)

@@ -30,7 +30,7 @@ from linux_observation import process_identity
 from process_ledger import Birth, Ledger, canonical
 from socket_observation import acquire_tcp, acquire_unix_pair
 from source_profile import METHODS, ROOT_COMMAND
-from ordinary_acp import CASES as ORDINARY_CASES, MOCK, NEGATIVE_CASES
+from ordinary_acp import EXECUTION_CASES as ORDINARY_CASES, MOCK, NEGATIVE_CASES
 from unix_endpoints import UnixPairs
 from session_launch import CASES as SESSION_CASES, LIVE as SESSION_LIVE, TIMEOUT as SESSION_TIMEOUT, SCRIPT as SESSION_SCRIPT
 from fixed_inline import CASES as FIXED_CASES, SEQUENCES as FIXED_SEQUENCES, CLI_CASE, JOURNAL_CASE, DRAIN_CASE, CONSOLE_CASE, UV_CASES
@@ -224,12 +224,13 @@ class Observer:
         matches = [value for value in self.intents.values() if not value['consumed']
                    and value['translated'] == vector and value['environment'] == environment
                    and value.get('parent', self.root_birth) == parent
-                   and value['cwd'] == cwd and path == value.get('executable', self.binding['entry']['path'])]
+                   and value['cwd'] == cwd and path == value.get('attempt_path',value.get('executable', self.binding['entry']['path']))]
         if len(matches) != 1:
             return False
         from uv_cli import uv_digest
-        actual_pin=(uv_digest(Path(path).resolve(strict=True)) if matches[0]['role']=='uv-cli'
-                    else native_digest(Path(path).resolve(strict=True)))
+        measured=Path(path) if Path(path).is_absolute() else Path(cwd)/path
+        actual_pin=(uv_digest(measured.resolve(strict=True)) if matches[0]['role']=='uv-cli'
+                    else native_digest(measured.resolve(strict=True)))
         if actual_pin != matches[0].get('executable_sha256', self.binding['entry']['sha256']):
             return False
         intent = matches[0]

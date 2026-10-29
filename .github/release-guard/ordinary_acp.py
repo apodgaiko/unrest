@@ -40,12 +40,30 @@ NEGATIVE_CASES = tuple(TEST + '::' + name for name in (
       for fixture, category in (('directory', 'directory'), ('non_executable', 'not_executable')) for role in ('work', 'validate')),
     'test_terminal_local_rejection_starts_no_mcp_client_or_protocol',
 ))
-ALL_CASES = (*CASES, *NEGATIVE_CASES)
+STARTUP_CASES=tuple(TEST+'::'+name for name in (
+    'test_owned_node_real_startup_failure_is_safe_and_starts_no_protocol[work]',
+    'test_owned_node_real_startup_failure_is_safe_and_starts_no_protocol[validate]',
+    'test_terminal_real_startup_failure_is_safe_and_starts_no_protocol'))
+EXECUTION_CASES=(*CASES,*STARTUP_CASES)
+ALL_CASES = (*EXECUTION_CASES, *NEGATIVE_CASES)
 
 
 def environment(case, base, root_environment):
-    if case not in CASES:
+    if case not in EXECUTION_CASES:
         raise Refused('ordinary finite case')
+    if case in STARTUP_CASES:
+        role='work' if case==STARTUP_CASES[0] else 'validate' if case==STARTUP_CASES[1] else 'terminal_reviewer'
+        home=base/'.unrest'
+        result={key:root_environment[key] for key in ('HOME','TMPDIR','PATH')}
+        result.update(UNREST_CAPABILITY_PROFILE='safe',UNREST_CAPABILITY_POLICY_VERSION='1',
+                      UNREST_HOME=str(home),UNREST_PROJECT_ID='p1',UNREST_MISSION_ID='mission-001')
+        runtime=home/'projects/p1/.unrest-runtime/missions/mission-001'
+        if role=='terminal_reviewer':
+            result['UNREST_TERMINAL_REVIEW_PATH']=str(runtime/'terminal-reviews/2026-08-30T05-00-00Z.json')
+        else:
+            result.update(UNREST_NODE_ID='startup-'+role,UNREST_NODE_TYPE=role,
+                UNREST_HANDOFF_PATH=str(runtime/'attempts'/('2026-08-30T04-00-00Z-'+role+'__startup-'+role+'.json')))
+        return result
     role = 'work' if case==MOCK_CASE else case.rsplit('[', 1)[1][:-1]
     node, spawn = ('v-good', '2026-08-10T07-05-00Z-0000') if role == 'claude' else (
         'plan-' + role, '2026-08-30T00-00-00Z-' + role)
@@ -81,7 +99,7 @@ def system_sleep():
 
 
 def expected(case, role, cwd, checkout, native, native_pin, root_environment, owned, *, base=None):
-    if case not in CASES or role not in ('mock-acp', 'sleep'):
+    if case not in EXECUTION_CASES or role not in (('session-invalid','sleep') if case in STARTUP_CASES else ('mock-acp', 'sleep')):
         raise Refused('ordinary closed launch role')
     if role == 'sleep':
         if cwd != str(checkout):
@@ -95,6 +113,19 @@ def expected(case, role, cwd, checkout, native, native_pin, root_environment, ow
             leaf=environment(case,base,root_environment)
             env.update({key:leaf[key] for key in ('UNREST_HANDOFF_PATH','UNREST_NODE_ID','UNREST_NODE_TYPE')})
         vector, executable, pin, kind, payload = (('sleep' if case==MOCK_CASE else '/bin/sleep'), '30'), ('/usr/bin/sleep' if case==MOCK_CASE else '/bin/sleep'), system_sleep(), 'native', None
+    elif role=='session-invalid':
+        from owned_fixture import acquire
+        from content_manifest import read_regular
+        workspace=Path(cwd)
+        base,_=acquire(str(workspace.parent),owned,case.split('::')[1][:30],20000)
+        suffix='work' if case==STARTUP_CASES[0] else 'validate' if case==STARTUP_CASES[1] else 'reviewer'
+        file=workspace/('invalid-format-'+suffix)
+        body,_,pin=read_regular(file,4096,uid=20000,mode=0o700)
+        if workspace!=base/'workspace' or body!=b'mode executable, intentionally invalid format\n':
+            raise Refused('ordinary exact invalid-format fixture')
+        vector=('./'+file.name,)
+        executable,kind,payload=str(file),'expected-exec-failure',None
+        env=environment(case,base,root_environment)
     else:
         home = Path(cwd)
         if (not home.is_absolute() or str(home.resolve()) != cwd or home.name != 'workspace'

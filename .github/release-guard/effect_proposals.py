@@ -10,7 +10,7 @@ from content_manifest import Refused
 from plan_launch import CASES as PLANS, expected as plan_expected
 from session_launch import CASES as SESSIONS, expected as session_expected
 from fixed_inline import CASES as FIXED, SEQUENCES, NESTED_CASES, STORAGE_CASES, INSPECTION_CASES, MEASUREMENT_CASE, COMPLETION_CASES, DRAIN_CASE, CONSOLE_CASE, UV_CASES, READINESS_CASES, TERMINAL_CASES, expected as fixed_expected, STDIO, startup_expected, translated as fixed_translated
-from ordinary_acp import CASES as ORDINARY, expected as ordinary_expected
+from ordinary_acp import EXECUTION_CASES as ORDINARY, expected as ordinary_expected
 from cleanup_launch import EXECUTION_CASES as CLEANUP, expected as cleanup_expected, base_path, translated as cleanup_vector
 from cleanup_inline import DECLARATIONS, INFLIGHT, expected as inline_expected
 from controlled_startup import expected_entry, ACP
@@ -174,7 +174,7 @@ def proposal(host, actor, raw):
         role,maximum='git-fixed' if query else 'pytest-regression' if case in NESTED_CASES else 'fixed-inline',1 if query else len(SEQUENCES[case])
     elif case in ORDINARY:
         host.root_only(actor)
-        from ordinary_acp import MOCK_CASE
+        from ordinary_acp import MOCK_CASE,STARTUP_CASES
         base=None
         if case==MOCK_CASE:
             from owned_fixture import acquire
@@ -184,11 +184,11 @@ def proposal(host, actor, raw):
             generation=(str(base),info.st_dev,info.st_ino)
             if host.fixture_roots.setdefault(('ordinary-mock',case),generation)!=generation:
                 raise Refused('mock-agent fixture generation changed')
-        role='sleep' if argv[0] in ('/bin/sleep','sleep') else 'mock-acp'
+        role='sleep' if argv[0] in ('/bin/sleep','sleep') else 'session-invalid' if case in STARTUP_CASES else 'mock-acp'
         maximum=2 if case==ORDINARY[2] and role=='sleep' else 1
         expected = ordinary_expected(case,role,cwd,checkout,native,pin,root_environment,owned,base=base)
         script_pin = expected.payload_sha256
-        vector = list(expected.argv) if expected.rule=='ordinary:sleep' else [native,'-I','-S',*expected.argv[1:]]
+        vector = list(expected.argv) if role in ('sleep','session-invalid') else [native,'-I','-S',*expected.argv[1:]]
     elif case in DECLARATIONS:
         host.root_only(actor)
         from cleanup_inline import child_count
@@ -266,6 +266,8 @@ def proposal(host, actor, raw):
     else:
         answer=host.admit_launch(actor,expected,role,vector,script_pin,
             maximum=maximum,environment=extra_environment,inherited=inherited,port=port)
+    if answer is not None and case in ORDINARY and role=='session-invalid':
+        host.intents[answer['ticket']]['attempt_path']=expected.argv[0]
     if answer is not None and case in FIXED:
         host.intents[answer['ticket']].update(fixed_operation=operation,input_pipe=case in STDIO)
     if answer is not None and case in CLEANUP and role=='cleanup-acp':

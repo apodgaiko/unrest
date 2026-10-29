@@ -202,6 +202,14 @@ Advisory port probes never become listeners. MCP slot ownership and its explicit
 retirement remain separate. Python application-context wrappers are removed;
 only finite multiprocessing hook installation remains after discovery.
 
+Three original ACP invalid-format startup cases reuse ordinary native-fixture
+admission: the exact no-op sleep child and a case-owned mode-0700 file with the
+original non-executable-format bytes. The relative argv is preserved; the exec
+attempt is measured against the acquired cwd and pinned absolute file. Expected
+ENOEXEC retains generation zero and the actual numeric parent wait; it never
+fabricates Python READY or protocol completion. Provider configuration and native
+pin-refusal cases remain unchanged.
+
 ## Verification and retired model controls
 
 Every original product/source test and its real completion, status and cleanup
