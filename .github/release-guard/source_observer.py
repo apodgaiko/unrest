@@ -37,7 +37,7 @@ from fixed_inline import CASES as FIXED_CASES, SEQUENCES as FIXED_SEQUENCES, CLI
 from git_sites import CASES as GIT_CASES
 from completion_roles import CASES as ROLE_CASES,HTTP as ROLE_HTTP,actor_slot
 from git_observer import Git
-from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, INFLIGHT, child_count as inline_count
+from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, child_count as inline_count
 from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, GROUPS as CLEANUP_GROUPS, child_count, SCRIPT, snapshot_path
 
 
@@ -199,8 +199,10 @@ class Observer:
         null = Path('/dev/null').stat()
         for descriptor in (0,1,2):
             info = (Path('/proc') / str(pid) / 'fd' / str(descriptor)).stat()
+            inherited=(parent/str(descriptor)).stat()
             if not (stat.S_ISCHR(info.st_mode) and info.st_rdev==null.st_rdev
-                    or stat.S_ISFIFO(info.st_mode) and (info.st_dev,info.st_ino) in parent_pipes):
+                    or stat.S_ISFIFO(info.st_mode) and (info.st_dev,info.st_ino) in parent_pipes
+                    or stat.S_ISREG(info.st_mode) and (info.st_dev,info.st_ino,info.st_mode)==(inherited.st_dev,inherited.st_ino,inherited.st_mode)):
                 raise Refused('source stdio outside actual parent pipe or null descriptor')
         output=(Path('/proc')/str(pid)/'fd/1').stat()
         return output.st_dev,output.st_ino

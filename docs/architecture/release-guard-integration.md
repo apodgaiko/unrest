@@ -171,8 +171,10 @@ image directly, avoiding undeclared PATH probes when stock-uv support adds a
 runtime bin directory. Command arguments and original product assertions remain.
 
 Stdio containment has one common rule: descriptors 0–2 must be `/dev/null` or
-FIFOs currently held by the actual parent. Sockets, arbitrary character devices
-and arbitrary regular files remain refused. The original HTTP fixture retains
+FIFOs currently held by the actual parent, or the identical regular file already
+used for the same numbered parent stdio descriptor. This retains redirected
+parent stdio, including test capture. Sockets, arbitrary character devices and
+substituted regular files remain refused. The original HTTP fixture retains
 its separately acquired, exact owned log-file exception. Extra inherited MP
 resources remain independently bound. Original null/inherited/merged stream
 shape is an application-test assertion, no longer an additional guard claim;
@@ -184,6 +186,10 @@ Every original product/source test and its real completion, status and cleanup
 assertions remains. Guard controls retain unknown-launch, foreign/PID-reused owner,
 non-loopback/DNS, ambient inherited FD, stale listener, sticky caught refusal,
 quota/retirement, invalid profile and missing-parent-wait negatives.
+
+The unused TCP empty-EOF query is removed; native socket controls retain real
+cookie/FD acquisition, payload reads and actual child waits without claiming
+application accept or EOF certification.
 
 Model-only controls for queued-send/accepted-ticket joins, post-connect payload
 reauthorization, EOF-only drains, parked payload cancellation, and Git semantic
