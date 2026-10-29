@@ -32,10 +32,12 @@ def test_exceptional_git_literals_do_not_spread_to_other_cases(case,args):
 
 
 @pytest.mark.parametrize('boundary',['reservation','dispatch'])
-def test_pre_send_stops_cannot_launch_a_backend(boundary):
+def test_pre_send_stops_allow_one_owned_startup_pair_but_no_second(boundary):
     case=TEST+'::test_stop_boundaries_preserve_consumption_and_no_new_sends['+boundary+']'
+    assert before_spawn(case,'/owned/pytest/case/worker','backend',[],lambda row:True)
     with pytest.raises(Refused,match='pair bound'):
-        before_spawn(case,'/owned/pytest/case/worker','backend',[],lambda row:True)
+        before_spawn(case,'/owned/pytest/case/other/worker','backend',
+            [{'cwd':'/owned/pytest/case/worker','role':'backend'}],lambda row:True)
 
 
 def test_git_sequencing_is_per_repository_but_quota_remains_case_wide(monkeypatch):

@@ -54,7 +54,6 @@ def graph(tmp_path, monkeypatch):
 
 def test_original_metadata_graph_is_readonly_and_descriptor_is_closed(graph):
     root, value = graph
-    metadata.validate(value)
     assert value==metadata.descriptor()
     assert all(path.stat().st_mode & 0o777==0o555 for path in [root,*root.rglob('*')] if path.is_dir())
     assert (root/'bin/codex-acp').readlink().as_posix()==metadata.LINK[1]
@@ -86,12 +85,3 @@ def test_factory_refuses_changed_bytes_before_exposing_readonly_inputs(graph,mon
             for path in [target,*target.rglob('*')]:
                 if path.is_dir() and not path.is_symlink():
                     path.chmod(0o755)
-
-
-@pytest.mark.parametrize("field", ["members", "link", "platform", "execution"])
-def test_descriptor_substitution_refuses_before_use(graph, field):
-    _, value = graph
-    changed = dict(value)
-    changed[field] = None
-    with pytest.raises(Refused):
-        metadata.validate(changed)

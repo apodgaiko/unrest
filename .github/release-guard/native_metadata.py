@@ -7,7 +7,6 @@ import tarfile
 import urllib.request
 
 from content_manifest import Refused
-from control_transport import finite
 from git_observer import regular
 
 INPUTS = (
@@ -30,12 +29,6 @@ OWNER = 0
 def descriptor():
     return {'schema':'unrest.native-metadata.v1','members':[list(row) for row in MEMBERS],
             'link':list(LINK),'platform':'darwin-arm64','execution':'forbidden'}
-
-
-def validate(record):
-    finite(record)
-    if record != descriptor():
-        raise Refused('original native metadata descriptor')
 
 
 def prepare(root):

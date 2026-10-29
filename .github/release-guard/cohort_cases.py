@@ -20,7 +20,7 @@ CAMPAIGNS = {
     **rows('final_gate_rejects_stale_reused_and_dissent',('repeated-session',),4,12),
     **rows('failed_final_transport_keeps_consumed_budget',(None,),3,12),
     **rows('runtime_capacity_parking_and_correction_priority',('1-2','2-2','4-4','8-4'),8,28),
-    **rows('stop_boundaries_preserve_consumption_and_no_new_sends',('reservation','dispatch'),0,4),
+    **rows('stop_boundaries_preserve_consumption_and_no_new_sends',('reservation','dispatch'),1,4),
     **rows('stop_boundaries_preserve_consumption_and_no_new_sends',('completion',),1,8),
     **rows('runtime_budget_before_recheck_retains_dissent',(None,),2,12),
     **rows('stop_after_sibling_pass_drains_and_retains_both_verdicts',('z-first','a-second'),4,12),

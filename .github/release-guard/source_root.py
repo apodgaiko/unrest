@@ -16,7 +16,6 @@ class OriginalCases:
     def __init__(self, policy):
         self.policy, self.items, self.reports, self.completed = policy, (), {}, []
         self.cases = tuple(policy.profile['cases'])
-        self.skips=[]
 
     def pytest_collection_finish(self, session):
         items = tuple(session.items)
@@ -61,8 +60,6 @@ class OriginalCases:
         if self.normal_outcomes:
             if self.policy.poison:
                 raise Refused('full source forbidden effect')
-            if skipped:
-                self.skips.append(case)
         elif not passed:
             raise Refused('root original assertions or cleanup failed')
         self.leave(case,'skipped' if skipped else 'passed' if passed else 'failed',phases)

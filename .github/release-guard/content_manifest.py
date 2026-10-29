@@ -72,44 +72,43 @@ def _directory_key(info: os.stat_result) -> tuple[int, ...]:
     return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid)
 
 
-def _root(stack: ExitStack, path: Path) -> tuple[int, list[tuple[int, str, int, tuple[int, ...]]]]:
-    path = path.absolute()
-    if ".." in path.parts:
-        raise Refused("noncanonical_root")
-    parent = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    stack.callback(os.close, parent)
-    chain = []
-    for part in path.parts[1:]:
-        before = os.stat(part, dir_fd=parent, follow_symlinks=False)
+def _descend(stack, parent, parts, identity):
+    chain=[]
+    for part in parts:
+        before=os.stat(part,dir_fd=parent,follow_symlinks=False)
         if not stat.S_ISDIR(before.st_mode):
-            raise Refused("noncanonical_root")
-        child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
-        stack.callback(os.close, child)
-        if _directory_key(before) != _directory_key(os.fstat(child)):
-            raise Refused("root_acquisition_race")
-        chain.append((parent, part, child, _directory_key(before)))
-        parent = child
-    return parent, chain
+            raise Refused('noncanonical_root' if identity is _directory_key else 'non_directory_component')
+        child=os.open(part,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=parent)
+        stack.callback(os.close,child)
+        if identity(before)!=identity(os.fstat(child)):
+            raise Refused('directory_acquisition_race')
+        chain.append((parent,part,child,identity(before)))
+        parent=child
+    return parent,chain
+
+
+def _verify(chain,identity,code):
+    for parent,part,child,expected in reversed(chain):
+        if (expected!=identity(os.fstat(child))
+                or expected!=identity(os.stat(part,dir_fd=parent,follow_symlinks=False))):
+            raise Refused(code)
+
+
+def _root(stack: ExitStack, path: Path):
+    path=path.absolute()
+    if '..' in path.parts:
+        raise Refused('noncanonical_root')
+    parent=os.open('/',os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+    stack.callback(os.close,parent)
+    return _descend(stack,parent,path.parts[1:],_directory_key)
 
 
 def _member(root: int, name: str, line_counts: dict[str, int] | None,
             file_bound: int | None = None, *, collected=None, uid=None, mode=None,
             minimum=0, forbidden=0o7000) -> Member:
     parts = name.split("/")
-    directories: list[tuple[int, str, int, tuple[int, ...]]] = []
     with ExitStack() as stack:
-        parent = root
-        for part in parts[:-1]:
-            before = os.stat(part, dir_fd=parent, follow_symlinks=False)
-            if not stat.S_ISDIR(before.st_mode):
-                raise Refused("non_directory_component")
-            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
-                            dir_fd=parent)
-            stack.callback(os.close, child)
-            if _key(before) != _key(os.fstat(child)):
-                raise Refused("directory_acquisition_race")
-            directories.append((parent, part, child, _key(before)))
-            parent = child
+        parent,directories=_descend(stack,root,parts[:-1],_key)
         before = os.stat(parts[-1], dir_fd=parent, follow_symlinks=False)
         if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
                 or before.st_mode & forbidden or uid is not None and before.st_uid!=uid
@@ -137,11 +136,7 @@ def _member(root: int, name: str, line_counts: dict[str, int] | None,
                 or _key(before) != _key(os.stat(parts[-1], dir_fd=parent,
                                                  follow_symlinks=False))):
             raise Refused("file_read_race")
-        for ancestor, part, child, expected in reversed(directories):
-            if (expected != _key(os.fstat(child))
-                    or expected != _key(os.stat(part, dir_fd=ancestor,
-                                                follow_symlinks=False))):
-                raise Refused("directory_read_race")
+        _verify(directories,_key,'directory_read_race')
         if line_counts is not None:
             try:
                 line_counts[name] = len(counted_bytes.decode("utf-8").splitlines())
@@ -171,11 +166,7 @@ def _capture(root: Path, paths: Sequence[str], line_counts: dict[str, int] | Non
                 files.append(member)
             if before != _key(os.fstat(fd)):
                 raise Refused("root_read_race")
-            for parent, part, child, expected in reversed(chain):
-                if (expected != _directory_key(os.fstat(child))
-                        or expected != _directory_key(os.stat(part, dir_fd=parent,
-                                                             follow_symlinks=False))):
-                    raise Refused("root_read_race")
+            _verify(chain,_directory_key,'root_read_race')
     except OSError:
         raise Refused("filesystem_acquisition_refused") from None
     return {"schema": SCHEMA, "files": files}
@@ -194,10 +185,7 @@ def read_regular(file: Path, maximum: int, *, uid=None, mode=None, minimum=0,
         parent, chain = _root(stack, file.parent)
         member=_member(parent, _path(file.name), None, maximum, collected=observed,
                 uid=uid, mode=mode, minimum=minimum, forbidden=forbidden)
-        for ancestor, part, child, expected in reversed(chain):
-            if (expected != _directory_key(os.fstat(child))
-                    or expected != _directory_key(os.stat(part, dir_fd=ancestor, follow_symlinks=False))):
-                raise Refused('regular file ancestor changed')
+        _verify(chain,_directory_key,'regular file ancestor changed')
     return observed['body'], observed['info'], member['sha256']
 
 

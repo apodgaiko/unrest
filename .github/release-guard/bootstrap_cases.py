@@ -14,7 +14,6 @@ from content_manifest import Refused
 
 TEST = 'tests/test_experimental_bootstrap.py'
 CATALOGUE = 'src/unrest_harness/provider_data/codex-rust-v0.160.1-models.json'
-CATALOGUE_PIN = 'fd219bd9f061278275f528939f82f54d2eb97df4b25c23b022adbe48813d920b'
 
 
 @dataclass(frozen=True)
@@ -23,15 +22,6 @@ class Case:
     delay: int | float | None
     configured: bool
     children: int
-
-    @property
-    def broker_http(self):
-        return self.name == 'test_delayed_turn_uses_only_original_remaining_time'
-
-    @property
-    def interrupted(self):
-        return (self.name.startswith('test_actual_launch_lifetime_and_interruptions[')
-                or self.name.startswith('test_original_limits_refuse_before_grant_or_send['))
 
     @property
     def nodeid(self):

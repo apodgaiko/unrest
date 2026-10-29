@@ -564,3 +564,17 @@ bind mount must expose that same measured directory generation, owned by root
 with mode0555; the common mount inventory still verifies readonly coverage.
 The duplicate arbitrary-tree walk after mounting is retired. Source children
 cannot modify these inputs, and metadata remains data with execution forbidden.
+
+Profile acquisition and content measurement now share held nofollow directory
+descent and chain verification. Root ancestors retain their directory-generation
+key; member ancestors retain the stricter timestamp-inclusive key. Native profile
+reads use the same complete bounded regular-file acquisition with the existing
+UID20001/mode0444 checks. No source code runs before this boundary. Unused
+bootstrap properties and the unconsumed skip accumulator are removed; real skip
+outcomes, original phases and constructor ceilings remain.
+
+The original cohort stop-file tests stop sends after reservation or dispatch,
+but initialize one owned controlled pair before the next send-boundary check.
+Their admission ceiling therefore permits that single startup pair; the original
+zero-prompt assertions still verify no turn was sent. This does not apply to the
+intentional controller crash at reservation.
