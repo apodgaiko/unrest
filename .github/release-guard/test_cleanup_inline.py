@@ -97,16 +97,9 @@ def test_inline_options_and_vectors_are_closed():
 
 
 @pytest.mark.parametrize("case", NO_LAUNCH)
-def test_numeric_cases_cannot_enter_a_child_profile_or_mint_an_intent(tmp_path, case):
-    from source_profile import FIELDS, validate
+def test_numeric_cases_cannot_mint_a_child_intent(tmp_path, case):
     from test_source_integration import backend_request
 
-    profile = dict.fromkeys(FIELDS)
-    profile.update(
-        schema="unrest.bootstrap-source.v1", role="cleanup-acp", case=case, cases=list(NO_LAUNCH)
-    )
-    with pytest.raises(Refused):
-        validate(profile, "cpython.run_file", ("foreign.py",))
     observer, actor, request = backend_request(tmp_path)
     observer.case = request["case"] = case
     with pytest.raises(Refused):

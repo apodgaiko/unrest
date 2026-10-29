@@ -124,7 +124,7 @@ def test_http_authority_and_inherited_profile_descriptors_remain_closed(tmp_path
     native=str(runtime/'bin/python-unrest-guard-control')
     vector=[native,'-I','-S','-c','pass']
     environment={'PATH':'/usr/bin:/bin'}
-    profile={key:'a'*64 for key in profiles.FIELDS}
+    profile={key:'a'*64 for key in ('entry_sha256','native_sha256','source_sha256','support_sha256','runtime_sha256','dependency_sha256')}
     profile.update(schema='unrest.bootstrap-source.v1',role='mcp',case=case,
         cases=list(http_cases.SUPERVISION if subject.startswith('http') else GROUPS['mp-lock3']),
         native=native,checkout=str(tmp_path/'source'),owned=str(tmp_path/'owned'),

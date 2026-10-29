@@ -340,3 +340,15 @@ measures the actual inputs before source admission. A source cannot create a new
 valid manifest by declaring its own hash; the hash comes from the protected
 observer profile. Test-only roundtrip oracles still remeasure files and compare
 canonical bytes, including malformed/coherently rehashed fixture negatives.
+
+
+Protected source profiles are parsed once by `native_entry.acquire`, under the
+observer-owned directory/file identity, mode, link and stable-read checks. Their
+consumer no longer decodes the producer's schema, canonical path, digest format
+or execution-descriptor shape again. The observer still constructs execution
+descriptors from exactly one consumed launch intent. The consumer checks actual
+entry event/arguments, script/data bytes, executor-fixture custody, process and
+parent identities, credentials, environment, cwd, namespaces, readonly mounts,
+CPython flags and inherited descriptors. Authenticated producer data never
+replaces these live comparisons. Controlled configuration rendering similarly
+consumes its authored declarations; raw relay input remains validated.

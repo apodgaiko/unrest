@@ -8,10 +8,8 @@ separate mandatory boundaries. There is no legacy resolver fallback.
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Any
 
-from bootstrap_cases import BOOTSTRAP, configuration, wrapper
+from bootstrap_cases import configuration, wrapper
 from content_manifest import Refused
 from controlled_cases import CASES as CONTROLLED, backend as controlled_backend, backend_path, configuration_items, configured as is_configured
 from launch_policy import build_expected
@@ -26,19 +24,7 @@ CASES = tuple('tests/test_experimental_bootstrap.py::' + name for name in (
     'test_actual_sequential_initialize_and_session_share_cutoff',
     'test_startup_subtracts_from_actual_inference_timeout'))
 WRAPPER = 'import runpy,sys,time; p=sys.argv.pop(1); time.sleep(0.5); runpy.run_path(p,run_name="__main__")'
-PATH_TYPE = type(Path('/'))
-
-
-def path(value: Any) -> Path:
-    if type(value) is not PATH_TYPE or not value.is_absolute() or str(value.resolve()) != str(value):
-        raise Refused('startup canonical path')
-    return value
-
-
 def expected_entry(case,checkout,home,native,native_pin,*,backend,relay=None):
-    if type(case) is not str or case not in (*BOOTSTRAP,*CONTROLLED) or type(backend) is not bool:
-        raise Refused('controlled entry declaration')
-    checkout,home = path(checkout),path(home)
     configured = is_configured(case)
     servers,skills = configuration_items(case,home)
     options,config = configuration(checkout,home,servers=servers,skills=skills) if configured else ([],None)

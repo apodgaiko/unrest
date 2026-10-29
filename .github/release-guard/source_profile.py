@@ -14,17 +14,12 @@ from http_cases import CASES as HTTP_CASES
 from linux_observation import credential_identity, process_identity
 from process_ledger import Birth, canonical
 from postbuild_root import CASES as ARCHIVE_CASES, COMMAND as ARCHIVE_COMMAND
-from execution_spec import DOMAINS
 from case_inventory import identity as case_identity,load
 
 ROOT_COMMAND = 'from source_root import main;raise SystemExit(main())'
 METHODS = frozenset({'collection-finish', 'collection', 'core-ready', 'body-ready', 'case-start', 'case-finish', 'root-finish',
     'archive-snapshot','archive-result','preselected-finish','fixture-root','multiprocess-proposal','launch-proposal', 'launch-return', 'pair-intent', 'pair-seal',
     'custody_signal', 'custody_close', 'self-stop', 'guard-refusal'})
-FIELDS = {'schema', 'role', 'case', 'identity', 'parent', 'observer', 'argv', 'environment', 'cwd',
-    'native', 'native_sha256', 'entry_sha256', 'nonce', 'token', 'seal', 'generation',
-    'mount_namespace', 'network_namespace', 'checkout', 'owned', 'dependencies', 'runtime_root', 'mounts',
-    'source_sha256', 'support_sha256', 'runtime_sha256', 'dependency_sha256', 'script', 'cases', 'inherited', 'execution'}
 
 
 def case_seal(cases):
@@ -47,12 +42,8 @@ def inherited_descriptor(expected, descriptor, info, flags, uid):
 
 
 def readonly_mounts(expected: dict, namespace: str) -> None:
-    if type(expected) is not dict or len(expected) not in (4,5) or os.readlink('/proc/self/ns/mnt') != namespace:
+    if os.readlink('/proc/self/ns/mnt') != namespace:
         raise Refused('source immutable generation')
-    for point, identity in expected.items():
-        if (type(point) is not str or type(identity) is not list or len(identity) != 3
-                or any(type(value) is not int or value <= 0 for value in identity)):
-            raise Refused('source mount identity types')
     observed = {}
     for line in Path('/proc/self/mountinfo').read_text().splitlines():
         fields = line.split()
@@ -69,11 +60,6 @@ def readonly_mounts(expected: dict, namespace: str) -> None:
 
 
 def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
-    if (type(profile) is not dict or set(profile)!=FIELDS
-            or profile['schema']!='unrest.bootstrap-source.v1'
-            or type(profile['role']) is not str or profile['role'] not in DOMAINS
-            or type(profile['case']) is not str):
-        raise Refused('source closed profile')
     full=type(profile['cases']) is dict
     if full:
         cases=load(profile['cases'],Path(__file__).parent.parent/'profiles',
@@ -84,19 +70,7 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
     if (profile['case']!='<bootstrap>' if profile['role']=='root'
             else profile['case'] not in {case_identity(case) for case in cases}):
         raise Refused('source selected inventory membership')
-    for key in ('native', 'checkout', 'owned', 'dependencies', 'runtime_root', 'cwd'):
-        value = profile[key]
-        if type(value) is not str or not value.startswith('/') or str(Path(value).resolve()) != value:
-            raise Refused('source canonical profile path')
-    for key in ('native_sha256', 'entry_sha256', 'source_sha256', 'support_sha256', 'runtime_sha256',
-                'dependency_sha256', 'nonce', 'seal', 'token'):
-        value = profile[key]
-        size = 32 if key == 'token' else 64
-        if type(value) is not str or len(value) != size or any(char not in '0123456789abcdef' for char in value):
-            raise Refused('source profile byte identity')
     expected_mounts = {profile['checkout'], profile['dependencies'], profile['runtime_root'], str(Path(__file__).parent)}
-    if type(profile['mounts']) is not dict:
-        raise Refused('source mounted input dictionary')
     if '/native' in profile['mounts']:
         expected_mounts.add('/native')
     if set(profile['mounts']) != expected_mounts:
@@ -117,10 +91,7 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
             or (str(Path(profile['runtime_root'])/'bin/pytest') if full and profile['role']=='root' else profile['native']) != sys.executable or digest(Path(sys.executable)) != profile['native_sha256']
             or digest(Path(__file__).with_name('native_entry.py')) != profile['entry_sha256']):
         raise Refused('source actual profile binding')
-    if (type(profile['environment']) is not dict
-            or any(type(key) is not str or type(value) is not str for key, value in profile['environment'].items())
-            or profile['environment'] != dict(os.environ) or profile['cwd'] != os.getcwd()
-            or type(profile['argv']) is not list or any(type(arg) is not str for arg in profile['argv'])
+    if (profile['environment'] != dict(os.environ) or profile['cwd'] != os.getcwd()
             or profile['argv'] != sys.orig_argv):
         raise Refused('source actual request binding')
     inherited = profile['inherited']

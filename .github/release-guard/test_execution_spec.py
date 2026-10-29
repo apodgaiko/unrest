@@ -21,24 +21,6 @@ def profile(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "key,value",
-    [
-        ("domain", "sealed"),
-        ("event", "cpython.run_file"),
-        ("argument", "foreign\n"),
-        ("extra", True),
-        ("script_sha256", "a" * 64),
-        ("data", [["/foreign", "b" * 64]]),
-    ],
-)
-def test_execution_spec_rejects_changed_or_extra_fields(tmp_path, key, value):
-    value_profile = profile(tmp_path)
-    value_profile["execution"][key] = value
-    with pytest.raises(Refused):
-        validate(value_profile, "cpython.run_command", ("pass\n",), tmp_path)
-
-
-@pytest.mark.parametrize(
     "event,arguments",
     [
         ("cpython.run_file", ("pass\n",)),
@@ -117,23 +99,6 @@ def test_spec_cannot_borrow_another_admitted_intent(tmp_path, field, value):
             "/owned",
             None,
         )
-
-
-def test_delayed_script_cannot_be_changed_independently_of_argv():
-    with pytest.raises(Refused, match="auxiliary script"):
-        issue(
-            "delayed-backend",
-            ["/python", "-I", "-S", "-c", "pass", "/original"],
-            "/foreign",
-            "a" * 64,
-        )
-
-
-def test_unknown_domain_role_and_malformed_digest_refuse():
-    with pytest.raises(Refused):
-        issue("unknown", ["/python", "-I", "-S", "-c", "pass"], None, None)
-    with pytest.raises(Refused):
-        issue("backend", ["/python", "-I", "-S", "/fixture"], "/fixture", "foreign")
 
 
 @pytest.mark.parametrize("mutation", [None, "path", "hash", "uid", "mode", "nlink", "argv"])

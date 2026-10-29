@@ -4,65 +4,34 @@ import stat
 
 from content_manifest import Refused, capture
 
-LIBRARY = ('mcp','cleanup-acp','session-adapter','session-child','fixed-inline','plan-python','mp-child','mp-tracker','review-wire','pytest-regression','desktop','archive-checker','archive-leaf','archive-installed')
-SEALED = ('backend','delayed-backend','acp','mock-acp','cleanup-inline','workspace-owned','session-inline')
-DOMAINS = {'root':'root', **dict.fromkeys(LIBRARY,'library'), **dict.fromkeys(SEALED,'sealed')}
-
-
 def issue(role, vector, script, script_pin, data=(), fixture=None):
-    if (type(role) is not str or role not in DOMAINS or type(vector) is not list
-            or len(vector)<4 or any(type(arg) is not str for arg in vector)
-            or vector[1:3]!=['-I','-S']):
-        raise Refused('execution specification role or vector')
-    if script is not None and (type(script) is not str or not Path(script).is_absolute()):
-        raise Refused('execution specification script primitive')
     if vector[3] in ('-c','-m'):
-        if len(vector)<5:
-            raise Refused('execution specification entry argument')
         event='cpython.run_command' if vector[3]=='-c' else 'cpython.run_module'
         argument=vector[4]+('\n' if vector[3]=='-c' else '')
     else:
         event,argument='cpython.run_file',vector[3]
-        if script!=argument or not Path(argument).is_absolute():
-            raise Refused('execution specification script path')
-    if script is not None and vector[3]=='-c' and (role!='delayed-backend' or len(vector)<6 or vector[5]!=script):
-        raise Refused('execution specification auxiliary script path')
-    if script_pin is not None and (type(script_pin) is not str or len(script_pin)!=64 or any(char not in '0123456789abcdef' for char in script_pin)):
-        raise Refused('execution specification script digest')
-    if (script is None)!=(script_pin is None):
-        raise Refused('execution specification script pin presence')
-    return {'domain':DOMAINS[role],'event':event,'argument':argument,'script_sha256':script_pin,'data':list(data),'fixture':fixture}
+    return {'event':event,'argument':argument,'script_sha256':script_pin,'data':list(data),'fixture':fixture}
 
 
 def validate(profile,event,arguments,directory):
     value=profile['execution']
-    if (type(value) is not dict or set(value)!={'domain','event','argument','script_sha256','data','fixture'}
-            or type(value['data']) is not list or len(value['data'])!=(1 if profile['role'] in ('cleanup-acp','review-wire','archive-leaf') else 0)
-            or value!=issue(profile['role'],profile['argv'],profile['script'],value['script_sha256'],value['data'],value['fixture'])
-            or event!=value['event'] or arguments!=(value['argument'],)):
+    if event!=value['event'] or arguments!=(value['argument'],):
         raise Refused('execution specification exact body or domain')
     if value['fixture'] is not None:
         from run_worker_launch import WORKERS
         binding=value['fixture']
         if (profile['case'] not in WORKERS or profile['role']!='fixed-inline'
                 or profile['argv'][3:5]!=['-m','unrest_harness.run_worker']
-                or type(binding) is not dict or set(binding)!={'path','sha256','identity'}
-                or binding['path']!=str(Path(profile['cwd'])/'executor_fixture.py')
-                or type(binding['identity']) is not list or len(binding['identity'])!=9
-                or any(type(part) is not int for part in binding['identity'])
-                or type(binding['sha256']) is not str or len(binding['sha256'])!=64
-                or any(char not in '0123456789abcdef' for char in binding['sha256'])):
+                or binding['path']!=str(Path(profile['cwd'])/'executor_fixture.py')):
             raise Refused('execution specification finite executor fixture')
     if profile['script'] is not None:
         file=Path(profile['script'])
-        if (type(profile['script']) is not str or str(file.resolve())!=str(file)
+        if (str(file.resolve())!=str(file)
                 or capture(file.parent,[file.name])['files'][0]['sha256']!=value['script_sha256']):
             raise Refused('execution specification current script bytes')
     if profile['role']=='archive-leaf':
         archive_snapshot(profile,directory)
     for row in value['data']:
-        if type(row) is not list or len(row)!=2 or any(type(part) is not str for part in row):
-            raise Refused('execution specification immutable data record')
         file=Path(row[0])
         info=file.stat(follow_symlinks=False)
         if (file.parent!=directory or str(file.resolve())!=str(file) or not stat.S_ISREG(info.st_mode)
