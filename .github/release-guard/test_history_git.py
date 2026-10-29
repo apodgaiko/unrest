@@ -2,7 +2,7 @@
 from pathlib import Path
 import pytest
 from content_manifest import Refused
-from history_git import BINDING,V021,V045,CATALOG,CASES,commands,proposal
+from history_git import BINDING,V021,V045,CATALOG,CASES,commands,proposal,CLI
 
 ROOT=Path(__file__).resolve().parents[2]
 
@@ -38,3 +38,19 @@ def test_readonly_case_does_not_admit_other_git_commands(arguments):
             assert actor=='root'
     with pytest.raises(Refused,match='history exact readonly command'):
         proposal(Host(),'root',{'executable':'/usr/bin/git','stdin':None,'argv':['git',*arguments]})
+
+
+def test_nested_cli_cannot_authorize_a_root_git_query():
+    class Host:
+        case=CLI
+        meta={'checkout':str(ROOT)}
+        binding={'entry':{'path':'/native/python'}}
+    with pytest.raises(Refused,match='history original CLI parent'):
+        proposal(Host(),{'role':'root'}, {'argv':['git','ls-files','--stage','-z']})
+
+
+def test_nested_git_resolution_is_confined_to_binding_cli():
+    from source_entry import direct_git
+    args=(['git','ls-files','--stage','-z'],)
+    assert direct_git(args,{},CLI,'fixed-inline')[1]=={'executable':'/usr/bin/git'}
+    assert direct_git(args,{},CASES[0],'fixed-inline')==(args,{})

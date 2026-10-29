@@ -442,3 +442,10 @@ inventory rather than the five-command minimum of a newly initialized fixture.
 The private source copy includes a fixed ignored egg-info marker so the existing
 ignored-file exclusion assertion remains a real probe in the readonly source
 suite; this generated test input is outside the candidate tracked-file binding.
+
+The release-binding CLI case admits exactly its active/wrong manifest invocations
+with script bytes, owned fixture generation, complete argv/environment and
+expected statuses 0/1. Only those authenticated children may request the two
+readonly inventory forms in the original empty repository. Its metadata must
+retain the literal HEAD and empty objects/refs without config or aliases; no
+helper or root-level Git authority follows from the nested route.

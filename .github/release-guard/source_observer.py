@@ -323,6 +323,10 @@ class Observer:
             return terminal is not None and terminal[2]==code and actor['body_ready'] and (actor['role']!='archive-leaf' or actor.get('archive_result')==expected)
         from completion_launch import CASES as COMPLETION_CASES
         from run_worker_launch import ALL_CASES as RUN_WORKERS
+        from history_git import CLI as BINDING_CLI
+        if actor['role']=='fixed-inline' and actor['case']==BINDING_CLI:
+            rows=[row for row in self.intents.values() if row.get('birth')==actor['birth'] and row['token']==actor['token'] and 'binding_status' in row]
+            return len(rows)==1 and terminal is not None and actor['body_ready'] and terminal[2]==rows[0]['binding_status']
         if actor['role']=='fixed-inline' and actor['case'] in RUN_WORKERS:
             rows=[row for row in self.intents.values() if row.get('run_worker') and row.get('birth')==actor['birth']
                   and row['token']==actor['token'] and row['consumed']]
