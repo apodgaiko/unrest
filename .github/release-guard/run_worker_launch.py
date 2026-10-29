@@ -35,7 +35,8 @@ NAMES=(
 WORKERS={TEST+'::test_'+name: ('end_mission' if name.endswith('[end_mission]') else
          'advance_project' if name.endswith('[advance_project]') else 'start_project') for name in NAMES}
 EXITS=dict(zip(WORKERS,((0,),(2,),(2,),(2,),(2,0),(0,),(17,0),(-9,),(-9,),(0,),(0,),(0,)),strict=True))
-ALL_CASES=(*CASES,*WORKERS)
+MEASUREMENT_EVOLUTION='tests/test_measurement.py::test_evolution_cases_use_real_public_state_machine_and_cold_state'
+ALL_CASES=(*CASES,*WORKERS,MEASUREMENT_EVOLUTION)
 DESCENDANT=TEST+'::test_'+NAMES[5]
 
 
@@ -97,6 +98,9 @@ def descendant(host,actor,raw):
 def proposal(host,actor,raw):
     host.root_only(actor)
     case=host.case
+    if case==MEASUREMENT_EVOLUTION:
+        from measurement_git import worker
+        return worker(host,actor,raw)
     custom=case in WORKERS
     exits=EXITS.get(case,(0,))
     ordinal=sum(row['case']==case and row.get('run_worker',False) for row in host.intents.values())
@@ -109,21 +113,26 @@ def proposal(host,actor,raw):
         repository_root(host,case,str(home.parent/'repo'))
         if home.name!='.unrest' or home.resolve()!=home:
             raise Refused('async error worker original home')
+    env={'LANG':'C.UTF-8','PATH':os.defpath,'PYTHONPATH':str(Path(host.meta['checkout'])/'src'),
+         'UNREST_APPROVAL_RECOVERY':'0','UNREST_HOME':str(home),'UNREST_PROJECTS_DIR':str(home/'projects')}
+    if custom:
+        env={key:env[key] for key in ('LANG','PATH','PYTHONPATH')}
+    return admit_worker(host,actor,raw,home,(WORKERS if custom else CASES)[case],env,maximum,exits[ordinal],binding,custom)
+
+
+def admit_worker(host,actor,raw,home,operation,env,maximum,status,binding=None,custom=False):
+    case=host.case
     argv=raw['argv']
     if len(argv)!=13 or not re.fullmatch('run:[a-f0-9]{64}',argv[6]):
         raise Refused('async error worker bounded run identity')
     run=argv[6]
     record,_,_=read_regular(home/'.unrest/runs'/run[4:]/'request.json',65536,uid=20000,mode=0o600)
     document=json.loads(record,object_pairs_hook=unique)
-    if document.get('run_id')!=run or document.get('operation')!=(WORKERS if custom else CASES)[case] or document.get('generation')!=1:
+    if document.get('run_id')!=run or document.get('operation')!=operation or document.get('generation')!=1:
         raise Refused('async error worker exact retained request')
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
     vector=[native,'-m','unrest_harness.run_worker','--project-root',str(home),'--run-id',run,
             '--executor','executor_fixture:execute' if custom else 'unrest_harness.runtime_executor:execute','--custody-root-id','local:unrest-run-control','--generation','1']
-    env={'LANG':'C.UTF-8','PATH':os.defpath,'PYTHONPATH':str(Path(host.meta['checkout'])/'src'),
-         'UNREST_APPROVAL_RECOVERY':'0','UNREST_HOME':str(home),'UNREST_PROJECTS_DIR':str(home/'projects')}
-    if custom:
-        env={key:env[key] for key in ('LANG','PATH','PYTHONPATH')}
     expected=build_expected('async:error-worker',case,native,pin,tuple(vector),tuple(sorted(env.items())),str(home),'python-module',native_digest(Path(host.meta['checkout'])/'src/unrest_harness/run_worker.py'))
     return admit_expected(host,actor,raw,expected,'fixed-inline',[native,'-I','-S',*vector[1:]],maximum=maximum,
-                          fields={'run_worker':True,'null_stdio':True,'execution_fixture':binding,'worker_status':exits[ordinal]})
+                          fields={'run_worker':True,'null_stdio':True,'execution_fixture':binding,'worker_status':status})

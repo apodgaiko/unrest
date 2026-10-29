@@ -91,7 +91,7 @@ SLOTS={
     'tests/test_v04_activation.py::test_improvement_click_and_subprocess_stop_without_exact_request':('improve-click-cli', 'improve-subprocess-cli'),
 }
 SLOTS.update(dict.fromkeys(CANDIDATE_CASES,('repository',)))
-SLOTS.update(dict.fromkeys(MEASUREMENT_CASES,('source',)))
+SLOTS.update(dict.fromkeys(MEASUREMENT_CASES,('source','workspace')))
 
 
 def fixture(case):
@@ -108,6 +108,9 @@ def root(host,case,repository):
     file=case.split('::')[0]
     source_unit(Path(host.meta['checkout']),file,PINS[file])
     path=Path(repository)
+    if file==MEASUREMENT_TEST and path.name=='workspace':
+        from measurement_git import cold_root
+        return cold_root(host,path)
     parent,info=acquire(str(path.parent),Path(host.meta['owned']),re.sub(r'[\W]','_',case.split('::')[1])[:30],20000)
     if path.name not in SLOTS[case] or path.resolve()!=path:
         raise Refused('Git exact additional repository slot')

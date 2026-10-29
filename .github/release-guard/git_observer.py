@@ -47,7 +47,7 @@ class Git:
         fixture=declared_fixture(self.host.case) if self.host.case in SLOTS else None
         if fixture is not None:
             fixture_root(self.host,self.host.case,repository)
-        if ((root.name != 'project' if fixture is None else root.name not in SLOTS[self.host.case]) or root.parent.parent != owned / 'pytest'
+        if (((root.name != 'project' or root.parent.parent != owned / 'pytest') if fixture is None else root.name not in SLOTS[self.host.case])
                 or str(root.resolve(strict=True)) != repository):
             raise Refused('git original repository location')
         identities = []

@@ -486,3 +486,11 @@ image, readonly home configuration, repository generation, per-case quota and
 actual prior parent wait checks reuse the common Git boundary. Cold-workspace
 and nested ACP launches remain separate declarations; this source-fixture slice
 does not certify those paths or authorize live provider/benchmark work.
+
+Cold measurement repositories are confined to the original two repetitions of
+each genuine library test, one acquired run UUID and stable owned directory
+generations. Setup has three exact forms; workspace/evolution operations reuse
+the closed shared Git grammar and actual helper/wait custody. The evolution test
+admits exactly its two original start-project RunControl entries with retained
+request identity, fixed executor, complete environment and numeric status zero.
+This enables its provider-free state machine; it grants no ACP or provider launch.

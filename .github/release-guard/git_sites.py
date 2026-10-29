@@ -1,4 +1,5 @@
 """Finite operations and original byte pins; no Python caller authentication."""
+from measurement_git import COLD as MEASUREMENT_OPERATIONS
 from history_git import CASES as HISTORY_CASES
 from git_fixtures import SLOTS
 from git_commands import OPERATIONS as COMMANDS,SETUP
@@ -39,7 +40,7 @@ WORKSPACE_ONLY=frozenset({'head-tree','stage-advance','commit-advance','stage-ch
 SHARED_OPERATIONS=tuple(sorted(set(COMMANDS)-WORKSPACE_ONLY-set(SETUP)))
 OPERATIONS={'workspaces':tuple(sorted(COMMANDS)),
     'evolution':tuple(sorted(set(COMMANDS)-WORKSPACE_ONLY)),
-    'candidate':('init','candidate-command'),'measurement':('init','measurement-command')}
+    'candidate':('init','candidate-command'),'measurement':('init','measurement-command',*MEASUREMENT_OPERATIONS)}
 
 OWNED_BODY = 'import time; time.sleep(60)'
 

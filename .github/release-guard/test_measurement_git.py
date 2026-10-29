@@ -18,7 +18,7 @@ def host(monkeypatch):
     def launch(*args):
         value.seen.append(args)
         return {'ticket':1,'token':'child','ok':True}
-    value.git=SimpleNamespace(launch=launch)
+    value.git=SimpleNamespace(launch=launch,repositories={})
     return value
 
 def raw(host,args):
@@ -56,3 +56,63 @@ def test_original_source_setup_has_only_the_two_declared_git_calls():
     owner=source_unit(ROOT,measurement.TEST,measurement.PIN,('_source',))
     calls=[node for node in ast.walk(owner) if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr=='run']
     assert [ast.literal_eval(call.args[0]) for call in calls]==[['git','init','-q'],['git','add','.']]
+
+
+@pytest.mark.parametrize('mutation',(None,'repetition','case','run','alias','generation'))
+def test_cold_repositories_are_exact_case_repetition_and_directory_generations(tmp_path,monkeypatch,mutation):
+    import os
+    monkeypatch.setattr(measurement,'OWNER',os.getuid())
+    case=next(iter(measurement.REAL))
+    base=tmp_path/'pytest/test_case0'
+    path=base/'home/measurement-private'/('a'*32)/'cold-roots/rep-11/workspace'
+    path.mkdir(parents=True)
+    host=SimpleNamespace(case=case,fixture_roots={('git-fixture',case):(str(base),)})
+    if mutation=='repetition':
+        path=path.parent.parent/'rep-01/workspace'
+        path.mkdir(parents=True)
+    elif mutation=='case':
+        host.case=measurement.CASES[0]
+    elif mutation=='run':
+        host.fixture_roots['measurement-run',case]='b'*32
+    elif mutation=='alias':
+        alias=path.parent/'alias'
+        alias.symlink_to(path,target_is_directory=True)
+        path=alias
+    elif mutation=='generation':
+        measurement.cold_root(host,path)
+        path.rename(path.with_name('old'))
+        path.mkdir()
+    if mutation is None:
+        measurement.cold_root(host,path)
+        assert host.fixture_roots['measurement-run',case]=='a'*32
+        assert host.fixture_roots['measurement-root',case,str(path)][0][0]==str(path)
+    else:
+        with pytest.raises(Refused):
+            measurement.cold_root(host,path)
+
+@pytest.mark.parametrize('mutation',(None,'exhausted','pending','unreaped','repetition'))
+def test_evolution_workers_are_two_fixed_start_operations(host,monkeypatch,mutation):
+    import run_worker_launch
+    host.case=run_worker_launch.MEASUREMENT_EVOLUTION
+    host.fixture_roots={}
+    host.ledger=SimpleNamespace(reaped=lambda birth,token:mutation!='unreaped')
+    previous={'case':host.case,'run_worker':True,'consumed':mutation!='pending','birth':'first','token':'first'}
+    host.intents={} if mutation is None or mutation=='repetition' else {1:previous}
+    if mutation=='exhausted':
+        host.intents[2]=dict(previous)
+    monkeypatch.setattr(measurement,'cold_root',lambda host,path:None)
+    seen=[]
+    monkeypatch.setattr(run_worker_launch,'admit_worker',lambda *args:seen.append(args) or {'ok':True})
+    repetition=16 if host.intents else 11
+    if mutation=='repetition':
+        repetition=1
+    request={'cwd':f'/owned/home/cold-roots/rep-{repetition:02d}/harness-home'}
+    if mutation is None:
+        assert measurement.worker(host,{},request)=={'ok':True}
+        assert seen[0][4]=='start_project' and seen[0][6:8]==(2,0)
+        assert seen[0][5]['UNREST_APPROVAL_RECOVERY']=='0'
+        assert set(seen[0][5])=={'LANG','PATH','PYTHONPATH','UNREST_HOME','UNREST_PROJECTS_DIR','UNREST_APPROVAL_RECOVERY','UNREST_WORKER_ACP_COMMAND','UNREST_VALIDATOR_ACP_COMMAND'}
+    else:
+        with pytest.raises(Refused):
+            measurement.worker(host,{},request)
+        assert not seen
