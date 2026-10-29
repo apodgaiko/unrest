@@ -94,8 +94,9 @@ def test_host_reconstructs_exact_original_launch(tmp_path, mutation):
 
 
 
+@pytest.mark.parametrize('role', ['root', 'fixed-inline', 'mcp', 'desktop', 'archive-checker', 'session-adapter'])
 @pytest.mark.parametrize('sig', [signal.SIGTERM, 15])
-def test_original_signal_enum_is_normalized_without_signal_substitution(monkeypatch, sig):
+def test_original_signal_enum_is_normalized_without_signal_substitution(monkeypatch, sig, role):
     import subprocess
     checked, requested = [], []
     def check(pid, number, group):
@@ -104,8 +105,8 @@ def test_original_signal_enum_is_normalized_without_signal_substitution(monkeypa
     def request(kind, payload):
         requested.append((kind, payload))
         return {'ok': True, 'live': False}  # Actual terminal evidence forbids delivery.
-    policy = SimpleNamespace(profile={'role': 'root'}, local=threading.local(),
-        calls=SimpleNamespace(signal=check), children={123: {'token': 'owned'}},
+    policy = SimpleNamespace(profile={'role': role}, local=threading.local(),
+        children={123: {'token': 'owned'}},
         client=SimpleNamespace(request=request))
     def refuse(code):
         raise Refused(code)
@@ -120,6 +121,9 @@ def test_original_signal_enum_is_normalized_without_signal_substitution(monkeypa
     assert requested == [('custody_signal', {'pid': 123, 'child_token': 'owned', 'signal': 15, 'group': True})]
     with pytest.raises(Refused, match='nonnumeric'):
         os.killpg(123, True)
+    assert len(requested) == 1
+    with pytest.raises(Refused, match='outside owned children'):
+        os.kill(124, signal.SIGTERM)
     assert len(requested) == 1
 
 
@@ -234,7 +238,6 @@ def test_caught_cleanup_signal_refusal_stays_poisoned(monkeypatch):
     policy.profile, policy.local, policy.poison = {'role': 'root'}, threading.local(), False
     def reject(*args):
         raise Refused('original cleanup caller')
-    policy.calls = object()
     def request(kind,payload):
         if kind=='custody_signal':
             raise Refused('observer refused signal')

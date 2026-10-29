@@ -51,7 +51,8 @@ class FullCases(OriginalCases):
         if len(set(self.cases))!=len(self.cases):
             raise Refused('full source ambiguous case references')
         profile['cases']=list(self.cases)
-        self.policy.calls.install()
+        from source_context import install
+        install(self.policy)
 
     @pytest.hookimpl(wrapper=True,tryfirst=True)
     def pytest_sessionfinish(self,session,exitstatus):

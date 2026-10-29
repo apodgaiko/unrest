@@ -105,5 +105,6 @@ def main():
     from postbuild_root import CASES,run
     if ACTIVE is None or ACTIVE.profile['role']!='root' or tuple(ACTIVE.profile['cases'])!=CASES:
         raise Refused('archive exact native activation absent')
-    ACTIVE.calls.install()
+    from source_context import install
+    install(ACTIVE)
     return run(ACTIVE,OriginalCases(ACTIVE))

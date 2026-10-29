@@ -31,13 +31,13 @@ def direct_git(args, kwargs, case, role):
 
 ACTIVE = None
 PATH_TYPE = type(Path('/'))
+PROCESS_OWNERS = ('root','mcp','session-adapter','fixed-inline','desktop','archive-checker')
 
 
 class Policy:
     def __init__(self, directory, profile, actual, client):
         self.directory, self.profile, self.actual, self.client = directory, profile, actual, client
         self.case, self.poison = None, False
-        self.calls: Any = None
         self.children: dict[int, dict] = {}
         self.local = threading.local()
         if profile['role']=='root':
@@ -57,7 +57,7 @@ class Policy:
         return getattr(self.client.local,'active',False) is True
 
     def popen(self, args):
-        if self.profile['role'] not in ('root','mcp','session-adapter','fixed-inline','desktop','archive-checker') or self.case is None:
+        if self.profile['role'] not in PROCESS_OWNERS or self.case is None:
             raise Refused('source undeclared process role')
         if type(args) is not tuple or len(args)!=4:
             raise Refused('source process audit schema')
@@ -176,7 +176,7 @@ class Policy:
             if type(sig) not in (int, signals.Signals):
                 policy.refuse('source nonnumeric signal')
             sig = int.__int__(sig)
-            if policy.profile['role'] not in ('root', 'session-adapter') or policy.calls is None:
+            if policy.profile['role'] not in PROCESS_OWNERS:
                 policy.refuse('source signal role')
             self_stop = policy.profile['role']=='session-adapter' and pid==os.getpid() and sig==15 and not group
             if not self_stop and (type(pid) is not int or pid not in policy.children):
@@ -212,7 +212,7 @@ class Policy:
         def killpg(pid, sig):
             return signal(pid, sig, group=True)
 
-        if self.profile['role'] in ('root', 'mcp', 'session-adapter', 'fixed-inline','desktop','archive-checker'):
+        if self.profile['role'] in PROCESS_OWNERS:
             subprocess.run=run
             setattr(subprocess.Popen, '__init__', construct)
             os.kill, os.killpg = kill, killpg
@@ -236,8 +236,6 @@ def activate(directory, profile, event, arguments):
             __import__('source_root')
             if type(profile['cases']) is dict:
                 sys.executable=profile['native']
-        from source_context import Context
-        policy.calls=Context(policy)
         if profile['role']!='root':
             policy.case=profile['case']
     if profile['role'] in ('archive-checker','archive-leaf'):

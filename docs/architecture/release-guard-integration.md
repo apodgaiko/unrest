@@ -536,3 +536,9 @@ Unused digest tables left by retired focused-driver validation are removed from
 controlled_cases/git_sites and unused startup/custody constants. They supplied
 no runtime check. Active source-unit pins, generated backend postimage pins,
 native/dependency identities and original ordered case maps remain enforced.
+
+Owned process cleanup uses the same source roles that can construct declared
+children. A local Popen handle and its observer-issued token are required before
+a signal request; the observer independently verifies the exact parent birth,
+active case, child token, permitted signal, and process-group identity. Installing
+multiprocessing hooks is independent of this cleanup permission.

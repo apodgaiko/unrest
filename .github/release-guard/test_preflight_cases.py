@@ -9,7 +9,6 @@ from content_manifest import Refused
 from test_preflight_inventory import CASES, NO_EFFECT
 from plan_launch import CASES as LAUNCHES
 from source_entry import Policy
-from source_context import Context
 
 ROOT = next(p for p in Path(__file__).resolve().parents if (p / "pyproject.toml").is_file())
 
@@ -55,7 +54,6 @@ def policy():
     value.profile = {"role": "root"}
     value.case = next(iter(NO_EFFECT))
     value.local = threading.local()
-    value.calls = Context(value)
     value.children = {}
     return value, records
 
