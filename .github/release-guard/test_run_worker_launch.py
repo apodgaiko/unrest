@@ -58,6 +58,8 @@ def test_async_error_result_requires_normal_process_exit_and_ready(status):
     host.ledger=SimpleNamespace(process=lambda birth:SimpleNamespace(terminal=(None,None,status)))
     actor={'birth':object(),'role':'fixed-inline','case':next(iter(worker.CASES)),'body_ready':True,'token':'token','signals':set()}
     host.intents={1:{'run_worker':True,'birth':actor['birth'],'token':'token','consumed':True,'worker_status':0}}
+    host.intents[1].update(ticket=1,role=actor['role'],case=actor['case'])
+    actor['intent']=host.intents[1]
     assert host.completed_child(actor) is (status==0)
     actor['body_ready']=False
     assert not host.completed_child(actor)
@@ -145,6 +147,8 @@ def test_authored_worker_status_is_bound_to_each_consumed_ordinal(case,actual):
     for expected in worker.EXITS[case]:
         actor={'birth':object(),'role':'fixed-inline','case':case,'body_ready':True,'token':'token','signals':{9,15}}
         host.intents={1:{'run_worker':True,'birth':actor['birth'],'token':'token','consumed':True,'worker_status':expected}}
+        host.intents[1].update(ticket=1,role=actor['role'],case=actor['case'])
+        actor['intent']=host.intents[1]
         assert host.completed_child(actor) is (actual==expected)
         actor['signals']=set()
         assert host.completed_child(actor) is (actual==expected and expected>=0 and expected!=2)

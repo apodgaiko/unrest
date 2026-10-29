@@ -663,6 +663,8 @@ def test_spawn_completion_uses_exact_birth_token_case_and_actual_signal(status, 
         },
         ledger=SimpleNamespace(process=lambda value: SimpleNamespace(terminal=(1, 0, status))),
     )
+    host.intents[4]['ticket']=4
+    actor['intent']=host.intents[4]
     assert Observer.completed_child(host, actor) is (status == 73 or status == -15 and signal == 15)
     del host.intents[4]
     assert not Observer.completed_child(host, actor)

@@ -598,3 +598,11 @@ UNVERIFIED, and the evidence labels original-parent cleanup as unproven. There
 is no successful-path signal or cancellation; expiry retains failed status and
 the existing failure cleanup. Only these authenticated case-finish RPCs receive
 22 seconds for transport; the provenance deadline itself remains20 seconds.
+
+Observer-created actors retain the uniquely matched consumed launch intent by
+reference. The lookup uses its monotonic ticket and object identity, then checks
+Birth/token/case/role and consumed state. Completion and child-result handlers
+reuse that binding instead of independently searching the intent collection.
+Removing a ticket or changing its identity still invalidates the binding; all
+existing READY, exit-code, authorized-signal and actual-parent-wait predicates
+remain separate requirements.

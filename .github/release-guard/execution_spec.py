@@ -38,5 +38,5 @@ def admitted(intents,role,case,pid,token,vector,environment,cwd,script):
     if len(values)!=1:
         raise Refused('execution specification unique admitted intent')
     value=values[0]
-    return issue(role,vector,script,value['script_sha256'] if script is not None else None,value.get('execution_fixture'))
+    return issue(role,vector,script,value['script_sha256'] if script is not None else None,value.get('execution_fixture')),value
 

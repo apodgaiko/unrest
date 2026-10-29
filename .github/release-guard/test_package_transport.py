@@ -166,6 +166,8 @@ def test_archive_result_requires_its_consumed_actor_actual_exit_and_body(case):
     value=object.__new__(Observer)
     value.case=case
     value.intents={1:{'birth':birth,'token':'owned','case':case,'role':'archive-leaf','consumed':True}}
+    value.intents[1].update(ticket=1,role=actor['role'],case=actor['case'])
+    actor['intent']=value.intents[1]
     value.ledger=SimpleNamespace(process=lambda birth:SimpleNamespace(terminal=None))
     kind=NEGATIVE.get(case,'normal')
     code=1 if case in NEGATIVE else 0
@@ -190,6 +192,8 @@ def test_foreign_or_incomplete_archive_result_cannot_seal(mutation):
     value=object.__new__(Observer)
     value.case=POSITIVE
     value.intents={1:{'birth':birth,'token':'owned','case':POSITIVE,'role':'archive-leaf','consumed':True}}
+    value.intents[1].update(ticket=1,role=actor['role'],case=actor['case'])
+    actor['intent']=value.intents[1]
     result={'kind':'normal','count':15,'failed':0,'exit':0}
     if mutation=='role':
         actor['role']='root'

@@ -88,6 +88,8 @@ def server():
         }
     }
     host.ledger = SimpleNamespace(process=lambda birth: SimpleNamespace(terminal=(1, 0, 0)))
+    host.intents[1]['ticket']=1
+    actor['intent']=host.intents[1]
     return host, actor
 
 

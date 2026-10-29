@@ -48,6 +48,11 @@ def native_class(role):
     return 'native-stock-uv' if role=='uv-cli' else 'native-git-command' if role == 'git-custody' else 'native-' + role
 
 
+def bound_intent(host,actor):
+    value=actor.get('intent')
+    return value if value is not None and host.intents.get(value.get('ticket')) is value and value['consumed'] and all(value.get(key)==actor[key] for key in ('birth','token','case','role')) else None
+
+
 class Observer:
     def __init__(self, binding, metadata, root_pid, out_read):
         self.binding, self.meta = binding, metadata
@@ -94,7 +99,7 @@ class Observer:
             'inherited': list(inherited),
             'script': script}
         from execution_spec import issue, admitted
-        source['execution'] = (issue(role,vector,None,None) if role=='root' else
+        source['execution'],intent = ((issue(role,vector,None,None),None) if role=='root' else
             admitted(self.intents,role,case,pid,token,vector,environment,cwd,script))
         source['seal'] = hashlib.sha256(json.dumps(source, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
         target = self.directory / (str(pid) + '.json')
@@ -105,7 +110,7 @@ class Observer:
             ('source', source['source_sha256']), ('support', source['support_sha256']),
             ('runtime', source['runtime_sha256']), ('dependency', source['dependency_sha256']))))
         actor = {'birth': Birth.read(actual), 'role': role, 'case': case, 'token': token,
-                 'profile': source, 'pins': pins, 'body_ready': False, 'signals': set()}
+                 'profile': source, 'pins': pins, 'intent':intent, 'body_ready': False, 'signals': set()}
         self.actors[pid] = actor
         command_class = {'root': 'bootstrap-root', 'acp': 'controlled-acp',
                          'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline','plan-python':'plan-python','mp-child':'mp-child','mp-tracker':'mp-tracker','review-wire':'review-wire','pytest-regression':'pytest-regression','desktop':'desktop',**dict.fromkeys(('archive-checker','archive-leaf','archive-installed'),'archive-python')}[role]
@@ -242,7 +247,7 @@ class Observer:
             self.ledger.register(birth, intent['token'], pins, intent['executable_sha256'],
                                  case=intent['case'], command_class=native_class(intent['role']), expected_generation=0 if intent['role'] == 'session-invalid' else 1)
             self.actors[pid] = {'birth': birth, 'role': intent['role'], 'case': intent['case'], 'token': intent['token'],
-                'body_ready': False, 'signals': set(), 'kernel_admitted': True}
+                'body_ready': False, 'signals': set(), 'kernel_admitted': True,'intent':intent}
             if intent['role']=='uv-cli':
                 from uv_cli import reserve_child
                 reserve_child(self,intent,birth)
@@ -307,7 +312,7 @@ class Observer:
             return None
         self.serial += 1
         token = os.urandom(16).hex()
-        self.intents[self.serial] = {'case': self.case, 'role': role, 'parent': actor['birth'],
+        self.intents[self.serial] = {'ticket':self.serial,'case': self.case, 'role': role, 'parent': actor['birth'],
             'environment': dict(expected.environment) if environment is None else environment,
             'cwd': expected.cwd, 'translated': vector, 'token': token, 'consumed': False, 'pid': None,
             'executable': expected.executable, 'executable_sha256': expected.executable_sha256,
@@ -325,12 +330,11 @@ class Observer:
     def completed_child(self, actor):
         process = self.ledger.process(actor['birth'])
         terminal = process.terminal
+        value=bound_intent(self,actor)
         from package_security import CASES as SECURITY_CASES
         if actor.get('case') in SECURITY_CASES and actor['role']=='archive-installed':
             from package_security import completed
-            rows=[row for row in self.intents.values() if row['case']==actor['case'] and row['consumed']
-                  and row.get('birth')==actor['birth'] and row['token']==actor['token']]
-            return len(rows)==1 and completed(self,rows[0])
+            return value is not None and completed(self,value)
         if actor['role'] in ('archive-checker','archive-leaf','archive-installed'):
             from package_cases import MUTATIONS,NEGATIVE
             code=1 if actor['role']=='archive-checker' and actor['case'] in MUTATIONS or actor['role']=='archive-leaf' and actor['case'] in NEGATIVE else 0
@@ -345,12 +349,9 @@ class Observer:
             return (terminal is not None and actor['body_ready'] and (terminal[2]==0
                 or terminal[2] in ((-9,-15) if actor['role']=='mcp' else (-15,)) and -terminal[2] in actor['signals']))
         if actor['role']=='fixed-inline' and actor['case']==BINDING_CLI:
-            rows=[row for row in self.intents.values() if row.get('birth')==actor['birth'] and row['token']==actor['token'] and 'binding_status' in row]
-            return len(rows)==1 and terminal is not None and actor['body_ready'] and terminal[2]==rows[0]['binding_status']
+            return value is not None and terminal is not None and actor['body_ready'] and terminal[2]==value['binding_status']
         if actor['role']=='fixed-inline' and actor['case'] in RUN_WORKERS:
-            rows=[row for row in self.intents.values() if row.get('run_worker') and row.get('birth')==actor['birth']
-                  and row['token']==actor['token'] and row['consumed']]
-            code=rows[0]['worker_status'] if len(rows)==1 else None
+            code=value.get('worker_status') if value is not None and value.get('run_worker') else None
             return (code is not None and terminal is not None and terminal[2]==code and actor['body_ready']
                     and (code!=2 or 15 in actor['signals']) and (code>=0 or -code in actor['signals']))
         from run_worker_launch import DESCENDANT
@@ -358,14 +359,10 @@ class Observer:
             return terminal is not None and terminal[2]==0 and actor['body_ready']
         if actor['role']=='fixed-inline' and actor['case'] in ROLE_CASES:
             from completion_server import status
-            rows=[row for row in self.intents.values() if row.get('birth')==actor['birth'] and row['token']==actor['token']
-                  and row['case']==actor['case'] and row['consumed'] and 'server_slot' in row]
-            return len(rows)==1 and status(self,actor,rows[0]['server_slot'])
+            return value is not None and status(self,actor,value['server_slot'])
         if actor['role']=='fixed-inline' and actor['case'] in COMPLETION_CASES:
-            rows=[row for row in self.intents.values() if row.get('birth')==actor['birth'] and row['token']==actor['token']
-                  and row['case']==actor['case'] and row['role']=='fixed-inline' and row['consumed']]
-            return (len(rows)==1 and terminal is not None and actor['body_ready']
-                    and terminal[2]==(73 if rows[0]['fixed_operation']=='crash' else 0))
+            return (value is not None and terminal is not None and actor['body_ready']
+                    and terminal[2]==(73 if value['fixed_operation']=='crash' else 0))
         if actor.get('case') in READINESS_CASES:
             from readiness_launch import completed
             return completed(actor,terminal)
@@ -382,17 +379,13 @@ class Observer:
         if actor['role']=='review-wire':
             return terminal is not None and actor['body_ready'] and (terminal[2]==0 or terminal[2]==-9 and 9 in actor['signals'])
         if actor['role'] in ('mp-child','mp-tracker'):
-            rows=[row for row in self.intents.values() if row.get('birth')==actor['birth'] and row['token']==actor['token']
-                and row['case']==actor['case'] and row['role']=='mp-child' and row['consumed']]
-            if actor['role']=='mp-child' and len(rows)!=1:
+            if actor['role']=='mp-child' and value is None:
                 return False
-            status=rows[0]['mp_status'] if actor['role']=='mp-child' else 0
+            status=value['mp_status'] if actor['role']=='mp-child' else 0
             return terminal is not None and terminal[2]==status and actor['body_ready'] and (status>=0 or -status in actor['signals'])
         if actor['case'] in PLAN_CASES:
-            values=[value for value in self.intents.values() if value['case']==actor['case'] and value.get('pid')==actor['birth'].pid]
-            if len(values)!=1 or terminal is None:
+            if value is None or terminal is None:
                 return False
-            value=values[0]
             if actor['case']==PLAN_INVALID:
                 return process.generation==0 and terminal[2]==255 and value.get('plan_failed') is True and not actor['body_ready']
             return (process.generation==1 and terminal[2]==0 and value.get('plan_exec_verified') is True
@@ -490,9 +483,7 @@ class Observer:
             if (actor['role']!='archive-leaf' or actor['case']!=self.case or self.case not in (*NEGATIVE,POSITIVE)
                     or not actor['body_ready'] or 'archive_result' in actor):
                 raise Refused('archive result scope')
-            rows=[row for row in self.intents.values() if row.get('birth')==actor['birth'] and row['token']==actor['token']
-                  and row['consumed'] and row['role']==actor['role'] and row['case']==self.case]
-            if len(rows)!=1:
+            if bound_intent(self,actor) is None:
                 raise Refused('archive result original consumed intent')
             expected={'kind':NEGATIVE.get(self.case,'normal'),'count':0 if NEGATIVE.get(self.case)=='missing-package' else 15,
                 'failed':15 if NEGATIVE.get(self.case)=='missing-corpus' else 0,'exit':1 if self.case in NEGATIVE else 0}
@@ -504,10 +495,8 @@ class Observer:
         elif kind == 'preselected-finish':
             from nested_pytest import CASES
             from source_profile import case_seal
-            rows=[row for row in self.intents.values() if row.get('birth')==actor['birth'] and row['token']==actor['token']
-                  and row['consumed'] and row['role']==actor['role'] and row['case']==self.case]
             if (actor['role']!='pytest-regression' or actor['case']!=self.case or self.case not in CASES
-                    or not actor['body_ready'] or actor.get('preselected_complete') or payload!=case_seal(CASES[self.case]) or len(rows)!=1):
+                    or not actor['body_ready'] or actor.get('preselected_complete') or payload!=case_seal(CASES[self.case]) or bound_intent(self,actor) is None):
                 raise Refused('preselected child completion scope')
             actor['preselected_complete']=True
         elif kind == 'fixture-root':

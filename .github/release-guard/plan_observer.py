@@ -71,7 +71,7 @@ def resolve(host,trace,pid,path,vector,environment,cwd):
         host.ledger.register(birth,value['token'],(('native-plan',model.image[1]),),model.image[1],
             case=value['case'],command_class='native-'+value['role'],expected_generation=0 if value['case']==INVALID else 1)
         host.actors[pid]={'birth':birth,'role':value['role'],'case':value['case'],'token':value['token'],
-                         'body_ready':False,'signals':set(),'kernel_admitted':True}
+                         'body_ready':False,'signals':set(),'kernel_admitted':True,'intent':value}
     return True
 
 

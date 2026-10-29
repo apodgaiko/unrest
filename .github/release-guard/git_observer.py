@@ -146,7 +146,7 @@ class Git:
             'PATH': '/usr/lib/git-core:' + intent['environment']['PATH']}
         vector = [executable, 'reset', '--hard', '--no-recurse-submodules']
         host.serial += 1
-        child = {'case': host.case, 'role': 'git-helper', 'parent': parent, 'environment': environment,
+        child = {'ticket':host.serial,'case': host.case, 'role': 'git-helper', 'parent': parent, 'environment': environment,
             'cwd': intent['cwd'], 'translated': vector, 'token': os.urandom(16).hex(), 'consumed': False,
             'pid': None, 'executable': executable, 'executable_sha256': pin, 'inherited': [], 'port': None}
         host.intents[host.serial] = child

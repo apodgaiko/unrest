@@ -81,7 +81,7 @@ def test_spec_cannot_borrow_another_admitted_intent(tmp_path, field, value):
     }
     assert admitted(
         {1: row}, "fixed-inline", "case", 123, "token", vector, {}, "/owned", None
-    ) == issue("fixed-inline", vector, None, None)
+    ) == (issue("fixed-inline", vector, None, None),row)
     changed = deepcopy(row)
     changed[field] = value
     with pytest.raises(Refused, match="unique admitted intent"):

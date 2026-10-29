@@ -38,6 +38,8 @@ def test_actual_crash73_cannot_be_relabelled_as_success(operation,status,accepte
     host.ledger=SimpleNamespace(process=lambda value:SimpleNamespace(terminal=(3,status<<8,status)))
     actor={'role':'fixed-inline','case':case,'birth':birth,'token':'owned','body_ready':True}
     host.intents={1:{'birth':birth,'token':'owned','role':'fixed-inline','case':case,'consumed':True,'fixed_operation':operation}}
+    host.intents[1].update(ticket=1,role=actor['role'],case=actor['case'])
+    actor['intent']=host.intents[1]
     assert host.completed_child(actor)==accepted
     actor['body_ready']=False
     assert not host.completed_child(actor)
