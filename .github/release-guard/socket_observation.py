@@ -13,7 +13,6 @@ import socket
 import struct
 from typing import Any
 
-from linux_identity import identity
 from linux_observation import pidfd_open
 
 
@@ -68,30 +67,6 @@ def dump(request: bytes) -> list[bytes]:
         raise RuntimeError("unbounded socket diagnostic dump")
 
 
-def tcp_table() -> dict[int, dict[str, Any]]:
-    request = struct.pack("=BBBBI", socket.AF_INET, socket.IPPROTO_TCP, 0, 0, 0xFFFFFFFF)
-    request += bytes(40) + b"\xff" * 8
-    rows = {}
-    for raw in dump(request):
-        if len(raw) < 72 or raw[0] != socket.AF_INET:
-            raise RuntimeError("unknown inet_diag ABI")
-        inode = struct.unpack_from("=I", raw, 68)[0]
-        if inode == 0:
-            continue  # TIME_WAIT entries have no live descriptor owner.
-        cookie = struct.unpack_from("=Q", raw, 44)[0]
-        if cookie == (1 << 64) - 1 or inode in rows:
-            raise RuntimeError("socket cookie unavailable or duplicate inode")
-        local, remote = struct.unpack_from("!HH", raw, 4)
-        rows[inode] = {
-            "inode": inode, "socket_cookie": cookie, "state": raw[1],
-            "local_host": socket.inet_ntop(socket.AF_INET, raw[8:12]),
-            "remote_host": socket.inet_ntop(socket.AF_INET, raw[24:28]),
-            "local_port": local, "remote_port": remote,
-            "socket_uid": struct.unpack_from("=I", raw, 64)[0],
-        }
-    return rows
-
-
 def unix_table() -> dict[int, dict[str, int]]:
     request = struct.pack("=BBHIIIII", socket.AF_UNIX, 0, 0, 0xFFFFFFFF, 0, 0x44,
                           0xFFFFFFFF, 0xFFFFFFFF)
@@ -121,56 +96,6 @@ def unix_table() -> dict[int, dict[str, int]]:
     return rows
 
 
-def socket_fds(pid: int) -> dict[int, int]:
-    if type(pid) is not int or pid <= 0:
-        raise ValueError("positive owned PID required")
-    directory = Path("/proc") / str(pid) / "fd"
-    result = {}
-    for path in sorted(directory.iterdir(), key=lambda p: int(p.name)):
-        try:
-            target = os.readlink(path)
-        except FileNotFoundError:
-            if pid == os.getpid():
-                continue
-            raise RuntimeError("owned descriptor observation raced") from None
-        if target.startswith("socket:[") and target.endswith("]"):
-            result[int(path.name)] = int(target[8:-1])
-        if len(result) > 4096:
-            raise RuntimeError("unbounded owned socket inventory")
-    return result
-
-
-def _socket_snapshot(pid: int) -> list[dict[str, Any]]:
-    before = socket_fds(pid)
-    table = tcp_table()
-    result = [{"pid": pid, "fd": fd, **table[inode]}
-              for fd, inode in before.items() if inode in table]
-    if socket_fds(pid) != before:
-        raise RuntimeError("owned descriptor binding changed during socket observation")
-    return result
-
-
-def sockets(pid: int) -> list[dict[str, Any]]:
-    """Discard raced censuses; accept only a fresh, complete, stable kernel view."""
-    birth = identity(pid)
-    for attempt in range(3):
-        if identity(pid) != birth:
-            raise RuntimeError('stale_or_reused_ownership')
-        try:
-            rows = _socket_snapshot(pid)
-        except RuntimeError as error:
-            if (str(error) not in {
-                    'owned descriptor observation raced',
-                    'owned descriptor binding changed during socket observation'}
-                    or attempt == 2):
-                raise
-        else:
-            if identity(pid) != birth:
-                raise RuntimeError('stale_or_reused_ownership')
-            return rows
-    raise RuntimeError('owned socket observation retry exhausted')
-
-
 def _socket_inode(pid: int, descriptor: int) -> int | None:
     try:
         target = os.readlink(Path('/proc') / str(pid) / 'fd' / str(descriptor))
@@ -179,37 +104,6 @@ def _socket_inode(pid: int, descriptor: int) -> int | None:
     if not target.startswith('socket:[') or not target.endswith(']'):
         return None
     return int(target[8:-1])
-
-
-def _descriptor_snapshot(pid: int, descriptor: int) -> dict[str, Any] | None:
-    before = _socket_inode(pid, descriptor)
-    if before is None:
-        return None
-    table = tcp_table()
-    if _socket_inode(pid, descriptor) != before:
-        raise RuntimeError('owned descriptor binding changed during socket observation')
-    return {'pid': pid, 'fd': descriptor, **table[before]} if before in table else None
-
-
-def socket_descriptor(pid: int, descriptor: int) -> dict[str, Any] | None:
-    """Reacquire one already-admitted listener; unrelated FDs supply no authority."""
-    if type(pid) is not int or pid <= 0 or type(descriptor) is not int or descriptor < 0:
-        raise ValueError('finite process descriptor required')
-    birth = identity(pid)
-    for attempt in range(3):
-        if identity(pid) != birth:
-            raise RuntimeError('stale_or_reused_ownership')
-        try:
-            row = _descriptor_snapshot(pid, descriptor)
-        except RuntimeError as error:
-            if (str(error) != 'owned descriptor binding changed during socket observation'
-                    or attempt == 2):
-                raise
-        else:
-            if identity(pid) != birth:
-                raise RuntimeError('stale_or_reused_ownership')
-            return row
-    raise RuntimeError('owned socket observation retry exhausted')
 
 
 def unix_pair(pid: int, fds: list[int]) -> list[dict[str, int]]:
@@ -308,26 +202,22 @@ def retained_unix_member(pid: int, descriptor: int,
     return {'fd': descriptor, **current}
 
 
-def acquire_tcp(birth, descriptor: int, *, retained: bool = False, eof_only: bool = False):
+def acquire_tcp(birth, descriptor: int, *, eof_only: bool = False):
     """Return one birth-bound socket; no caller-supplied PID or cached row wins."""
     from endpoint_policy import Socket
     from process_ledger import Birth
     from linux_observation import process_identity
 
-    if (type(birth) is not Birth or type(retained) is not bool or type(eof_only) is not bool
-            or eof_only and not retained):
+    if type(birth) is not Birth or type(eof_only) is not bool:
         raise ValueError('exact owned birth and observation mode required')
     if Birth.read(process_identity(birth.pid)) != birth:
         raise RuntimeError('stale_or_reused_ownership')
-    if retained:
-        row = retained_tcp_descriptor(birth.pid, descriptor, eof_only=eof_only)
-        if row is not None:
-            local, remote = row['local_address'], row['peer_address']
-            row = {**row, 'local_host': local[0], 'local_port': local[1],
-                   'remote_host': remote[0] if remote else '0.0.0.0',
-                   'remote_port': remote[1] if remote else 0}
-    else:
-        row = socket_descriptor(birth.pid, descriptor)
+    row = retained_tcp_descriptor(birth.pid, descriptor, eof_only=eof_only)
+    if row is not None:
+        local, remote = row['local_address'], row['peer_address']
+        row = {**row, 'local_host': local[0], 'local_port': local[1],
+               'remote_host': remote[0] if remote else '0.0.0.0',
+               'remote_port': remote[1] if remote else 0}
     if Birth.read(process_identity(birth.pid)) != birth:
         raise RuntimeError('stale_or_reused_ownership')
     return None if row is None else Socket.read(birth, row)

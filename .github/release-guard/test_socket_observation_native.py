@@ -49,21 +49,21 @@ def test_actual_same_loop_initial_send_precedes_accept_then_joins_real_descripto
             port = listener.getsockname()[1]
             route = Route('queued', 'queued-control', owner, owner, port)
             endpoints.declare(route)
-            fresh_listener = acquire_tcp(birth, listener.fileno(), retained=True)
+            fresh_listener = acquire_tcp(birth, listener.fileno())
             endpoints.listen(route.name, fresh_listener)
-            ticket = endpoints.connect(route.name, fresh_listener, acquire_tcp(birth, client.fileno(), retained=True))
+            ticket = endpoints.connect(route.name, fresh_listener, acquire_tcp(birth, client.fileno()))
             await loop.sock_connect(client, ('127.0.0.1', port))
-            endpoints.queued_send(ticket, acquire_tcp(birth, listener.fileno(), retained=True),
-                                  acquire_tcp(birth, client.fileno(), retained=True), 6)
+            endpoints.queued_send(ticket, acquire_tcp(birth, listener.fileno()),
+                                  acquire_tcp(birth, client.fileno()), 6)
             assert client.send(b'queued') == 6
             assert ticket.serial in endpoints.tickets and not endpoints.connections
             accepted, _ = await asyncio.wait_for(loop.sock_accept(listener), 1)
             with accepted:
                 accepted.setblocking(False)
-                connection = endpoints.accepted(ticket, acquire_tcp(birth, client.fileno(), retained=True),
-                                                acquire_tcp(birth, accepted.fileno(), retained=True))
+                connection = endpoints.accepted(ticket, acquire_tcp(birth, client.fileno()),
+                                                acquire_tcp(birth, accepted.fileno()))
                 assert not endpoints.tickets and not endpoints.queued
-                endpoints.retained(connection, owner, acquire_tcp(birth, accepted.fileno(), retained=True))
+                endpoints.retained(connection, owner, acquire_tcp(birth, accepted.fileno()))
                 assert await asyncio.wait_for(loop.sock_recv(accepted, 6), 1) == b'queued'
                 assert not endpoints.poison and not ledger.poison
     asyncio.run(run())
@@ -129,6 +129,14 @@ def test_actual_dead_client_before_accept_requires_empty_close_wait(buffered):
             os.close(read)
 
 
+def tcp_row(descriptor):
+    row=observation.retained_tcp_descriptor(os.getpid(),descriptor)
+    assert row is not None
+    local,remote=row['local_address'],row['peer_address']
+    return {**row,'local_host':local[0],'local_port':local[1],
+        'remote_host':remote[0] if remote else '0.0.0.0','remote_port':remote[1] if remote else 0}
+
+
 def test_tcp_fd_inode_cookie_and_closed_descriptor():
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
@@ -137,7 +145,7 @@ def test_tcp_fd_inode_cookie_and_closed_descriptor():
             client.connect(listener.getsockname())
             accepted, _ = listener.accept()
             with accepted:
-                rows = observation.sockets(os.getpid())
+                rows = [tcp_row(stream.fileno()) for stream in (listener,client,accepted)]
                 saved = {}
                 for stream in (listener, client, accepted):
                     row = next(value for value in rows if value["fd"] == stream.fileno())
@@ -146,11 +154,12 @@ def test_tcp_fd_inode_cookie_and_closed_descriptor():
                     assert row["socket_uid"] == os.getuid()
                     saved[stream.fileno()] = row
                 client_cookie = cookie(client)
+                client_fd = client.fileno()
                 assert saved[listener.fileno()]["state"] == 10
                 assert saved[client.fileno()]["state"] == saved[accepted.fileno()]["state"] == 1
                 assert saved[client.fileno()]["local_port"] == saved[accepted.fileno()]["remote_port"]
-        assert all(row["socket_cookie"] != client_cookie
-                   for row in observation.sockets(os.getpid()))
+        assert observation.retained_tcp_descriptor(os.getpid(),client_fd) is None
+        assert all(row["socket_cookie"] != client_cookie for row in (tcp_row(listener.fileno()),))
 
 
 def test_unix_pair_reciprocal_kernel_inodes():
@@ -207,13 +216,12 @@ def test_accepted_peer_survives_one_shot_listener_close():
     listener.listen(1)
     client = socket.socket()
     try:
-        admitted = next(row for row in observation.sockets(os.getpid())
-                        if row['fd'] == listener.fileno())
+        admitted = tcp_row(listener.fileno())
         client.connect(listener.getsockname())
         server, _ = listener.accept()
         with server:
             listener.close()
-            rows = observation.sockets(os.getpid())
+            rows = [tcp_row(stream.fileno()) for stream in (client,server)]
             own = next(row for row in rows if row['fd'] == client.fileno())
             peer = next(row for row in rows if row['fd'] == server.fileno())
             assert peer['socket_cookie'] == cookie(server)
@@ -276,20 +284,20 @@ def test_actual_tcp_observations_drive_same_process_endpoint_policy():
         admitted = observation.acquire_tcp(birth, listener.fileno())
         endpoints.listen(route.name, admitted)
         ticket = endpoints.connect(route.name, observation.acquire_tcp(birth, listener.fileno()),
-                                   observation.acquire_tcp(birth, client.fileno(), retained=True))
+                                   observation.acquire_tcp(birth, client.fileno()))
         client.connect(listener.getsockname())
         server, _ = listener.accept()
         with server:
             connection = endpoints.accepted(ticket, observation.acquire_tcp(birth, client.fileno()),
                                             observation.acquire_tcp(birth, server.fileno()))
             listener.close()
-            endpoints.retained(connection, owner, observation.acquire_tcp(birth, server.fileno(), retained=True))
+            endpoints.retained(connection, owner, observation.acquire_tcp(birth, server.fileno()))
             import time
             client.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))
             client.close()
             deadline = time.monotonic() + 2
             while True:
-                closed = observation.acquire_tcp(birth, server.fileno(), retained=True)
+                closed = observation.acquire_tcp(birth, server.fileno())
                 if closed is not None and closed.state == 7:
                     break
                 assert time.monotonic() < deadline
@@ -299,7 +307,7 @@ def test_actual_tcp_observations_drive_same_process_endpoint_policy():
             with socket.socket() as replacement:
                 os.dup2(replacement.fileno(), descriptor)
                 with pytest.raises(Refused):
-                    endpoints.retained(connection, owner, observation.acquire_tcp(birth, descriptor, retained=True))
+                    endpoints.retained(connection, owner, observation.acquire_tcp(birth, descriptor))
             assert endpoints.poison
     with pytest.raises(RuntimeError, match='stale_or_reused_ownership'):
         observation.acquire_tcp(replace(birth, ticks=birth.ticks + 1), 0)
@@ -382,18 +390,18 @@ def test_two_actual_clients_share_only_the_same_listener_description():
         listener.bind(('127.0.0.1', 0))
         listener.listen(2)
         port = listener.getsockname()[1]
-        observed = acquire_tcp(birth, listener.fileno(), retained=True)
+        observed = acquire_tcp(birth, listener.fileno())
         for index in range(2):
             route = Route('client-' + str(index), 'shared', owner, owner, port)
             endpoints.declare(route, shared_listener=observed if index else None)
-            endpoints.listen(route.name, acquire_tcp(birth, listener.fileno(), retained=True))
+            endpoints.listen(route.name, acquire_tcp(birth, listener.fileno()))
             with socket.socket() as client:
-                ticket = endpoints.connect(route.name, acquire_tcp(birth, listener.fileno(), retained=True),
-                                           acquire_tcp(birth, client.fileno(), retained=True))
+                ticket = endpoints.connect(route.name, acquire_tcp(birth, listener.fileno()),
+                                           acquire_tcp(birth, client.fileno()))
                 client.connect(('127.0.0.1', port))
                 accepted, _ = listener.accept()
                 with accepted:
-                    connection = endpoints.accepted(ticket, acquire_tcp(birth, client.fileno(), retained=True),
-                                                    acquire_tcp(birth, accepted.fileno(), retained=True))
-                    endpoints.retained(connection, owner, acquire_tcp(birth, accepted.fileno(), retained=True))
+                    connection = endpoints.accepted(ticket, acquire_tcp(birth, client.fileno()),
+                                                    acquire_tcp(birth, accepted.fileno()))
+                    endpoints.retained(connection, owner, acquire_tcp(birth, accepted.fileno()))
         assert len(endpoints.connections) == 2 and not endpoints.poison and not ledger.poison

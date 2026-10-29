@@ -359,7 +359,7 @@ class Observer:
         if serial is not None:
             drain = self.eof_drains[serial]
             if (payload['operation'] not in ('recv', 'recv_into', 'fd-read') or drain['reads'] >= 8
-                    or acquire_tcp(actor['birth'], fd, retained=True, eof_only=True) != drain['socket']):
+                    or acquire_tcp(actor['birth'], fd, eof_only=True) != drain['socket']):
                 raise Refused('source interrupted socket grants EOF reads only')
             drain['reads'] += 1
             return {'ok': True, 'eof_only': True}
@@ -376,12 +376,12 @@ class Observer:
             return {'ok': True}
         slot = self.listener_fds.get(key)
         if slot is not None and payload['operation'] == 'accept':
-            if acquire_tcp(actor['birth'], fd, retained=True) != slot['socket']:
+            if acquire_tcp(actor['birth'], fd) != slot['socket']:
                 raise Refused('source live listener acceptance')
             return {'ok': True}
         connection = self.connections.get(key)
         if connection is not None:
-            observed = acquire_tcp(actor['birth'],fd,retained=True)
+            observed = acquire_tcp(actor['birth'],fd)
             if self.case in ROOT_HTTP:
                 from root_http_observer import retained
                 retained(self,connection,observed)
@@ -392,8 +392,8 @@ class Observer:
         if len(tickets) == 1 and payload['operation'] in ('send', 'sendall', 'fd-write'):
             ticket = tickets[0]
             self.endpoints.queued_send(ticket,
-                acquire_tcp(ticket.listener.owner, ticket.listener.fd, retained=True),
-                acquire_tcp(actor['birth'], fd, retained=True), count)
+                acquire_tcp(ticket.listener.owner, ticket.listener.fd),
+                acquire_tcp(actor['birth'], fd), count)
             return {'ok': True}
         if len(tickets) == 1 and actor['birth'] != tickets[0].route.server.birth:
             return None  # A different process can make the actual accept join.
@@ -475,9 +475,9 @@ class Observer:
                 or ticket.route.case != self.case or ticket.route.server != self.owner(actor)
                 or server.owner != actor['birth'] or server.remote is None or server.remote[0] != '127.0.0.1'
                 or server.local != ticket.listener.local or server.binding() == ticket.listener.binding()
-                or acquire_tcp(actor['birth'], ticket.listener.fd, retained=True) != ticket.listener):
+                or acquire_tcp(actor['birth'], ticket.listener.fd) != ticket.listener):
             raise Refused('source interrupted accept ownership or signal')
-        eof = acquire_tcp(actor['birth'], server.fd, retained=True, eof_only=True)
+        eof = acquire_tcp(actor['birth'], server.fd, eof_only=True)
         if eof is None or eof != server or ticket.serial in self.eof_drains:
             raise Refused('source interrupted accepted descriptor or EOF')
         self.eof_drains[ticket.serial] = {'ticket': ticket, 'socket': eof, 'reads': 0}
@@ -508,7 +508,7 @@ class Observer:
                     slot = self.listeners[self.listener_key(actor['case'],tag,scope)]
                     name = actor['token'] + ':' + tag
                     route = Route(name, actor['case'], self.owner(root_actor), self.owner(actor), slot['socket'].local[1])
-                    actual_listener = acquire_tcp(self.root_birth, slot['socket'].fd, retained=True)
+                    actual_listener = acquire_tcp(self.root_birth, slot['socket'].fd)
                     sharing = actual_listener if any(value.port == route.port and value.case not in self.endpoints.retired for value in self.endpoints.routes.values()) else None
                     self.endpoints.declare(route, shared_listener=sharing)
                     self.endpoints.listen(name, actual_listener)
@@ -690,7 +690,7 @@ class Observer:
                     or any(char not in '0123456789abcdef' for char in nonce))
                     or self.listener_key(self.case,payload['tag'],scope) in self.listeners):
                 raise Refused('source listener application binding')
-            observed = acquire_tcp(actor['birth'], fd, retained=True)
+            observed = acquire_tcp(actor['birth'], fd)
             if observed is None or observed.state != 7 or observed.local != ('0.0.0.0', 0) or observed.remote is not None:
                 raise Refused('source fresh unbound TCP descriptor')
             key = actor['birth'], fd
@@ -707,7 +707,7 @@ class Observer:
                 raise Refused('source finite negative probe case')
             fd = number(payload['fd'])
             binding = self.bindings[actor['birth'], fd]
-            observed = acquire_tcp(actor['birth'], fd, retained=True)
+            observed = acquire_tcp(actor['birth'], fd)
             if (binding['case'] != self.case or binding['tag'] != 'mcp-probe' or observed is None
                     or observed.binding() != binding['socket'].binding() or observed.state != 7
                     or observed.local[0] != '127.0.0.1' or not 0 < observed.local[1] <= 65535
@@ -724,7 +724,7 @@ class Observer:
             binding = self.bindings[actor['birth'], fd]
             if binding['tag'] == 'mcp-probe':
                 raise Refused('source advisory probe never grants a listener')
-            observed = acquire_tcp(actor['birth'], fd, retained=True)
+            observed = acquire_tcp(actor['birth'], fd)
             if (binding['case'] != self.case or observed is None or observed.binding() != binding['socket'].binding()
                     or observed.local[0] != '127.0.0.1' or observed.remote is not None
                     or actor['role'] == 'mcp' and observed.local[1] != int(actor['profile']['argv'][12])):
@@ -761,7 +761,7 @@ class Observer:
             if self.case in STARTUP:
                 self.root_only(actor)
                 probe = self.probe_ports.get(self.case)
-                observed = acquire_tcp(actor['birth'], number(payload['fd']), retained=True)
+                observed = acquire_tcp(actor['birth'], number(payload['fd']))
                 if (probe is None or probe['socket'].local != ('127.0.0.1', port) or probe['attempts'] >= 16
                         or observed is None or observed.owner != actor['birth'] or observed.uid != actor['birth'].uid
                         or observed.state != 7 or observed.local != ('0.0.0.0', 0) or observed.remote is not None):
@@ -788,7 +788,7 @@ class Observer:
                 name = actor['token'] + ':mcp:' + hashlib.sha256(self.case.encode()).hexdigest()
                 if name not in self.endpoints.routes:
                     route = Route(name, self.case, self.owner(target), self.owner(actor), port)
-                    actual_listener = acquire_tcp(target['birth'], slot['socket'].fd, retained=True)
+                    actual_listener = acquire_tcp(target['birth'], slot['socket'].fd)
                     sharing = actual_listener if any(value.port == port and value.case not in self.endpoints.retired for value in self.endpoints.routes.values()) else None
                     self.endpoints.declare(route, shared_listener=sharing)
                     self.endpoints.listen(name, actual_listener)
@@ -807,8 +807,8 @@ class Observer:
             if self.connected_routes.get(name, 0) >= maximum:
                 raise Refused('source finite connection count')
             listener = self.endpoints.listeners[name]
-            ticket = self.endpoints.connect(name, acquire_tcp(listener.owner, listener.fd, retained=True),
-                                            acquire_tcp(actor['birth'], number(payload['fd']), retained=True))
+            ticket = self.endpoints.connect(name, acquire_tcp(listener.owner, listener.fd),
+                                            acquire_tcp(actor['birth'], number(payload['fd'])))
             self.connected_routes[name] = self.connected_routes.get(name, 0) + 1
             self.descriptors.pop((actor['birth'], ticket.client.fd), None)
             self.connections.pop((actor['birth'], ticket.client.fd), None)
@@ -831,14 +831,14 @@ class Observer:
             listener_fd, fd = number(payload['listener']), number(payload['fd'])
             matches = [ticket for ticket in self.endpoints.tickets.values()
                        if ticket.listener.owner == actor['birth'] and ticket.listener.fd == listener_fd]
-            server = acquire_tcp(actor['birth'], fd, retained=True)
+            server = acquire_tcp(actor['birth'], fd)
             candidates = []
             for ticket in matches:
                 process = self.ledger.process(ticket.route.client.birth)
                 if process.exit is not None or process.terminal is not None:
                     continue
                 try:
-                    client = acquire_tcp(ticket.route.client.birth, ticket.client.fd, retained=True)
+                    client = acquire_tcp(ticket.route.client.birth, ticket.client.fd)
                 except FileNotFoundError:
                     return None  # Await its kernel terminal fact, never guess a peer.
                 if client is not None and server is not None and client.remote == server.local and server.remote == client.local:

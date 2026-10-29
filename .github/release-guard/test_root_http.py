@@ -40,7 +40,7 @@ def model(tmp_path,monkeypatch):
         root_only=root_only,owner=lambda value:owner,endpoints=endpoints,
         listener_key=lambda case,tag,scope:(case,tag,scope),
         listeners={(case,'broker',str(scope)):{'socket':listener}})
-    monkeypatch.setattr(observer_calls,'acquire_tcp',lambda birth,fd,retained:listener)
+    monkeypatch.setattr(observer_calls,'acquire_tcp',lambda birth,fd:listener)
     return observer,actor,{'ordinal':1,'listener':7,'scope':str(scope)},listener
 
 

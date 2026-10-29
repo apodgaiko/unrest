@@ -462,3 +462,12 @@ generation and its actual persisted project ID/workspace record; syntax alone
 cannot authorize a different project. The recovery CLI retains its exact home
 and projects environment, changed cwd and redaction assertions. These read-only
 children receive no descendant launch permission.
+
+TCP acquisition has one held-descriptor path. The observer duplicates the exact
+owned descriptor with pidfd_getfd, checks process birth before and after, and
+queries TCP_INFO, SO_COOKIE, inode, UID and endpoints on that held file
+description. Original-FD replacement still fails; empty CLOSE_WAIT requires its
+independent zero-pending-byte/unchanged-cookie checks. The unused TCP table census
+and its duplicate process-identity reader are retired. Unix reciprocal peer
+identity still uses its existing netlink dump. Native socket control nodes retain
+cookie/inode/UID, reciprocal endpoint, closed-FD and one-shot-listener assertions.

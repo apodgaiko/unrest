@@ -36,7 +36,7 @@ def context(observer,actor,kind,payload):
         raise Refused('root HTTP original broker scope')
     slot = observer.listeners.get(observer.listener_key(observer.case,'broker',str(scope)))
     descriptor = number(payload['listener'])
-    listener = acquire_tcp(actor['birth'],descriptor,retained=True)
+    listener = acquire_tcp(actor['birth'],descriptor)
     if slot is None or slot['socket'].fd != descriptor or listener != slot['socket']:
         raise Refused('root HTTP original broker listener generation')
     name = actor['token']+':http:'+hashlib.sha256(observer.case.encode()).hexdigest()+':'+str(ordinal)
