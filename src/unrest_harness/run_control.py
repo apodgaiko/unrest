@@ -690,11 +690,17 @@ class RunControl:
                         },
                     )
                 cursor = self._load_worker_cursor(run_id)
-                if cursor is None or not _pid_live(int(cursor.get("pid", -1))):
+                if (
+                    cursor is None
+                    or not self._cursor_matches(self._load_request(run_id), cursor)
+                    or not _pid_live(int(cursor["pid"]))
+                ):
                     self._settle_cancel_without_worker_unlocked(run_id)
                 else:
                     try:
-                        os.killpg(int(cursor["pgid"]), signal.SIGTERM)
+                        # The owner unwinds its managed children in parent-wait
+                        # order; group termination can kill those parents first.
+                        os.kill(int(cursor["pid"]), signal.SIGTERM)
                     except ProcessLookupError:
                         self._settle_cancel_without_worker_unlocked(run_id)
             return self.inspect_run(run_id).as_dict()

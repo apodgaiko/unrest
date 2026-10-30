@@ -274,8 +274,8 @@ class Observer:
                 from measurement_runtime import owner
                 owner(self,actor)
                 return
-            from run_worker_launch import DESCENDANT
-            if self.case==DESCENDANT and any(value.get('run_worker') and value.get('birth')==actor['birth'] and value['token']==actor['token'] for value in self.intents.values()):
+            from run_worker_launch import DESCENDANTS
+            if self.case in DESCENDANTS and any(value.get('run_worker') and value.get('birth')==actor['birth'] and value['token']==actor['token'] for value in self.intents.values()):
                 return
             if sum(value.get('fixed_operation') == 'check' and value['token'] == actor['token'] for value in self.intents.values()) != 1:
                 raise Refused('fixed inline has no query authority')
@@ -352,8 +352,8 @@ class Observer:
                 and self.ledger.reaped(actor['birth'],actor['token']))
         if terminal is None or value is None or terminal[2]<0 and -terminal[2] not in actor['signals']:
             return False
-        from run_worker_launch import MEASUREMENT_PROJECT,DESCENDANT
-        early_cleanup=actor['case'] not in (MEASUREMENT_PROJECT,DESCENDANT) and actor['role'] in ('backend','delayed-backend','acp','mock-acp','cleanup-acp','cleanup-inline',
+        from run_worker_launch import MEASUREMENT_PROJECT,DESCENDANTS
+        early_cleanup=actor['case'] not in (MEASUREMENT_PROJECT,*DESCENDANTS) and actor['role'] in ('backend','delayed-backend','acp','mock-acp','cleanup-acp','cleanup-inline',
             'workspace-owned','session-adapter','session-child','session-inline') and terminal[2] in (-9,-15)
         return actor.get('kernel_admitted') is True or actor['body_ready'] or early_cleanup
 
@@ -472,6 +472,10 @@ class Observer:
         elif kind == 'launch-proposal':
             from effect_proposals import proposal
             return proposal(self,actor,payload)
+        elif kind=='self-group':
+            shape(payload,('signal',))
+            from run_worker_launch import self_group
+            return self_group(self,actor,payload)
         elif kind == 'self-stop':
             shape(payload, ('signal',))
             children = [value for value in self.actors.values() if self.ledger.process(value['birth']).parent == actor['birth']]

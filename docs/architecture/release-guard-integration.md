@@ -1367,3 +1367,10 @@ and `namespace_init_wait_proven=true`. Relay/backend retain their original-paren
 wait requirements. This grants no resumed launch/review authority and changes no
 historical restart or denial disposition. Signal-zero probes retain actual zombie
 liveness; a terminal observation alone never becomes disappearance.
+
+The registered-child cancellation regression has one exact pinned executor and
+one exact pinned direct-child program. It retains the worker's real root wait,
+the direct child's real worker wait and its explicit cleanup barrier. Only that
+case may signal its own current worker session group after an independently
+attributed cancellation: exact actor/intent, READY, one admitted child and actual
+PGID/SID are required. This is not a generic group-signal or provider permission.

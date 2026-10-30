@@ -38,8 +38,10 @@ WORKERS={TEST+'::test_'+name: ('end_mission' if name.endswith('[end_mission]') e
 MAXIMUM=dict(zip(WORKERS,(1,1,1,1,2,1,2,1,1,1,1,1),strict=True))
 MEASUREMENT_EVOLUTION='tests/test_measurement.py::test_evolution_cases_use_real_public_state_machine_and_cold_state'
 MEASUREMENT_PROJECT='tests/test_measurement.py::test_project_cases_use_real_run_control_and_nested_acp'
-ALL_CASES=(*CASES,*WORKERS,MEASUREMENT_EVOLUTION,MEASUREMENT_PROJECT)
+REGISTERED='tests/test_run_cancel_delivery.py::test_cancel_registered_child_drains_before_unlock'
+ALL_CASES=(*CASES,*WORKERS,MEASUREMENT_EVOLUTION,MEASUREMENT_PROJECT,REGISTERED)
 DESCENDANT=TEST+'::test_'+NAMES[5]
+DESCENDANTS=(DESCENDANT,REGISTERED)
 
 
 def fixture(host,home):
@@ -101,18 +103,30 @@ def install_fixture(policy):
 def descendant(host,actor,raw):
     rows=[row for row in host.intents.values() if row.get('run_worker') and row.get('birth')==actor['birth']
           and row['token']==actor['token'] and row['consumed']]
-    if host.case!=DESCENDANT or len(rows)!=1:
+    if host.case not in DESCENDANTS or len(rows)!=1:
         raise Refused('worker finite descendant owner')
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
-    value=build_expected(host.case,native,pin,
-        (native,'-c','import time; time.sleep(0.35)'),tuple(sorted(rows[0]['environment'].items())),
-        rows[0]['cwd'],'python-command')
-    return admit_expected(host,actor,raw,value,'session-child',[native,'-I','-S',*value.argv[1:]],maximum=1)
+    script='tests/fixtures/cancel_registered_child.py'
+    child_pin='5be8b3003dc4eb36acedce41822e3128cf288ed12b21cf1a5787e39386ae5b7e'
+    registered=host.case==REGISTERED
+    if registered:
+        source_unit(Path(host.meta['checkout']),script,child_pin)
+    vector=(native,str(Path(host.meta['checkout'])/script)) if registered else (native,'-c','import time; time.sleep(0.35)')
+    value=build_expected(host.case,native,pin,vector,tuple(sorted(rows[0]['environment'].items())),
+        rows[0]['cwd'],'python-script' if registered else 'python-command',child_pin if registered else None)
+    return admit_expected(host,actor,raw,value,'session-child',[native,'-I','-S',*value.argv[1:]],value.payload_sha256,maximum=1)
 
 
 def proposal(host,actor,raw):
     host.root_only(actor)
     case=host.case
+    if case==REGISTERED:
+        checkout=Path(host.meta['checkout'])
+        source_unit(checkout,'tests/fixtures/cancel_registered_executor.py','cb49ca5cf474491fcb395407ae0205134b2a0742195448b0f0c792f81bb41b79')
+        home=retain(host,Path(raw['cwd']),case.split('::')[1][:30],20000)
+        env={'LANG':'C.UTF-8','PATH':os.defpath,'PYTHONPATH':str(checkout)+':'+str(checkout/'src')}
+        answer=admit_worker(host,actor,raw,home,'advance_project',env,1,executor='tests.fixtures.cancel_registered_executor:execute')
+        return {**answer,'wait_at_case_close':True} if answer is not None else None
     if case in (MEASUREMENT_EVOLUTION,MEASUREMENT_PROJECT):
         from git_policy import measurement_worker as worker
         return worker(host,actor,raw)
@@ -156,3 +170,25 @@ def admit_worker(host,actor,raw,home,operation,env,maximum,binding=None,custom=F
                               'run_project':arguments.get('project_id'),
                               'run_control':document.get('control_identity_digest')})
     return {**answer,'wait_at_case_close':True} if answer is not None and case==SERVER_INQUIRY else answer
+
+
+def self_group(host,actor,payload):
+    from source_observer import bound_intent
+    from linux_observation import process_identity
+    from process_ledger import Birth
+    row=bound_intent(host,actor)
+    process=host.ledger.process(actor['birth'])
+    children=[child for child in host.actors.values() if child['case']==host.case
+        and host.ledger.process(child['birth']).parent==actor['birth']]
+    if (host.case!=REGISTERED or actor['case']!=host.case or actor['role']!='fixed-inline' or not actor['body_ready']
+            or row is None or not row.get('run_worker') or not host.executed(row)
+            or payload!={'signal':15} or type(payload['signal']) is not int or 15 not in actor['signals'] or not process.new_session
+            or not process.session_complete or len(children)!=1 or children[0]['role']!='session-child'
+            or not children[0]['body_ready']):
+        raise Refused('registered worker exact cancellation group')
+    actual=process_identity(actor['birth'].pid)
+    if Birth.read(actual)!=actor['birth'] or (actual['pgid'],actual['sid'])!=(actor['birth'].pid,actor['birth'].pid):
+        raise Refused('registered worker actual session')
+    from composed_adoption import record_group
+    record_group(host,actor,15)
+    return {'ok':True}

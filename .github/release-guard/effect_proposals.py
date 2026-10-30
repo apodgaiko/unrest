@@ -59,8 +59,8 @@ def proposal(host, actor, raw):
         selected=module.eligible(case) if name=='repository_cli' else case in (module.CASES if hasattr(module,'CASES') else (module.CASE,))
         if selected and (name!='uv_cli' or argv[0]=='uv'):
             return module.proposal(host,actor,raw)
-    from run_worker_launch import ALL_CASES as RUN_WORKERS,proposal as run_proposal,descendant,DESCENDANT
-    if case==DESCENDANT and actor['role']=='fixed-inline':
+    from run_worker_launch import ALL_CASES as RUN_WORKERS,proposal as run_proposal,descendant,DESCENDANTS
+    if case in DESCENDANTS and actor['role']=='fixed-inline':
         return descendant(host,actor,raw)
     if case in RUN_WORKERS and argv[1:3]==['-m','unrest_harness.run_worker']:
         return run_proposal(host,actor,raw)

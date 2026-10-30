@@ -64,6 +64,23 @@ class WorkerContext:
                 except InterruptedError:
                     continue
 
+    def cancel_descendants(self) -> None:
+        if not self._descendant_pids:
+            return
+        owner = os.getpid()
+        if os.getpgrp() != owner or os.getsid(0) != owner:
+            raise RuntimeError("descendant cancellation requires the worker's own session")
+        previous = {kind: signal.signal(kind, signal.SIG_IGN)
+                    for kind in (signal.SIGTERM, signal.SIGINT)}
+        try:
+            # Managed executor finalizers have finished. Preserve bulk TERM for
+            # remaining custom-executor group members, without stale PID targets.
+            os.killpg(owner, signal.SIGTERM)
+            self.drain_descendants()
+        finally:
+            for kind, handler in previous.items():
+                signal.signal(kind, handler)
+
 
 def _cancel(_: int, __: Any) -> NoReturn:
     raise WorkerCancelled()
@@ -134,12 +151,16 @@ def main(argv: list[str] | None = None) -> int:
                 return 0
             operation, arguments = control.request_payload(options.run_id)
             context = WorkerContext(options.run_id, control)
-            result = executor(operation, arguments, context)
-            if not isinstance(result, Mapping):
-                raise TypeError("executor result must be an object")
-            context.drain_descendants()
-            if control.inspect_run(options.run_id).state == "cancel_requested":
-                raise WorkerCancelled
+            try:
+                result = executor(operation, arguments, context)
+                if not isinstance(result, Mapping):
+                    raise TypeError("executor result must be an object")
+                context.drain_descendants()
+                if control.inspect_run(options.run_id).state == "cancel_requested":
+                    raise WorkerCancelled
+            except WorkerCancelled:
+                context.cancel_descendants()
+                raise
             control.worker_effect_complete(options.run_id, result)
             control.worker_report_complete(options.run_id)
             control.worker_succeeded(options.run_id)

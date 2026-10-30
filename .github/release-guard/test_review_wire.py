@@ -197,6 +197,7 @@ def test_component_collection_and_reports_keep_actual_large_pytest_item(monkeypa
     assert len(wire.NODES) == 63 and tuple(identity(node) for node in wire.NODES) == wire.CASES
     calls = []
     policy = SimpleNamespace(
+        children={},
         profile={"cases": [identity(node)]},
         poison=False,
         client=SimpleNamespace(request=lambda *args: calls.append(args)),

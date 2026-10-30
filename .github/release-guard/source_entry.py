@@ -200,19 +200,22 @@ class Policy:
                 finally:
                     policy.local.signal=None
             self_stop = policy.profile['role']=='session-adapter' and pid==os.getpid() and sig==15 and not group
-            resumed=not self_stop and type(pid) is int and pid not in policy.children
+            from run_worker_launch import REGISTERED
+            self_group=(policy.profile['role']=='fixed-inline' and policy.case==REGISTERED
+                and type(pid) is int and pid==os.getpid() and sig==15 and group)
+            resumed=not (self_stop or self_group) and type(pid) is int and pid not in policy.children
             from approval_launch import CASES as APPROVAL
             approval=resumed and policy.profile['role'] in ('root','fixed-inline') and policy.case in APPROVAL
-            if not self_stop and (type(pid) is not int or resumed):
+            if not (self_stop or self_group) and (type(pid) is not int or resumed):
                 from composed_cases import ADOPT
                 if not approval and (not resumed or policy.profile['role']!='mcp' or policy.case not in ADOPT):
                     policy.refuse('source signal outside owned children')
-            if self_stop is True:
-                if policy.client.request('self-stop', {'signal': sig}) != {'ok': True}:
+            if self_stop or self_group:
+                if policy.client.request('self-group' if self_group else 'self-stop', {'signal': sig}) != {'ok': True}:
                     policy.refuse('source self stop response')
-                policy.local.signal = 'os.kill', (pid, sig)
+                policy.local.signal = 'os.killpg' if self_group else 'os.kill', (pid, sig)
                 try:
-                    return original_kill(pid, sig)
+                    return (original_group if self_group else original_kill)(pid, sig)
                 finally:
                     policy.local.signal = None
             try:
