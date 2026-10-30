@@ -1556,3 +1556,9 @@ then retains the exact temporary prefix, source UID, private mode and archive
 root name. Reference bytes, complete membership, nofollow/race checks and the
 observer-owned immutable snapshot remain mandatory. Negative extraction cases
 retain their existing owned-pytest scope.
+
+The positive overlapping-input drift case uses the existing byte-pinned receipt
+barrier backend from `CompletionBarriers`, rather than the standard backend.
+Only that exact case selects that image; all other additional controlled owners
+retain their original standard image. Configuration variants, pair ceilings,
+READY, actual process identity, original-parent waits and cleanup are unchanged.

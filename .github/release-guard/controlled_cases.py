@@ -2,10 +2,11 @@
 from content_manifest import Refused, read_regular, refuse_if
 from cohort_cases import CAMPAIGNS
 from cohort_controller import CASES as CRASH
-from controlled_owners import selection, GIT_CASES
+from controlled_owners import selection, GIT_CASES, DRIFTS
 
 SOURCE_UID=20000
 STANDARD=('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53','fake-app-server')
+RECEIPT='1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1'
 STARTUP_FAILURE='tests/test_experimental_startup_diagnostics.py::test_coordinator_persists_startup_and_separate_cleanup_failure'
 RUNTIME_DRIFT='tests/test_controlled_runtime_binding.py::test_runtime_rechecked_at_each_child_boundary[adapter]'
 WARNING='tests/test_controlled_acp_warnings.py::test_original_owner_warning_state_and_phase'
@@ -76,7 +77,7 @@ def acquire_backend(case,home):
     file=backend_path(case,home.parent)
     _,_,pin=read_regular(file,4*1024*1024,uid=SOURCE_UID,forbidden=0o6022)
     refuse_if(not eligible(case) or BACKENDS.get(pin)!=file.name
-            or (case in (*CAMPAIGNS,*CRASH,RUNTIME_DRIFT) or selection(case) is not None) and pin!=STANDARD[0], 'unknown controlled backend bytes or layout')
+            or (case in (*CAMPAIGNS,*CRASH,RUNTIME_DRIFT) or selection(case) is not None) and pin!=(RECEIPT if case==DRIFTS[0] else STANDARD[0]), 'unknown controlled backend bytes or layout')
     return pin
 
 

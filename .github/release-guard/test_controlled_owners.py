@@ -1,5 +1,7 @@
 """Additional controlled fixture owners do not inherit unrelated capabilities."""
 from pathlib import Path
+import hashlib
+import os
 
 import pytest
 
@@ -71,3 +73,28 @@ def test_new_owners_keep_standard_image_and_exact_original_configuration(tmp_pat
     monkeypatch.setattr(live,'read_regular',lambda *args,**kwargs:(None,None,next(pin for pin in live.BACKENDS if pin!=live.STANDARD[0])))
     with pytest.raises(Refused,match='unknown controlled backend'):
         live.acquire_backend(case,home)
+
+
+def test_overlap_drift_requires_its_original_receipt_backend_only(tmp_path,monkeypatch):
+    from tests.test_experimental_finite_orders import CompletionBarriers
+
+    barriers=CompletionBarriers(monkeypatch,tmp_path)
+    body=barriers.fixture.read_bytes()
+    assert hashlib.sha256(body).hexdigest()==live.RECEIPT
+    home=tmp_path/'turn-0/worker'
+    home.mkdir(parents=True)
+    backend=home.parent/'fake-app-server'
+    backend.write_bytes(body)
+    monkeypatch.setattr(live,'SOURCE_UID',os.getuid())
+    assert live.acquire_backend(owners.DRIFTS[0],home)==live.RECEIPT
+    for case in (*owners.PRIORITIES,*owners.TTLS,*owners.DRIFTS[1:],*owners.DRAINS,owners.STARTUP,
+            owners.SESSION+'::test_installed_adapter_two_prompts_and_http_completion',
+            owners.RETAINED+'::test_retained_correction_rotation_then_one_shot',live.RUNTIME_DRIFT):
+        with pytest.raises(Refused,match='unknown controlled backend'):
+            live.acquire_backend(case,home)
+    backend.write_bytes(body+b'\n')
+    with pytest.raises(Refused,match='unknown controlled backend'):
+        live.acquire_backend(owners.DRIFTS[0],home)
+    backend.write_bytes((Path(__file__).resolve().parents[2]/'tests/fixtures/experimental_session_app_server.py').read_bytes())
+    with pytest.raises(Refused,match='unknown controlled backend'):
+        live.acquire_backend(owners.DRIFTS[0],home)
