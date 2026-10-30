@@ -7,18 +7,13 @@ from pathlib import Path
 from content_manifest import Refused
 
 
-def address(value,*,bind=False):
-    if (type(value) is not tuple or len(value)!=2 or type(value[0]) is not str
-            or value[0]!='127.0.0.1' or type(value[1]) is not int
-            or not (0 if bind else 1)<=value[1]<=65535):
-        raise Refused('source literal isolated loopback address')
-    return value
-
-
 def port_argument(value):
     if type(value) is not str or not value.isascii() or not value.isdigit() or not 0<len(value)<=5:
         raise Refused('source literal loopback port argument')
-    return address(('127.0.0.1',int(value)))[1]
+    port=int(value)
+    if not 1<=port<=65535:
+        raise Refused('source literal loopback port argument')
+    return port
 
 
 def isolated(before):

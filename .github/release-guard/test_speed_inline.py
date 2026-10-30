@@ -130,33 +130,3 @@ def test_unsafe_fixture_spelling_cannot_become_executable_source(tmp_path, monke
     with pytest.raises(Refused):
         observer.dispatch(actor, {"kind": "fixture-root", "payload": {"path": str(path)}})
     assert not observer.fixture_roots and not observer.intents
-
-
-def test_original_resolver_is_reachable_only_for_exact_child_probe():
-    from source_sockets import Hooks
-
-    hooks = object.__new__(Hooks)
-    seen = []
-
-    def refuse(code):
-        raise Refused(code)
-
-    hooks.policy = SimpleNamespace(
-        case=CASES[0], profile={"role": "fixed-inline", "case": CASES[0]}, refuse=refuse
-    )
-
-    def resolver(*args):
-        seen.append(args)
-        raise RuntimeError("real audit denial placeholder")
-
-    hooks.getaddrinfo = resolver
-    with pytest.raises(RuntimeError):
-        hooks.literal_address("alias-guard.invalid", 443)
-    assert seen == [("alias-guard.invalid", 443, 0, 0, 0, 0)]
-    for host, port in (("foreign.invalid", 443), ("alias-guard.invalid", 444)):
-        with pytest.raises(Refused):
-            hooks.literal_address(host, port)
-    hooks.policy.profile["role"] = "root"
-    with pytest.raises(Refused):
-        hooks.literal_address("alias-guard.invalid", 443)
-    assert len(seen) == 1

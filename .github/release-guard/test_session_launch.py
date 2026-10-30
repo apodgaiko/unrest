@@ -159,22 +159,3 @@ def test_synchronous_guard_import_does_not_initialize_asyncio():
     result = subprocess.run([sys.executable, '-I', '-S', '-c', body, str(ROOT / '.github/release-guard')],
                             capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr
-
-
-def test_fixed_script_socket_creation_is_private_channel_only():
-    import socket
-    from source_entry import Policy
-    policy = object.__new__(Policy)
-    policy.sockets, policy.poison = None, False
-    policy.client = SimpleNamespace(request=lambda *args: {'ok': True})
-    policy.private_call = lambda: True
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as stream:
-        assert policy.audit('socket.__new__', (stream, socket.AF_UNIX.value, socket.SOCK_STREAM.value, 0))
-    for args in ((stream, socket.AF_INET.value, socket.SOCK_STREAM.value, 0),
-                 (stream, socket.AF_UNIX.value, socket.SOCK_DGRAM.value, 0),
-                 (stream, CallbackTrap(), 1, 0)):
-        with pytest.raises(Refused, match='private channel'):
-            policy.audit('socket.__new__', args)
-    policy.private_call = lambda: False
-    with pytest.raises(Refused, match='private channel'):
-        policy.audit('socket.__new__', (stream, socket.AF_UNIX.value, socket.SOCK_STREAM.value, 0))

@@ -68,11 +68,14 @@ admitted child, consumed intents, actual statuses and original-parent joins.
 
 ## IPC admission model
 
-Socket construction and adoption remain restricted. TCP effects are literal
-IPv4 loopback inside the independently verified private network namespace. DNS,
-datagrams, arbitrary families and source Unix pathname/abstract bind/connect
-remain forbidden. The private control pathname retains its independent kernel
-peer authentication and current registration/token checks.
+The network boundary is the verified private loopback-only namespace, not
+per-role Python socket wrappers. Kernel admission permits contained IP stream
+and datagram sockets, anonymous Unix pairs and route-netlink queries; excluded
+families, raw IP and io_uring calls fail sticky. Python Unix pathname/abstract
+bind and connect remain refused except the exact authenticated control connect.
+Resolver calls use the actual system implementation inside this namespace.
+The private control pathname retains its independent kernel peer authentication
+and current registration/token checks.
 
 Anonymous AF_UNIX/SOCK_STREAM self-pairs need no observer receipt. The guard no
 longer certifies their creation history, reciprocal peer lineage or case-owned
@@ -263,8 +266,9 @@ The TCP boundary is the run's distinct network namespace, verified before source
 execution to contain only loopback and no external gateway or usable external
 route. The namespace identity is bound into every authenticated child profile
 and checked again at kernel exec admission and native bootstrap. Sources retain
-zero capabilities and `no_new_privs`. Python TCP effects permit only literal
-IPv4 loopback and bounded numeric ports; DNS and other destinations fail sticky.
+zero capabilities and `no_new_privs`. TCP/UDP and resolver traffic stay inside
+that namespace. Dynamic application port operands remain bounded numeric values;
+per-role address-family and literal-only resolver restrictions are retired.
 
 Per-case TCP peer ownership, listener FD/cookie reacquisition, connection/listener
 quotas, preceding port-reservation causality and TCP route-retirement proof are
@@ -273,8 +277,8 @@ operands in the complete admitted argv/environment. The original readiness,
 Bridge, private preflight, MCP, completion and cleanup tests establish application
 behavior; no controlled result becomes native provider acceptance. Evidence
 explicitly records these TCP claims as unproven. Guard-only controls for the
-retired graph are replaced by literal-effect controls and a real root Linux
-namespace control that excludes a host loopback service, exchanges local bytes,
+retired graph are replaced by kernel/native controls and a real root Linux
+namespace control that excludes host TCP/UDP services, exchanges local bytes,
 drops source capabilities and performs the actual parent wait.
 
 Exact inherited Unix-description checks, the peer-authenticated control
@@ -1100,3 +1104,8 @@ external route. Setup checks a fresh isolated namespace before changing it,
 requires root, then repeats its interface/route census. The source retains CAP0.
 The native positive control uses the actual libc resolver and its requested
 flags; it does not substitute a result or waive a lookup failure.
+
+The Python socket monkeypatch layer is removed. Guard-only tests of its retired
+per-role IPv6, literal resolver and wrapper call restrictions are replaced by
+actual native caught-refusal, kernel family/protocol, ordinary descriptor/IO and
+private namespace controls. No original product test is removed or weakened.

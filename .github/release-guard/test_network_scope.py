@@ -1,24 +1,14 @@
-"""Retained literal-address and namespace boundaries; TCP topology is retired."""
+"""Private namespace boundaries and bounded application port operands."""
 from pathlib import Path
 
 import pytest
 
 from content_manifest import Refused
-from network_scope import address,isolated,port_argument
+from network_scope import isolated,port_argument
 
 
-@pytest.mark.parametrize('value',('localhost',('localhost',80),('::1',80),('0.0.0.0',80),
-    ('127.0.0.1',True),('127.0.0.1',-1),('127.0.0.1',65536),['127.0.0.1',80],object()))
-def test_nonliteral_tcp_effects_are_refused(value):
-    with pytest.raises(Refused):
-        address(value,bind=True)
 
 
-def test_literal_loopback_is_ordinary_within_the_isolated_run():
-    assert address(('127.0.0.1',0),bind=True)==('127.0.0.1',0)
-    assert address(('127.0.0.1',65535))==('127.0.0.1',65535)
-    with pytest.raises(Refused):
-        address(('127.0.0.1',0))
 
 
 @pytest.mark.parametrize('value',('',0,'0','65536','service','١٢','+1',' 1','1\x00'))
@@ -48,21 +38,6 @@ def test_network_generation_has_only_loopback_and_no_external_routes(monkeypatch
             isolated(namespace if mutation=='same' else 'net:[122]')
 
 
-@pytest.mark.parametrize('method',('bind','connect','connect_ex'))
-@pytest.mark.parametrize('host',('localhost','alias-guard.invalid','::1','0.0.0.0'))
-def test_pre_resolution_wrapper_refuses_before_any_original_socket_call(method,host):
-    from source_sockets import Hooks
-    calls=[]
-    class Socket:
-        family=2
-    hooks=object.__new__(Hooks)
-    hooks.socket_type=hooks.base_type=Socket
-    hooks.original={method:lambda *args:calls.append(args)}
-    with pytest.raises(Refused):
-        hooks.call(method,Socket(),(host,12345))
-    assert not calls
-    hooks.call(method,Socket(),('127.0.0.1',12345))
-    assert len(calls)==1
 
 
 @pytest.mark.parametrize('branch',('plan','full','ordinary'))
@@ -78,28 +53,6 @@ def test_every_exec_branch_rejects_foreign_network_namespace_before_delegation(m
     assert Observer.resolve(host,None,123,'/native',[],{},'/') is False
 
 
-@pytest.mark.parametrize('triple',[(-1,-1,-1),(True,-1,-1),(-1,True,-1),(-1,-1,True),(-1,-1,0)])
-def test_default_socket_adoption_does_not_select_a_case_or_grant_effects(triple):
-    import socket
-    import threading
-    from types import SimpleNamespace
-    from source_sockets import Hooks
-    policy=SimpleNamespace(local=threading.local(),profile={'role':'root','case':'ordinary'},
-        private_call=lambda:False)
-    hooks=Hooks(policy)
-    with socket.socket() as stream:
-        if triple==(-1,-1,-1):
-            assert hooks.audit('socket.__new__',(stream,*triple)) is True
-        else:
-            with pytest.raises(Refused):
-                hooks.audit('socket.__new__',(stream,*triple))
-        for target in (('localhost',12345),('0.0.0.0',12345),('::1',12345)):
-            with pytest.raises(Refused):
-                hooks.audit('socket.connect',(stream,target))
-    left,right=socket.socketpair()
-    with left,right:
-        with pytest.raises(Refused):
-            hooks.audit('socket.connect',(left,'/host/service.sock'))
 
 
 def test_socket_adoption_uses_normal_os_errors_and_preserves_private_pairs(tmp_path):
@@ -123,20 +76,3 @@ def test_socket_adoption_uses_normal_os_errors_and_preserves_private_pairs(tmp_p
     finally:
         left.close()
         right.close()
-
-
-@pytest.mark.parametrize('unix',[False,True])
-def test_adoption_does_not_clear_sticky_forbidden_connect(unix):
-    import socket
-    from types import SimpleNamespace
-    from source_entry import Policy
-    from source_sockets import Hooks
-    requests=[]
-    client=SimpleNamespace(request=lambda kind,payload:requests.append(kind))
-    policy=Policy(None,{'role':'root','case':'ordinary'},None,client)
-    policy.sockets=Hooks(policy)
-    with socket.socket(socket.AF_UNIX if unix else socket.AF_INET) as stream:
-        assert policy.audit('socket.__new__',(stream,-1,-1,-1)) is True
-        with pytest.raises(Refused):
-            policy.audit('socket.connect',(stream,'/host/service.sock' if unix else ('localhost',12345)))
-    assert policy.poison is True and requests==['guard-refusal']

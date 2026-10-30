@@ -10,7 +10,7 @@ import subprocess
 import sys
 import threading
 import traceback
-from typing import Any, NoReturn
+from typing import NoReturn
 
 from bootstrap_wire import Client
 from content_manifest import Refused
@@ -44,7 +44,6 @@ class Policy:
         self.case, self.poison = None, False
         self.children: dict[int, dict] = {}
         self.local = threading.local()
-        self.sockets: Any = None
 
     def refuse(self, code) -> NoReturn:
         self.poison = True
@@ -104,16 +103,6 @@ class Policy:
             if event == 'subprocess.Popen':
                 self.popen(args)
                 return True
-            if event in ('socket.bind', 'socket.connect', 'socket.__new__'):
-                if self.sockets is None:
-                    import socket
-                    if (event != 'socket.__new__' or type(args) is not tuple or len(args) != 4
-                            or type(args[0]) not in (socket.socket, socket.SocketType)
-                            or any(type(v) is not int for v in args[1:])
-                            or args[1:] != (socket.AF_UNIX, socket.SOCK_STREAM, 0) or not self.private_call()):
-                        raise Refused('source fixed-script private channel only')
-                    return True
-                return self.sockets.audit(event, args)
             if event in ('os.kill', 'os.killpg'):
                 pending = getattr(self.local, 'signal', None)
                 if pending != (event, args):
@@ -252,13 +241,8 @@ def activate(directory, profile, event, arguments):
     if profile['role']=='pytest-regression':
         temp=str(Path(profile['owned'])/('nested-'+profile['token']))
         os.environ.update(PYTEST_DISABLE_PLUGIN_AUTOLOAD='1',PYTEST_PLUGINS='nested_pytest,pytest_asyncio.plugin,pytest_mock',PYTEST_ADDOPTS='--basetemp='+temp+' -o cache_dir='+temp+'-cache')
-    if profile['role'] not in ('session-adapter', 'session-child'):
-        from source_sockets import Hooks
-        policy.sockets = Hooks(policy)
     from run_worker_launch import install_fixture
     install_fixture(policy)
-    if policy.sockets is not None:
-        policy.sockets.install()
     policy.install_process_hooks()
     client.request('body-ready', {})
     sys.dont_write_bytecode = True

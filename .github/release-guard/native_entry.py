@@ -31,7 +31,7 @@ def acquire(directory: str) -> tuple[Path, dict]:
 
 
 def consume(directory: str, event: str, arguments: tuple) -> None:
-    global BODY_READY, POLICY, SCRIPT_TARGET
+    global BODY_READY, POLICY, SCRIPT_TARGET, PRIVATE_COMPARTMENT
     sys.path.insert(0, str(Path(__file__).parent))
     root, profile = acquire(directory)
     if profile.get('schema') != 'unrest.bootstrap-source.v1':
@@ -39,6 +39,7 @@ def consume(directory: str, event: str, arguments: tuple) -> None:
     from source_entry import activate
     POLICY = activate(root, profile, event, arguments)
     SCRIPT_TARGET = profile['script']
+    PRIVATE_COMPARTMENT = True
     BODY_READY = True
 
 
