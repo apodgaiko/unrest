@@ -405,3 +405,19 @@ def test_added_mock_launches_have_closed_identity_environment_and_quota(tmp_path
         with pytest.raises((Refused,FileNotFoundError)):
             proposal(host,{'role':'root'},raw)
         assert not calls
+
+
+def test_sleep_alias_uses_the_shared_native_custody_measurement(monkeypatch):
+    from pathlib import Path
+    import git_policy
+    calls=[]
+    monkeypatch.setattr(ordinary_acp.os,'readlink',lambda path:'usr/bin')
+    original=Path.resolve
+    monkeypatch.setattr(Path,'resolve',lambda path,**kwargs:Path('/usr/bin/sleep') if path==Path('/bin/sleep') else original(path,**kwargs))
+    monkeypatch.setattr(git_policy,'image',lambda path:calls.append(path) or 'a'*64)
+    assert ordinary_acp.system_sleep()=='a'*64
+    assert calls==['/usr/bin/sleep']
+    monkeypatch.setattr(ordinary_acp.os,'readlink',lambda path:'foreign')
+    with pytest.raises(Refused,match='alias'):
+        ordinary_acp.system_sleep()
+    assert calls==['/usr/bin/sleep']

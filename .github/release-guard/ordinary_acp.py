@@ -8,7 +8,6 @@ from __future__ import annotations
 import gc
 import os
 from pathlib import Path
-import stat
 import types
 
 from content_manifest import Refused
@@ -61,17 +60,8 @@ def system_sleep():
     file = Path('/bin/sleep')
     if os.readlink('/bin') != 'usr/bin' or file.resolve(strict=True) != Path('/usr/bin/sleep'):
         raise Refused('ordinary system fixture alias')
-    for member in (Path('/'), Path('/usr'), Path('/usr/bin'), Path('/usr/bin/sleep')):
-        info = member.lstat()
-        if info.st_uid != 0 or stat.S_IMODE(info.st_mode) & 0o6022:
-            raise Refused('ordinary system fixture custody')
-        if member == Path('/usr/bin/sleep'):
-            if not stat.S_ISREG(info.st_mode) or not info.st_mode & 0o111:
-                raise Refused('ordinary system fixture executable')
-        elif not stat.S_ISDIR(info.st_mode):
-            raise Refused('ordinary system fixture directory')
-    from source_profile import digest
-    return digest(Path('/usr/bin/sleep'))
+    from git_policy import image
+    return image('/usr/bin/sleep')
 
 
 def template_environment(case,checkout):

@@ -1203,3 +1203,7 @@ The cleanup pipe inspector requires the original UID 20000, FIFO type, and
 blocking read-only flags. The child independently rechecks those properties,
 the exact descriptor number and the complete inherited inventory before its body.
 No bytes are read and no descriptor flags are changed during measurement.
+
+The ordinary sleep fixture retains its exact `/bin` alias check and shares the
+root-to-file native custody and byte measurement used for Git and other system
+images. This removes a duplicate implementation, not an image or owner check.
