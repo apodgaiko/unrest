@@ -79,7 +79,19 @@ def test_each_actual_uv_birth_reserves_exactly_one_bound_console_child(original)
     host.serial=1
     uv.reserve_child(host,host.intents[1],birth)
     child=host.intents[2]
-    assert child['parent'] is birth and child['role']=='fixed-inline'
+    assert child['ticket']==2 and child['parent'] is birth and child['role']=='fixed-inline'
+    from source_observer import bound_intent,Observer
+    child_birth=object()
+    child.update(consumed=True,pid=77,birth=child_birth)
+    actor={'intent':child,'birth':child_birth,'token':child['token'],'case':host.case,
+           'role':'fixed-inline','body_ready':True,'signals':set()}
+    host.ledger=SimpleNamespace(process=lambda value:SimpleNamespace(terminal=(1,0,2)))
+    assert bound_intent(host,actor) is child
+    assert Observer.completed_child(host,actor)
+    del child['ticket']
+    assert bound_intent(host,actor) is None
+    assert not Observer.completed_child(host,actor)
+    child['ticket']=2
     assert child['executable']=='/runtime/bin/unrest' and child['executable_sha256']=='a'*64
     assert child['environment']==uv.child_environment(host.meta,raw['environment'])
     assert child['python_vector']==['/runtime/bin/python-unrest-guard-control','-I','-S',

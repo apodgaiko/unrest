@@ -102,7 +102,7 @@ def reserve_child(host,intent,birth):
     if str(file)!=declaration['script'] or pin!=declaration['pin']:
         raise Refused('stock uv retained console script')
     host.serial+=1
-    host.intents[host.serial]={'case':intent['case'],'role':'fixed-inline','parent':birth,
+    host.intents[host.serial]={'ticket':host.serial,'case':intent['case'],'role':'fixed-inline','parent':birth,
         'environment':child_environment(host.meta,intent['environment']),'cwd':intent['cwd'],
         'translated':declaration['argv'],'python_vector':normalized(runtime,Path(host.meta['dependencies']),'unrest',declaration['argv'][1:]),
         'token':os.urandom(16).hex(),'consumed':False,'pid':None,'executable':str(executable),
