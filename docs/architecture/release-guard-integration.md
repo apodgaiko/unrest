@@ -1461,3 +1461,9 @@ and child budgets remain. A diagnostic MCP/adapter pair keeps its selected
 project id; only the missing-handoff case may construct that adapter. The
 intentional pre-READY timeout still requires attributed termination and its real
 numeric parent wait.
+
+Completion role constructors use the same bounded project, mission, node and
+output-path scope as other node launches. Those application names do not select
+execution rights. Server ordinal, mode, fixed provider/command settings, exact
+script templates, per-parent Git quotas, intentional crash status, readiness and
+actual wait joins retain their separate admission checks.

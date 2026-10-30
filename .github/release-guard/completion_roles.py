@@ -3,6 +3,7 @@ from pathlib import Path
 
 from content_manifest import Refused
 from owned_fixture import acquire
+from node_environment import scoped,project_path
 from launch_policy import source_unit,assignment,render_string
 from composed_cases import CASES as COMPOSED,HTTP as COMPOSED_HTTP,DIRECT,UNDELIVERABLE
 
@@ -89,12 +90,8 @@ def root(host,cwd):
 
 
 
-def attempt(parent,case,ordinal):
-    family,_,_=CASES[case]
-    return parent/'.unrest/projects'/family/'.unrest-runtime/missions/mission-001/attempts'/(schedule(case)[ordinal][1]+'__node.json')
 
-
-def program(checkout,parent,case,ordinal):
+def program(checkout,parent,case,ordinal,environment=None):
     family,_,scenario=CASES[case]
     if family=='defect':
         owner=source_unit(checkout,SERVER_TEST,PINS[SERVER_TEST],(case.split('::')[1],'ProcessDispatcher','dispatch'))
@@ -108,7 +105,7 @@ def program(checkout,parent,case,ordinal):
     name=name.split('[')[0]
     owner=source_unit(checkout,path,PINS[path],(name,))
     template=assignment(owner,'script')
-    path=attempt(parent,case,ordinal)
+    path=Path(environment['UNREST_HANDOFF_PATH'])
     substitutions=(('str(path)',str(path)),('phase',scenario)) if family=='crash' else (
         ('str(path.parent)',str(path.parent)),('str(barrier)',str(parent/'workspace/barrier')),
         ('str(barrier)',str(parent/'workspace/barrier')))
@@ -130,11 +127,7 @@ def environment(checkout,parent,case,ordinal,ambient,*,native=None,observed=None
     result=dict(ambient) if http else {key:value for key,value in ambient.items() if not key.startswith('UNREST_')}
     result.update(UNREST_HOME=str(parent/'.unrest'),UNREST_PROJECTS_DIR=str(parent/'.unrest/projects'))
     if family=='defect':
-        role='work' if ordinal==0 else 'validate'
-        from node_environment import scoped,project_path
-        project=project_path(parent/'.unrest',observed.get('UNREST_PROJECT_ID'))
         result.update(PYTHONPATH=str(checkout/'src'),UNREST_WORKSPACE=str(parent/'workspace'))
-        return scoped(observed,result,parent/'.unrest',project.name,role,module=False)
     if http:
         result['PYTHONPATH']=str(checkout/'src')
         for name in ('WORKER','VALIDATOR','TERMINAL_REVIEWER'):
@@ -150,13 +143,9 @@ def environment(checkout,parent,case,ordinal,ambient,*,native=None,observed=None
             result['PYTHONPATH']=str(parent/'workspace')
     if mode(case,ordinal)=='orchestrator':
         return result
-    project=f'real-restart-{role}-{scenario=="repair"}' if family=='restart' else family
-    node=role+'-node' if family=='restart' else 'work' if family=='targetless' else 'node'
-    path=(parent/'.unrest/projects'/project/'.unrest-runtime/missions/mission-001/attempts'/
-          (schedule(case)[ordinal][1]+'__'+node+'.json') if family in ('restart','targetless','binding') else attempt(parent,case,ordinal))
-    result.update(UNREST_PROJECT_ID=project,UNREST_MISSION_ID='mission-001',UNREST_NODE_ID=node,
-        UNREST_NODE_TYPE=role,UNREST_HANDOFF_PATH=str(path))
-    return result
+    project=project_path(parent/'.unrest',observed.get('UNREST_PROJECT_ID'))
+    return scoped(observed,result,parent/'.unrest',project.name,
+        'work' if mode(case,ordinal)=='worker' else 'validate',module=False)
 
 
 

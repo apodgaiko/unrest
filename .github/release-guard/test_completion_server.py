@@ -7,6 +7,7 @@ import pytest
 from content_manifest import Refused
 import completion_server as server
 import completion_roles as roles
+from test_role_data_oracle import completion_environment
 
 ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
 
@@ -39,9 +40,10 @@ def host(tmp_path,monkeypatch):
 def raw(host,parent,slot,port=12345):
     kind,_,_=roles.schedule(host.case)[slot]
     mode='validator' if roles.CASES[host.case][1]=='validate' else 'worker'
-    env=roles.environment(ROOT,parent,host.case,slot,{**host.meta_environment(),
-        'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':host.case+' (call)'})
-    argv=['/native','-c',roles.program(ROOT,parent,host.case,slot)]
+    ambient={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':host.case+' (call)'}
+    observed=completion_environment(ROOT,parent,host.case,slot,ambient)
+    env=roles.environment(ROOT,parent,host.case,slot,ambient,observed=observed)
+    argv=['/native','-c',roles.program(ROOT,parent,host.case,slot,env)]
     if kind=='http':
         argv+=['--mode',mode,'--transport','streamable-http','--host','127.0.0.1','--port',str(port)]
     else:
@@ -60,7 +62,7 @@ def test_each_concurrent_http_constructor_consumes_one_exact_authored_slot(host)
     for slot in (0,1):
         command=raw(host,parent,slot,12345+slot)
         changed={**command,'environment':{**command['environment'],'FOREIGN':'not admitted'}}
-        with pytest.raises(Refused,match='original launch operands'):
+        with pytest.raises(Refused,match='exact security environment'):
             server.proposal(host,actor,changed)
         answer=server.proposal(host,actor,command)
         consumed(host,answer)

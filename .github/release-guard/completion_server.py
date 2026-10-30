@@ -77,7 +77,7 @@ def proposal(host,actor,raw):
     selected_mode=mode(case,slot)
     ambient={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}
     env=environment(checkout,parent,case,slot,ambient,native=native,observed=raw['environment'])
-    body=program(checkout,parent,case,slot)
+    body=program(checkout,parent,case,slot,env)
     port=None
     if kind=='http':
         from network_scope import port_argument

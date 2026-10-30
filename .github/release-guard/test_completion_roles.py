@@ -6,6 +6,7 @@ import pytest
 
 from content_manifest import Refused
 import completion_roles as roles
+from test_role_data_oracle import completion_environment,completion_attempt
 
 ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
 
@@ -27,12 +28,13 @@ def test_all_literals_and_environment_bind_closed_role_and_attempt(case,tmp_path
     ambient={'HOME':'/owned/home','PATH':'/usr/bin:/bin','UNREST_FOREIGN':'must be stripped for stdio'}
     family,role,_=roles.CASES[case]
     for ordinal,(kind,attempt,quota) in enumerate(roles.schedule(case)):
-        body=roles.program(ROOT,parent,case,ordinal)
+        observed=completion_environment(ROOT,parent,case,ordinal,ambient)
+        environment=roles.environment(ROOT,parent,case,ordinal,ambient,observed=observed)
+        body=roles.program(ROOT,parent,case,ordinal,environment)
         ast.parse(body)
-        environment=roles.environment(ROOT,parent,case,ordinal,ambient)
         assert environment['UNREST_NODE_TYPE']==role
         assert environment['UNREST_PROJECT_ID']==family
-        assert environment['UNREST_HANDOFF_PATH']==str(roles.attempt(parent,case,ordinal))
+        assert environment['UNREST_HANDOFF_PATH']==str(completion_attempt(parent,case,ordinal))
         assert Path(environment['UNREST_HANDOFF_PATH']).name==attempt+'__node.json'
         assert ('UNREST_FOREIGN' in environment)==(kind=='http')
         assert quota==0 if role=='validate' else 0<=quota<=2
@@ -40,7 +42,7 @@ def test_all_literals_and_environment_bind_closed_role_and_attempt(case,tmp_path
             assert body=='from unrest_harness.server import main; main()'
             assert environment['PYTHONPATH']==str(ROOT/'src')
         elif family=='crash':
-            assert 'os._exit(73)' in body and repr(str(roles.attempt(parent,case,ordinal))) in body
+            assert 'os._exit(73)' in body and repr(str(completion_attempt(parent,case,ordinal))) in body
         else:
             assert body.count(repr(str(parent/'workspace/barrier')))==2
 
@@ -95,7 +97,9 @@ def test_added_http_families_preserve_original_nodes_and_server_topology():
     for case,(family,role,scenario) in selected.items():
         parent=Path('/owned/case')
         for slot in range(len(roles.schedule(case))):
-            environment=roles.environment(ROOT,parent,case,slot,{'HOME':'/owned/home','PATH':'/usr/bin:/bin'})
+            ambient={'HOME':'/owned/home','PATH':'/usr/bin:/bin'}
+            observed=completion_environment(ROOT,parent,case,slot,ambient)
+            environment=roles.environment(ROOT,parent,case,slot,ambient,observed=observed)
             assert roles.program(ROOT,parent,case,slot)=='from unrest_harness.server import main; main()'
             if family=='restart' and slot>0:
                 assert roles.mode(case,slot)=='orchestrator'
@@ -144,3 +148,32 @@ def test_substantive_defect_keeps_two_distinct_pinned_roles_and_owned_attempts(t
         assert environment['UNREST_HANDOFF_PATH'].endswith('__'+role+'.json')
         assert roles.mode(case,index)==('worker' if role=='work' else 'validator')
         assert not any(key.endswith('_ACP_COMMAND') for key in environment)
+
+
+@pytest.mark.parametrize('family',('ownership','crash','setup','restart','targetless','binding'))
+@pytest.mark.parametrize('mutation',(None,'output','role','provider','command','import'))
+def test_completion_scoped_metadata_preserves_closed_execution_settings(tmp_path,family,mutation):
+    case=next(case for case,row in roles.CASES.items() if row[0]==family and row[1]=='work')
+    ambient={'HOME':'/owned/home','PATH':'/usr/bin:/bin'}
+    observed=completion_environment(ROOT,tmp_path,case,0,ambient)
+    observed.update(UNREST_PROJECT_ID='another-project',UNREST_MISSION_ID='another-mission',
+        UNREST_NODE_ID='another-node',UNREST_HANDOFF_PATH=str(tmp_path/'.unrest/projects/another-project/.unrest-runtime/missions/another-mission/attempts/another-attempt__another-node.json'))
+    if mutation=='output':
+        observed['UNREST_HANDOFF_PATH']=str(tmp_path/'outside.json')
+    elif mutation=='role':
+        observed['UNREST_NODE_TYPE']='validate'
+    elif mutation=='provider':
+        observed['UNREST_WORKER_PROVIDER']='codex'
+    elif mutation=='command':
+        observed['UNREST_WORKER_ACP_COMMAND']='/foreign'
+    elif mutation=='import':
+        observed['PYTHONPATH']='/foreign'
+    if mutation:
+        with pytest.raises(Refused):
+            roles.environment(ROOT,tmp_path,case,0,ambient,observed=observed)
+    else:
+        assert roles.environment(ROOT,tmp_path,case,0,ambient,observed=observed)==observed
+        body=roles.program(ROOT,tmp_path,case,0,observed)
+        ast.parse(body)
+        if family=='crash':
+            assert repr(observed['UNREST_HANDOFF_PATH']) in body and 'os._exit(73)' in body
