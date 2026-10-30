@@ -36,7 +36,7 @@ def state(tmp_path,monkeypatch):
            'plan_script_key':plan_observer.key(file),'plan_parent_key':plan_observer.key(file.parent)}
     host=SimpleNamespace(case=CASES[4],intents={1:value},ledger=ledger,root_birth=parent,actors={},plan_records=[],
         meta={'owned':str(tmp_path)},binding={'entry':{'path':'/sealed/python','sha256':'a'*64}},
-        consume=lambda trace:None,stdio=lambda pid,role:(1,2))
+        consume=lambda trace:None)
     process=identity(child.pid,parent.pid)
     process['namespaces']={'mnt':'sealed-namespace'}
     monkeypatch.setattr(plan_observer,'process_identity',lambda pid:process)

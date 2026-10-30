@@ -980,3 +980,11 @@ does not gain execution permission from Git data: its actual fork/exec must stil
 match the existing closed native-helper allowance, otherwise refusal poisons the
 run. No remote operation or new command form is added. UV, native-refusal, review,
 snapshot and adoption qualifications remain unchanged.
+
+Standard I/O routing is application data inside that compartment. The observer no
+longer reconstructs parent pipe inventories or checks which owned log received
+stdout/stderr, and it retains no unused stdout inode receipt. Initial inherited
+FD closure and prebody extra-descriptor census still protect observer custody;
+the sensitive inventory and multiprocessing descriptor checks remain separate.
+Product tests retain real output, pipe-drain and completion assertions. The guard
+does not certify standard-stream routing or output-value provenance.

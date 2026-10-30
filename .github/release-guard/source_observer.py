@@ -9,7 +9,6 @@ import json
 import os
 from pathlib import Path
 import socket
-import stat
 import struct
 import time
 
@@ -164,30 +163,6 @@ class Observer:
         from console_entries import standalone_environment
         return standalone_environment(self.meta)
 
-    def stdio(self, pid, role, *, input_pipe=False, intent=None):
-        if role=='mcp' and self.case in HTTP_CASES and intent['translated'][3]=='-c':
-            from http_cases import stdio
-            return stdio(self,pid,intent)
-        parent = Path('/proc') / str(process_identity(pid)['ppid']) / 'fd'
-        parent_pipes = set()
-        for fd in parent.iterdir():
-            try:
-                info = fd.stat()
-            except FileNotFoundError:
-                continue
-            if stat.S_ISFIFO(info.st_mode):
-                parent_pipes.add((info.st_dev,info.st_ino))
-        null = Path('/dev/null').stat()
-        for descriptor in (0,1,2):
-            info = (Path('/proc') / str(pid) / 'fd' / str(descriptor)).stat()
-            inherited=(parent/str(descriptor)).stat()
-            if not (stat.S_ISCHR(info.st_mode) and info.st_rdev==null.st_rdev
-                    or stat.S_ISFIFO(info.st_mode) and (info.st_dev,info.st_ino) in parent_pipes
-                    or stat.S_ISREG(info.st_mode) and (info.st_dev,info.st_ino,info.st_mode)==(inherited.st_dev,inherited.st_ino,inherited.st_mode)):
-                raise Refused('source stdio outside actual parent pipe or null descriptor')
-        output=(Path('/proc')/str(pid)/'fd/1').stat()
-        return output.st_dev,output.st_ino
-
     def resolve(self, trace, pid, path, vector, environment, cwd):
         actual_namespaces=process_identity(pid)['namespaces']
         if (actual_namespaces['mnt'] != os.readlink('/proc/self/ns/mnt')
@@ -236,8 +211,6 @@ class Observer:
             desktop_retained(self)
             if intent['role']=='ps' and str(Path(path).resolve(strict=True))!='/usr/bin/ps':
                 raise Refused('desktop retained system ps alias')
-        intent['stdout'] = self.stdio(pid, intent['role'],
-            input_pipe=intent.get('input_pipe',False) or intent['role'] == 'git-command' and intent['command'].stdin is not None,intent=intent)
         intent['consumed'], intent['pid'], intent['birth'] = True, pid, birth
         if intent['role'] in ('sleep', 'session-invalid','ps','uv-cli','terminal-native') or intent['role'].startswith('git-'):
             actual = process_identity(pid)

@@ -263,7 +263,7 @@ def proposal(host, actor, raw):
     if answer is not None and case in ORDINARY and role=='session-invalid':
         host.intents[answer['ticket']]['attempt_path']=expected.argv[0]
     if answer is not None and case in FIXED:
-        host.intents[answer['ticket']].update(fixed_operation=operation,input_pipe=case in STDIO)
+        host.intents[answer['ticket']].update(fixed_operation=operation)
     if answer is not None and case in CLEANUP and role=='cleanup-acp':
         from cleanup_launch import scenario,snapshot_path
         from source_profile import digest

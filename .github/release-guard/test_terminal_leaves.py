@@ -144,7 +144,6 @@ def test_terminal_launch_does_not_grant_other_programs_or_fixture_generations(tm
     actor={'role':'child' if mutation=='descendant' else 'root'}
     if mutation is None:
         assert leaves.proposal(host,actor,raw)['translated']==['/native','-I','-S','-c',body]
-        assert host.intents[1]['merged_output'] is True
     else:
         with pytest.raises(Refused):
             leaves.proposal(host,actor,raw)

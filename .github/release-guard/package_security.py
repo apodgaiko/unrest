@@ -165,5 +165,5 @@ def proposal(host,actor,raw):
     value=build_expected(case,native,pin,vector,tuple(sorted(env.items())),str(workspace),'python-command')
     return admit_expected(host,actor,raw,value,'archive-installed',[native,'-I','-S','-c',translated_code,*tail],
         maximum=limit+1,fields={'security_status':status,'security_operation':'matrix' if case==MATRIX else 'provider',
-            'credential_snapshot':sealed,'merged_output':True})
+            'credential_snapshot':sealed})
 

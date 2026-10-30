@@ -48,4 +48,4 @@ def proposal(host,actor,raw):
     value=build_expected(case,executable,pin,tuple(vector),tuple(sorted(env.items())),str(workspace),
         'native' if case in OPTIONAL else 'python-command')
     translated=vector if case in OPTIONAL else [native,'-I','-S',*vector[1:]]
-    return admit_expected(host,actor,raw,value,role,translated,fields={'merged_output':True})
+    return admit_expected(host,actor,raw,value,role,translated)

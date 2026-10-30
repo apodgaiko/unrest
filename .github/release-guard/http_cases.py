@@ -1,7 +1,6 @@
 """Finite real-MCP supervision fixtures; provider command strings grant no launch."""
 from pathlib import Path
 from mcp_inventory import CASES as INVENTORY
-import stat
 
 from content_manifest import Refused
 from git_observer import image
@@ -63,22 +62,6 @@ def expected(host, actor, raw):
         cwd = str(root)
     value = build_expected(case, executable, pin, vector, tuple(sorted(environment.items())), cwd, kind)
     return value, role, port
-
-
-def stdio(host,pid,row):
-    # Operands come from the independently matched kernel exec intent.
-    if host.case not in CASES or row['case']!=host.case or row['role']!='mcp':
-        raise Refused('HTTP exact prebody output intent')
-    mode = row['translated'][6]
-    log = Path(row['cwd'])/('.'+mode+'-'+str(row['port'])+'.log')
-    info = log.lstat()
-    descriptors = [(Path('/proc')/str(pid)/'fd'/str(fd)).stat() for fd in (0,1,2)]
-    null = Path('/dev/null').stat()
-    if (log.is_symlink() or not stat.S_ISREG(info.st_mode) or info.st_uid!=20000 or info.st_nlink!=1
-            or not stat.S_ISCHR(descriptors[0].st_mode) or descriptors[0].st_rdev!=null.st_rdev
-            or any((value.st_dev,value.st_ino,value.st_mode,value.st_uid)!=(info.st_dev,info.st_ino,info.st_mode,info.st_uid) for value in descriptors[1:])):
-        raise Refused('HTTP exact null and owned merged log descriptors')
-    return info.st_dev,info.st_ino
 
 
 def proposal(host,actor,raw):

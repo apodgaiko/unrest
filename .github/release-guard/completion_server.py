@@ -90,7 +90,7 @@ def proposal(host,actor,raw):
     translated=[native,'-I','-S',*vector[1:]]
     from composed_runtime import bootstrap
     answer=admit_expected(host,actor,raw,value,'mcp' if kind=='http' else 'fixed-inline',translated,
-        fields={'server_slot':slot,'input_pipe':kind=='stdio','server_stdio':kind=='stdio',
+        fields={'server_slot':slot,
             'execution_fixture':bootstrap(host,parent) if case in COMPOSED else None},
         maximum=len(schedule(case))+(len(roles(case)) if case in COMPOSED else 0),port=port)
     return answer

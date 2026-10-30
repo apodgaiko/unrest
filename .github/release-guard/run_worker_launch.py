@@ -152,7 +152,7 @@ def admit_worker(host,actor,raw,home,operation,env,maximum,binding=None,custom=F
             '--executor','executor_fixture:execute' if custom else 'unrest_harness.runtime_executor:execute','--custody-root-id','local:unrest-run-control','--generation','1']
     expected=build_expected(case,native,pin,tuple(vector),tuple(sorted(env.items())),str(home),'python-module',native_digest(Path(host.meta['checkout'])/'src/unrest_harness/run_worker.py'))
     answer=admit_expected(host,actor,raw,expected,'fixed-inline',[native,'-I','-S',*vector[1:]],maximum=maximum,
-                          fields={'run_worker':True,'null_stdio':True,'execution_fixture':binding,'run_id':run,
+                          fields={'run_worker':True,'execution_fixture':binding,'run_id':run,
                               'run_project':arguments.get('project_id'),
                               'run_control':document.get('control_identity_digest')})
     return {**answer,'wait_at_case_close':True} if answer is not None and case==SERVER_INQUIRY else answer

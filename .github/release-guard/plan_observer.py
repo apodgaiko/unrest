@@ -61,7 +61,6 @@ def resolve(host,trace,pid,path,vector,environment,cwd):
     if value['plan_pending']=='blocked':
         value['plan_blocked_key']=key(Path(path))
         return True
-    value['stdout']=host.stdio(pid,value['role'])
     value['consumed'],value['pid'],value['birth']=True,pid,birth
     if value['role']=='plan-python':
         host.profile(pid,value['role'],value['case'],vector,environment,cwd,value['token'])

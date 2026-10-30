@@ -168,35 +168,6 @@ def test_http_proposals_reject_a_leaf_even_with_the_root_birth(tmp_path):
     assert not observer.intents
 
 
-@pytest.mark.parametrize('mutation',[None,'stdin','stderr','owner','hardlink','symlink','foreign-case'])
-def test_http_stdio_requires_exact_null_and_owned_merged_log(prepared,monkeypatch,mutation):
-    import stat
-    host,_=prepared
-    row={'case':host.case,'role':'mcp','cwd':'/owned/workspace','port':12345,
-        'translated':['/native','-I','-S','-c','original','--mode','worker']}
-    log=SimpleNamespace(st_dev=1,st_ino=2,st_mode=stat.S_IFREG|0o644,
-        st_uid=20001 if mutation=='owner' else 20000,st_nlink=2 if mutation=='hardlink' else 1)
-    null=SimpleNamespace(st_mode=stat.S_IFCHR,st_rdev=123)
-    if mutation=='foreign-case':
-        row['case']='foreign'
-    monkeypatch.setattr(Path,'lstat',lambda *args,**kwargs:log)
-    monkeypatch.setattr(Path,'is_symlink',lambda path:mutation=='symlink')
-    def observed(path):
-        if str(path)=='/dev/null' or path.name=='0' and mutation!='stdin':
-            return null
-        if path.name=='2' and mutation=='stderr':
-            return SimpleNamespace(**{**vars(log),'st_ino':3})
-        return log
-    monkeypatch.setattr(Path,'stat',observed)
-    if mutation is None:
-        assert http_cases.stdio(host,123,row)==(1,2)
-    else:
-        with pytest.raises(Refused):
-            http_cases.stdio(host,123,row)
-
-
-
-
 @pytest.mark.parametrize('host',['127.0.0.1',b'127.0.0.1'])
 @pytest.mark.parametrize('port',[12345,'12345'])
 @pytest.mark.parametrize('flags',[0,socket.AI_PASSIVE,socket.AI_PASSIVE|socket.AI_ADDRCONFIG])

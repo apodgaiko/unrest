@@ -45,7 +45,7 @@ def test_error_worker_admission_is_exact_and_single(tmp_path,monkeypatch,case,mu
         result=worker.proposal(host,{},raw)
         assert result['translated']==['/native','-I','-S',*raw['argv'][1:]]
         assert result.get('wait_at_case_close') is (True if case==worker.SERVER_INQUIRY else None)
-        assert host.intents[1]['null_stdio'] and host.intents[1]['run_worker']
+        assert host.intents[1]['run_worker']
     else:
         with pytest.raises(Refused):
             worker.proposal(host,{},raw)

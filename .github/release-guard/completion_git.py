@@ -88,6 +88,6 @@ def proposal(host,actor,raw):
         return None
     intent=host.intents[answer['ticket']]
     intent.update(command=command,repository=str(workspace),operation='completion-fixture' if is_fixture else 'completion-head',
-        fixture_git=is_fixture,fixture_stdio=is_fixture)
+        fixture_git=is_fixture)
     host.git.commands[intent['token']]=intent
     return answer
