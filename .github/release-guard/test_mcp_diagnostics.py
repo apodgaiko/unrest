@@ -11,7 +11,7 @@ from source_observer import Observer
 
 @pytest.mark.parametrize('case', DIAGNOSTICS)
 @pytest.mark.parametrize('change', [None, 'project', 'mission', 'node', 'assignment', 'descendant', 'ACP'])
-def test_diagnostic_route_is_exact_and_has_no_timeout_adapter_authority(tmp_path, monkeypatch, case, change):
+def test_diagnostic_route_keeps_role_budget_and_bounded_metadata_delegation(tmp_path, monkeypatch, case, change):
     import owned_fixture
     import node_launch
     base = tmp_path / 'case'
@@ -40,7 +40,7 @@ def test_diagnostic_route_is_exact_and_has_no_timeout_adapter_authority(tmp_path
         actor['role'] = 'mcp'
     elif change == 'ACP':
         raw['argv'] = ['/native', 'mock.py']
-    if change:
+    if change in ('descendant','ACP'):
         with pytest.raises(Refused):
             proposal(host, actor, raw)
         assert not calls

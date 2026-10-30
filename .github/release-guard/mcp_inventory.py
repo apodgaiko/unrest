@@ -28,16 +28,12 @@ def inventory_proposal(host,actor,raw):
     from owned_fixture import retain
     base=retain(host,Path(raw['cwd']).parent, 20000)
     home=base/'.unrest'
-    project='p-worker' if worker else 'p-terminal-reviewer'
-    runtime=home/'projects'/project/'.unrest-runtime/missions/mission-001'
-    env={'LANG':'C','PATH':host.meta_environment()['PATH'],'UNREST_HOME':str(home),
-         'UNREST_PROJECT_ID':project,'UNREST_MISSION_ID':'mission-001'}
-    if worker:
-        env.update(UNREST_NODE_ID='w-secret',UNREST_NODE_TYPE='work',
-            UNREST_HANDOFF_PATH=str(runtime/'attempts/2026-08-03T00-00-00Z__w-secret.json'),
-            UNREST_NODE_ASSIGNMENT='{"targets":["VAL-001"],"task_type":"work"}')
-    else:
-        env['UNREST_TERMINAL_REVIEW_PATH']=str(runtime/'terminal-reviews/2026-08-03T00-00-00Z.json')
+    env=None
+    if role in ('mcp','git-observe'):
+        from node_environment import scoped,project_path
+        project=project_path(home,raw['environment'].get('UNREST_PROJECT_ID')).name
+        env=scoped(raw['environment'],{'LANG':'C','PATH':host.meta_environment()['PATH']},
+            home,project,'work' if worker else 'terminal_reviewer',module=True)
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
     port,inherited,reference=None,[],None
     if role=='mcp':
@@ -73,7 +69,6 @@ CASES=(*CASES,*DIAGNOSTICS)
 def proposal(host,actor,raw):
     if host.case in INVENTORY_CASES:
         return inventory_proposal(host,actor,raw)
-    import re
     from owned_fixture import retain
     from node_launch import proposal as node
     from ordinary_acp import MOCK
@@ -83,17 +78,13 @@ def proposal(host,actor,raw):
     source_unit(checkout,TEST,PINS[TEST])
     base=retain(host,Path(raw['cwd']).parent, 20000)
     first=case==DIAGNOSTICS[0]
-    project=raw['environment'].get('UNREST_PROJECT_ID','')
-    slug='missing-handoff-regression' if first else 'worker-mcp-timeout-regression'
-    if (case not in DIAGNOSTICS or re.fullmatch(r'[0-9]{8}T[0-9]{6}Z-'+slug,project) is None
-            or raw['environment'].get('UNREST_MISSION_ID')!='mission-001'
-            or raw['environment'].get('UNREST_NODE_ID')!=('w1' if first else 'w-timeout')):
-        raise Refused('diagnostic exact project and node')
+    from node_environment import project_path
+    if case not in DIAGNOSTICS:
+        raise Refused('diagnostic undeclared case')
+    project=project_path(base/'.unrest',raw['environment'].get('UNREST_PROJECT_ID')).name
     if host.fixture_roots.setdefault(('diagnostic-project',case),project)!=project:
         raise Refused('diagnostic project changed')
     module=raw['argv'][1:2]==['-m']
-    if module and raw['environment'].get('UNREST_NODE_ASSIGNMENT')!='{"targets":["VAL-001"],"task_type":"work"}':
-        raise Refused('diagnostic exact assignment')
     if not module:
         records=[row for row in host.intents.values() if row['case']==case and row['role']=='mcp' and row['parent']==actor['birth']]
         if not first or len(records)!=1 or not host.executed(records[0]) or not host.actors[records[0]['pid']]['body_ready']:

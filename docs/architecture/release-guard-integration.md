@@ -1451,3 +1451,13 @@ Private runtime/dependency inventories reuse the manifest reader's held
 no-follow directory acquisition. Their existing file/type/mode/population/byte
 bounds, relative-path order and digest encoding remain; this removes repeated
 absolute-root traversal per file without changing the input receipt format.
+
+
+Inventory/diagnostic MCP fixtures use the same scoped application-metadata
+validator as other owned nodes. Project/date/node spellings and assignment JSON
+contents are not separately predicted. The exact MCP mode, image, complete
+security environment, inherited read pipe, source pins, parent/READY correlation
+and child budgets remain. A diagnostic MCP/adapter pair keeps its selected
+project id; only the missing-handoff case may construct that adapter. The
+intentional pre-READY timeout still requires attributed termination and its real
+numeric parent wait.
