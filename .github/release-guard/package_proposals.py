@@ -12,6 +12,7 @@ from owned_fixture import acquire as acquire_owned
 
 SOURCE_UID=20000
 PREPARED_UID=0
+TEMPORARY_ROOT=Path('/tmp')
 
 
 def owned(path,root):
@@ -35,7 +36,8 @@ def snapshot(host,actor,payload):
     refuse_if(str(source.resolve())!=str(source) or source.name!=expected_name, 'archive original extracted root')
     if case in NEGATIVE:
         owned(source.parent,Path(host.meta['owned']))
-    elif (source.parent.parent!=Path(host.meta['owned'])/'tmp'
+    elif (source.parent.parent!=TEMPORARY_ROOT
+            or [os.stat('/').st_dev,os.stat('/').st_ino]!=host.meta['filesystem_root']
             or not source.parent.name.startswith('unrest-sdist-check-')
             or source.parent.stat().st_uid!=SOURCE_UID or stat.S_IMODE(source.parent.stat().st_mode)!=0o700):
         raise Refused('archive original temporary extraction')

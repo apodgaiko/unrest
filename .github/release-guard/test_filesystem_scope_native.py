@@ -11,6 +11,9 @@ def main():
     from compartment import credentials
     from filesystem_scope import enter
     from namespace_supervisor import run
+    import package_proposals
+    import source_observer  # Preload trusted guard code before discarding the host root.
+    from types import SimpleNamespace
     assert sys.platform == 'linux' and os.getuid() == 0
     with tempfile.TemporaryDirectory(prefix='unrest-filesystem-scope-') as temporary:
         base = Path(temporary)
@@ -19,6 +22,9 @@ def main():
             (base / name).mkdir(mode=0o755)
         (base / 'outside').write_text('public outside test sentinel')
         (base / 'input/member').write_text('public selected input')
+        (base/'input/extracted').mkdir()
+        (base/'input/extracted/member').write_text('public extracted input')
+        (base/'input/candidate.tar.gz').write_text('public archive name control')
         os.chown(base / 'owned', 20000, 20000)
         os.chown(base / 'output', 20001, 20001)
         (base / 'output').chmod(0o700)
@@ -119,11 +125,47 @@ def main():
                 os._exit(code)
             assert os.waitpid(child,0)==(child,0)
 
+        def extraction_scope():
+            # This exercises real private-/tmp acquisition and both UIDs, not
+            # the actor protocol or the separate fifteen-case certification.
+            child=os.fork()
+            if child==0:
+                try:
+                    result=enter({**metadata,'owned':str(base/'archive/owned')},str(base/'support'),base/'output')
+                    source=Path('/tmp/unrest-sdist-check-native/candidate')
+                    writer=os.fork()
+                    if writer==0:
+                        credentials(20000)
+                        source.parent.mkdir(mode=0o700)
+                        source.mkdir()
+                        (source/'member').write_text('public extracted input')
+                        os._exit(0)
+                    assert os.waitpid(writer,0)==(writer,0)
+                    credentials(20001)
+                    host=SimpleNamespace(case=package_proposals.POSITIVE,meta=result,directory=base/'profiles',
+                        fixture_roots={'<prepared-distribution>':{'dist':base/'input','extracted':base/'input/extracted'}},
+                        launch_owner=lambda actor:None)
+                    actor={'role':'archive-checker','body_ready':True,'birth':'scope-control','token':'scope-control'}
+                    answer=package_proposals.snapshot(host,actor,{'path':str(source)})
+                    assert answer['ok'] and (Path(answer['path'])/'member').read_text()=='public extracted input'
+                    assert Path(answer['path']).stat().st_uid==20001
+                    assert source.parent.stat().st_uid==20000
+                    assert source_observer.shape({'path':str(source)},('path',)) is None
+                except BaseException:
+                    traceback.print_exc()
+                    os._exit(1)
+                os._exit(0)
+            assert os.waitpid(child,0)==(child,0)
+
         (base/'negative').mkdir(mode=0o755)
         (base/'negative/owned').mkdir(mode=0o755)
         os.chown(base/'negative/owned',20000,20000)
         run(rejected_generation)
         run(contained)
+        (base/'archive').mkdir(mode=0o755)
+        (base/'archive/owned').mkdir(mode=0o755)
+        os.chown(base/'archive/owned',20000,20000)
+        run(extraction_scope)
         assert (base / 'input/member').read_text() == 'public selected input'
         assert (base / 'owned/created').read_text() == 'owned scratch'
     print('Private filesystem controls passed; actual owned wait zero', flush=True)

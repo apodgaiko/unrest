@@ -1546,3 +1546,13 @@ finite counts remain checked. Retirement selects only the two original
 supersede/cancel cases, the pinned replay script, gate mode and gate g1; both
 fresh calls require their actual preceding parent wait. Public projections
 retain the pinned helper body and separate bundled policy/projects operands.
+
+
+The source archive checker's temporary extraction is under the private
+filesystem's `/tmp`, matching its unchanged `TMPDIR` environment. This directory
+is not an alias for the separate owned pytest temporary tree. Snapshot admission
+binds the observer's current root device/inode to its attested private filesystem,
+then retains the exact temporary prefix, source UID, private mode and archive
+root name. Reference bytes, complete membership, nofollow/race checks and the
+observer-owned immutable snapshot remain mandatory. Negative extraction cases
+retain their existing owned-pytest scope.
