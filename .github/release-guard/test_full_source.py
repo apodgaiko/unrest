@@ -374,3 +374,26 @@ def test_queued_inquiry_fixture_requires_one_actual_parent_handle_and_success(co
     else:
         cases.leave(SERVER_INQUIRY,'passed',{})
         assert waits==[5] and requests==[('case-finish',{'case':SERVER_INQUIRY})]
+
+
+def test_durable_case_finish_waits_its_actual_child_handle_before_sending_completion():
+    import subprocess
+    import sys
+    from types import SimpleNamespace
+    from approval_launch import RUNS
+    from source_root import OriginalCases
+    child=subprocess.Popen([sys.executable,'-c','pass'],stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    calls=[]
+    def request(kind,payload):
+        assert child.returncode==0
+        calls.append((kind,payload))
+    policy=SimpleNamespace(case=RUNS[0],children={child.pid:{'case':RUNS[0],'process':child,'wait_at_case_close':True}},
+        client=SimpleNamespace(request=request))
+    cases=OriginalCases(SimpleNamespace(profile={'cases':[]}))
+    cases.policy=policy
+    try:
+        cases.leave(RUNS[0],'passed',{})
+        assert child.returncode==0 and calls==[('case-finish',{'case':RUNS[0]})]
+    finally:
+        child.wait(timeout=5)

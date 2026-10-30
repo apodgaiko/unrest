@@ -42,9 +42,12 @@ class OriginalCases:
 
     def leave(self,case,outcome,phases):
         from git_policy import FIXTURE_SERVER_INQUIRY as SERVER_INQUIRY
-        if case==SERVER_INQUIRY:
-            owned=[row['process'] for row in self.policy.children.values() if row['case']==case and row.get('wait_at_case_close') is True]
-            if len(owned)!=1 or owned[0].wait(timeout=5)!=0:
+        owned=[row['process'] for row in self.policy.children.values() if row['case']==case and row.get('wait_at_case_close') is True]
+        if case==SERVER_INQUIRY and len(owned)!=1:
+            raise Refused('source queued fixture actual parent completion')
+        for child in owned:
+            code=child.wait(timeout=5)
+            if case==SERVER_INQUIRY and code!=0:
                 raise Refused('source queued fixture actual parent completion')
         payload={'case':case,'outcome':outcome,'phases':phases} if self.normal_outcomes else {'case':case}
         self.policy.client.request('case-finish',payload)

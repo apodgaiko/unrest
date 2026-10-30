@@ -62,7 +62,7 @@ def worker(host,actor,raw):
     answer=admit_worker(host,actor,raw,home,'advance_project',env,1,executor='tests.fixtures.approval_run_executor:execute')
     if answer is not None:
         host.intents[answer['ticket']]['approval_worker']=True
-    return answer
+    return {**answer,'wait_at_case_close':True} if answer is not None else None
 
 
 def relay(host,base,path):

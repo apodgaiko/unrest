@@ -1350,7 +1350,9 @@ waive missing waits.
 The seven durable approval cases use exactly the pinned
 `tests.fixtures.approval_run_executor:execute` entry, one retained run request,
 generation 1, owned home and closed environment. Four success/cancel cases keep
-ordinary original-parent waits. The three intentional owner-SIGKILL cases may
+ordinary original-parent waits. Before case completion the root joins its actual
+retained worker `Popen` handle with a five-second bound; a durable terminal record
+does not substitute for that numeric reap. The three intentional owner-SIGKILL cases may
 adopt exactly its admitted READY MCP and adapter followers into namespace PID 1.
 Birth, UID, generation, inherited PGID/SID and private namespaces must remain
 unchanged except for actual observed PPID 1. If a follower reaches its kernel
