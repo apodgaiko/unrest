@@ -19,7 +19,7 @@ def fixture(tmp_path,monkeypatch):
         'consumed':True,'measurement_roles':('work','validate'),'cwd':str(home),'run_project':'project-one'}
     host=SimpleNamespace(case=runtime.PROJECT,meta={'checkout':str(ROOT)},
         binding={'entry':{'path':'/native/python','sha256':'a'*64}},intents={1:parent},
-        ledger=SimpleNamespace(reaped=lambda *args:True),executed=lambda row:row['consumed'],seen=[])
+        ledger=SimpleNamespace(reaped=lambda *args:True,peer_birth=lambda birth:birth),executed=lambda row:row['consumed'],seen=[])
     actor={'role':'fixed-inline','case':runtime.PROJECT,'token':'worker','birth':birth,'body_ready':True}
     def record(path):
         if path.name=='project.json':

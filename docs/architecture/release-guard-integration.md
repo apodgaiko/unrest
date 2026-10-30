@@ -1472,3 +1472,9 @@ preserves the original case-wide server/query ceilings, and bounds each READY
 worker parent by the largest original per-parent query allowance. Setup literal
 indices and crash slot zero remain exact; actual constructor ordinals still bind
 composed adoption and resumed-signal generations.
+
+An adopted worker's new MCP inventory pipe is acquired against its effective
+ledger peer Birth. Only the existing adoption proof can update that peer; the
+actor's original Birth, original parent and wait lineage remain unchanged.
+Pipe acquisition still checks that exact current Birth before and after the
+pidfd copy, along with descriptor ownership, flags and inode identity.

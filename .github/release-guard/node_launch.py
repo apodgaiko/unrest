@@ -27,7 +27,7 @@ def proposal(host,actor,raw,cwd,ambient,home,project,roles,script,script_pin,scr
             raise Refused('original MCP port or descriptor')
         port,fd=int(argv[-3]),int(argv[-1])
         from cleanup_launch import read_pipe
-        inherited=[read_pipe(actor['birth'],fd)]
+        inherited=[read_pipe(host.ledger.peer_birth(actor['birth']),fd)]
         mode={'work':'worker','validate':'validator','terminal_reviewer':'terminal-reviewer'}[role]
         vector=(native,'-m','unrest_harness','--mode',mode,'--transport','streamable-http','--host','127.0.0.1','--port',str(port),'--sensitive-inventory-fd',str(fd))
         source_unit(Path(host.meta['checkout']),SERVER,SERVER_PIN)

@@ -102,7 +102,7 @@ def fixture(tmp_path,monkeypatch):
     actor['intent']=row
     host=SimpleNamespace(case=cases.HERMETIC,meta={'checkout':str(ROOT)},binding={'entry':{'path':'/native','sha256':'a'*64}},
         fixture_roots={('completion-role',cases.HERMETIC):(str(tmp_path),)},intents={1:row},seen=[],
-        ledger=SimpleNamespace(reaped=lambda *args:True),executed=lambda row:row['consumed'])
+        ledger=SimpleNamespace(reaped=lambda *args:True,peer_birth=lambda birth:birth),executed=lambda row:row['consumed'])
     read=runtime.read_regular
     monkeypatch.setattr(runtime,'read_regular',lambda file,*args,**kwargs:read(file,*args,**{**kwargs,'uid':os.getuid()}))
     def record(path):
@@ -255,3 +255,27 @@ def test_scoped_assignment_content_and_independent_acp_template_remain_data(fixt
     assert runtime.nested(host,actor,raw)['ticket']==3
     with pytest.raises(Refused,match='budget'):
         runtime.nested(host,actor,raw)
+
+
+@pytest.mark.parametrize('adopted,approved',((False,False),(True,True),(True,False)))
+def test_mcp_inventory_acquires_only_the_ledger_approved_current_parent_birth(fixture,monkeypatch,adopted,approved):
+    import cleanup_launch
+    host,actor,raw,_=fixture
+    original=actor['birth']
+    current=SimpleNamespace(pid=original.pid,parent=1) if adopted else original
+    host.ledger.peer_birth=lambda birth:current if approved else birth
+    seen=[]
+    def read_pipe(birth,fd):
+        seen.append(birth)
+        if birth is not current:
+            raise Refused('inherited Unix stream birth changed')
+        return [fd,10,20]
+    monkeypatch.setattr(cleanup_launch,'read_pipe',read_pipe)
+    if adopted and not approved:
+        with pytest.raises(Refused,match='birth changed'):
+            runtime.nested(host,actor,raw)
+        assert not host.seen
+    else:
+        assert runtime.nested(host,actor,raw)['ticket']==2
+    assert seen==[current if approved else original]
+    assert actor['birth'] is original and host.intents[1]['birth'] is original
