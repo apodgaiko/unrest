@@ -18,7 +18,6 @@ class Client:
         self.nonce, self.token, self.generation = profile['nonce'], profile['token'], profile['generation']
         self.path = str(directory / 'control.sock')
         self.lock = threading.RLock()
-        self.local = threading.local()
         from cleanup_launch import ALL_CASES as CLEANUP_CASES
         self.seconds = 8 if profile.get('case') in CLEANUP_CASES else 4
         # Payload wrappers must not mediate their own fixed private channel.
@@ -27,33 +26,29 @@ class Client:
 
     def request(self, kind: str, payload: dict) -> dict:
         with self.lock:
-            self.local.active = True
+            request = {'pid': self.pid(), 'nonce': self.nonce, 'token': self.token,
+                       'generation': self.generation, 'id': self.random(16).hex(),
+                       'kind': kind, 'payload': payload}
+            from cohort_controller import WAIVED
+            from composed_cases import ADOPT
+            seconds=22 if kind=='case-finish' and payload.get('case') in (*WAIVED,*ADOPT) else self.seconds
+            stream = self.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             try:
-                request = {'pid': self.pid(), 'nonce': self.nonce, 'token': self.token,
-                           'generation': self.generation, 'id': self.random(16).hex(),
-                           'kind': kind, 'payload': payload}
-                from cohort_controller import WAIVED
-                from composed_cases import ADOPT
-                seconds=22 if kind=='case-finish' and payload.get('case') in (*WAIVED,*ADOPT) else self.seconds
-                stream = self.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                try:
-                    stream.settimeout(seconds)
-                    self.connect(stream, self.path)
-                    peer(stream, self.observer, 20001)
-                    frame = Frame(stream, RESPONSE_LIMIT, seconds=seconds)
-                    frame.answer(request)
-                    while not frame.send():
-                        self.sleep(.0001)
-                    response = None
-                    while response is None:
-                        response = frame.read()
-                        self.sleep(.0001)
-                    peer(stream, self.observer, 20001)
-                    answer = verify_reply(response, request)
-                    if answer.get('ok') is not True:
-                        raise Refused('bootstrap observer refused operation')
-                    return answer
-                finally:
-                    self.close(stream)
+                stream.settimeout(seconds)
+                self.connect(stream, self.path)
+                peer(stream, self.observer, 20001)
+                frame = Frame(stream, RESPONSE_LIMIT, seconds=seconds)
+                frame.answer(request)
+                while not frame.send():
+                    self.sleep(.0001)
+                response = None
+                while response is None:
+                    response = frame.read()
+                    self.sleep(.0001)
+                peer(stream, self.observer, 20001)
+                answer = verify_reply(response, request)
+                if answer.get('ok') is not True:
+                    raise Refused('bootstrap observer refused operation')
+                return answer
             finally:
-                self.local.active = False
+                self.close(stream)

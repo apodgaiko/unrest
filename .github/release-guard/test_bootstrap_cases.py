@@ -116,15 +116,18 @@ def test_original_fresh_probe_configuration_binding_and_render(fresh, case):
     assert dict(value.environment)['CODEX_CONFIG'] == json.dumps(config.thread_config(home), sort_keys=True)
 
 
-def test_fresh_configuration_case_is_closed_and_callback_free():
-    from test_controlled_catalogue import configured, STARTUP_FAILURE
+def test_live_configuration_selection_is_closed_and_callback_free(fresh):
+    from controlled_cases import eligible,STARTUP_FAILURE
+    from controlled_startup import expected_entry
     class Trap:
         def __hash__(self):
             pytest.fail('case hashing callback')
-    assert configured(BOOTSTRAP[0]) is True and configured(STARTUP_FAILURE) is False
-    for case in ('foreign', Trap()):
-        with pytest.raises(Refused):
-            configured(case)
+    assert not eligible(BOOTSTRAP[0]) and eligible(STARTUP_FAILURE)
+    assert not eligible('foreign') and not eligible(Trap())
+    binding,_,_,home=fresh
+    for variant in (True,-1,4,1.5,Trap()):
+        with pytest.raises(Refused,match='finite configuration variant'):
+            expected_entry(BOOTSTRAP[0],binding.checkout,home,'/native/python','a'*64,backend=True,variant=variant)
 
 
 @pytest.mark.parametrize('case', __import__('test_controlled_catalogue').POPULATED)

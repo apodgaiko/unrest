@@ -53,9 +53,6 @@ class Policy:
             pass
         raise Refused(code)
 
-    def private_call(self):
-        return getattr(self.client.local,'active',False) is True
-
     def popen(self, args):
         if self.profile['role'] not in PROCESS_OWNERS or self.case is None:
             raise Refused('source undeclared process role')
