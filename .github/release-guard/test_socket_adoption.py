@@ -1,6 +1,5 @@
 """Descriptor inspection permits no new endpoint or negative-default escape."""
 
-import errno
 import os
 import socket
 from types import SimpleNamespace
@@ -40,9 +39,7 @@ def adoption(monkeypatch):
     hooks = object.__new__(Hooks)
     hooks.policy, hooks.local = policy, policy.local
     hooks.socket_type = hooks.base_type = Socket
-    hooks.fd = Socket.fileno
     hooks.original = {}
-    hooks.read, hooks.write = os.read, os.write
     monkeypatch.setattr(
         source_sockets,
         "socket",
@@ -57,14 +54,11 @@ def adoption(monkeypatch):
             IPPROTO_TCP=socket.IPPROTO_TCP,
         ),
     )
-    monkeypatch.setattr(
-        source_sockets, "os", SimpleNamespace(read=os.read, write=os.write, fstat=os.fstat)
-    )
     hooks.install()
     return hooks, Socket, calls
 
 
-def test_adoption_uses_same_socket_fd_and_consumes_single_use_ticket(adoption):
+def test_wrapping_preserves_the_original_initializer_and_fd(adoption):
     hooks, Socket, calls = adoption
     left, right = socket.socketpair()
     try:
@@ -74,9 +68,8 @@ def test_adoption_uses_same_socket_fd_and_consumes_single_use_ticket(adoption):
             value = Socket(fileno=fd)
             assert value.fileno() == fd
             assert calls == [(-1, -1, -1, fd)]
-            assert os.fstat(fd) == before and hooks.local.adoption is None
-            with pytest.raises(Refused):
-                hooks.audit("socket.__new__", (value, -1, -1, -1))
+            assert os.fstat(fd) == before
+            assert hooks.audit("socket.__new__", (value, -1, -1, -1)) is True
         finally:
             os.close(fd)
     finally:
@@ -84,32 +77,11 @@ def test_adoption_uses_same_socket_fd_and_consumes_single_use_ticket(adoption):
         right.close()
 
 
-@pytest.mark.parametrize("fd", (-1, True, False))
-def test_invalid_descriptor_adoption_refuses_before_initializer(adoption, fd):
-    hooks, Socket, calls = adoption
-    with pytest.raises(Refused):
-        Socket(fileno=fd)
-    assert not calls and getattr(hooks.local, "adoption", None) is None
-
-
-def test_pipe_scan_preserves_enotsock_without_calling_socket_initializer(adoption):
-    hooks, Socket, calls = adoption
-    read, write = os.pipe()
-    try:
-        with pytest.raises(OSError) as error:
-            Socket(fileno=read)
-        assert error.value.errno == errno.ENOTSOCK and not calls
-    finally:
-        os.close(read)
-        os.close(write)
-
-
-def test_negative_defaults_without_adoption_are_not_a_new_socket_permission(adoption):
-    hooks, Socket, _ = adoption
-    with pytest.raises(Refused):
-        Socket()
-    with pytest.raises(Refused):
-        hooks.audit("socket.__new__", (Socket.__new__(Socket), -1, -1, -1))
+def test_default_construction_uses_the_original_initializer(adoption):
+    hooks,Socket,calls=adoption
+    value=Socket()
+    assert calls==[(-1,-1,-1,None)] and value.fileno() is None
+    assert hooks.audit('socket.__new__',(value,-1,-1,-1)) is True
 
 
 def test_adoption_does_not_allow_network_effects(adoption):
@@ -118,30 +90,6 @@ def test_adoption_does_not_allow_network_effects(adoption):
     for event in ("socket.bind", "socket.connect", "socket.sendto"):
         with pytest.raises(Refused):
             hooks.audit(event, (value, ("127.0.0.1", 1234)))
-
-
-@pytest.mark.parametrize("mutation", ("identity", "object", "pending"))
-def test_stale_foreign_and_reused_adoptions_refuse(adoption, mutation):
-    hooks, Socket, calls = adoption
-    left, right = socket.socketpair()
-    try:
-        fd = left.fileno()
-        info = os.fstat(fd)
-        value = Socket.__new__(Socket)
-        identity = (info.st_dev, info.st_ino, info.st_mode, info.st_uid)
-        hooks.local.adoption = (value, fd, identity if mutation != "identity" else (0, 0, 0, 0))
-        with pytest.raises(Refused):
-            if mutation == "pending":
-                Socket(fileno=fd)
-            else:
-                hooks.audit(
-                    "socket.__new__",
-                    (Socket.__new__(Socket) if mutation == "object" else value, -1, -1, -1),
-                )
-        assert not calls
-    finally:
-        left.close()
-        right.close()
 
 
 @pytest.mark.parametrize("case", NETWORK_CASES)

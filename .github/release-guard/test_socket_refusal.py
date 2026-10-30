@@ -30,7 +30,6 @@ def installed(monkeypatch):
     hooks.read=lambda *args:None
     hooks.write=lambda *args:None
     monkeypatch.setattr(source_sockets,'socket',SimpleNamespace(socket=Socket))
-    monkeypatch.setattr(source_sockets,'os',SimpleNamespace())
     hooks.install()
     return hooks,policy,records,Socket
 
