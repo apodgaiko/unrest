@@ -572,8 +572,8 @@ class Observer:
                     continue
                 admitted=self.admission.admit(frame)
                 from cohort_controller import WAIVED
-                from composed_cases import ADOPT
-                if actor['role']=='root' and admitted['kind']=='case-finish' and self.case in (*WAIVED,*ADOPT):
+                from composed_adoption import CLOSEOUT
+                if actor['role']=='root' and admitted['kind']=='case-finish' and self.case in (*WAIVED,*CLOSEOUT):
                     frame.seconds=22
                 channel['request'] = admitted
                 self.controls.append({**admitted, 'observed_monotonic_ns': time.monotonic_ns()})

@@ -28,9 +28,9 @@ def source_files(monkeypatch):
 
 @pytest.mark.parametrize(
     "mutation",
-    [None, "handoff", "mcp_receipt", "frames", "delay", "many", "raw", "linked", "mode", "outside"],
+    [None, "handoff", "mcp_receipt", "frames", "delay", "many", "raw", "linked", "mode", "outside", "too-large"],
 )
-def test_scenario_is_inert_owned_bounded_protocol_data(tmp_path, monkeypatch, mutation):
+def test_scenario_keeps_current_bytes_with_owned_bounded_acquisition(tmp_path, monkeypatch, mutation):
     source_files(monkeypatch)
     base = tmp_path / "pytest/case"
     base.mkdir(parents=True)
@@ -44,6 +44,8 @@ def test_scenario_is_inert_owned_bounded_protocol_data(tmp_path, monkeypatch, mu
         value["events"] *= 4
     elif mutation == "raw":
         value["raw_frame"] = "x" * 70001
+    elif mutation == "too-large":
+        value["raw_frame"] = "x" * 131072
     file.write_text(json.dumps(value))
     if mutation == "linked":
         os.link(file, base / "alias")
@@ -52,7 +54,7 @@ def test_scenario_is_inert_owned_bounded_protocol_data(tmp_path, monkeypatch, mu
     elif mutation == "outside":
         file = tmp_path / "scenario.json"
         file.write_text(json.dumps(value))
-    if mutation is None:
+    if mutation not in ('linked','mode','outside','too-large'):
         assert wire.scenario(file, tmp_path) == file.read_bytes()
         value["raw_frame"] = "x" * 70000
         file.write_text(json.dumps(value))
@@ -291,7 +293,7 @@ def test_extra_wire_catalogue_matches_the_unmodified_original_collection(monkeyp
 
 @pytest.mark.parametrize('case',wire.RUNNER)
 @pytest.mark.parametrize('mutation',(None,'handoff','receipt','ordering','command','frame','events'))
-def test_runner_scenario_is_separate_and_cannot_widen_wire_authority(tmp_path,monkeypatch,case,mutation):
+def test_runner_keeps_protocol_data_without_reconstructing_application_results(tmp_path,monkeypatch,case,mutation):
     import os
     from tests.test_provider_review_frames import malformed
     frame=malformed('result',{})
@@ -315,9 +317,7 @@ def test_runner_scenario_is_separate_and_cannot_widen_wire_authority(tmp_path,mo
     (tmp_path/'scenario.json').write_bytes(body)
     original=wire.read_regular
     monkeypatch.setattr(wire,'read_regular',lambda path,bound,**kwargs:original(path,bound,**{**kwargs,'uid':os.getuid()}))
-    if mutation is None:
-        assert wire.runner_scenario(case,tmp_path)==body
-        assert case not in wire.CASES
-    else:
-        with pytest.raises(Refused):
-            wire.runner_scenario(case,tmp_path)
+    assert wire.runner_scenario(case,tmp_path)==body
+    assert case not in wire.CASES
+    with pytest.raises(Refused):
+        wire.runner_scenario('foreign',tmp_path)

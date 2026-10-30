@@ -731,11 +731,11 @@ specifications and unknown/reordered fields, and requires exact row exhaustion.
 It evaluates no source expression and derives no permission rows from a template.
 
 The three additional wire-helper consumers in provider_review_frames retain the
-same pinned transport, inert scenario schema, sequential quota and actual waits.
+same pinned transport, bounded byte-current scenario, sequential quota and actual waits.
 Their 30 explicit original parameter nodes are checked against ordinary pytest
 collection and the helper call sites. The five actual-runner scenarios remain a
-separate family; their handoff/receipt schema is not admitted by the wire-only
-boundary. The repository contract's two readonly status commands use its pinned
+separate launch family; scenario fields do not confer another launch right.
+The repository contract's two readonly status commands use its pinned
 source owner and the existing public-history projection, without helper authority.
 
 A trusted namespace supervisor primitive is being validated separately from
@@ -780,10 +780,10 @@ identities. This exception applies only to these native Git queries.
 
 The five original matching-ID runner parameters reuse cleanup transport custody,
 with their separately pinned approval fixture and exact Git commit arguments.
-Their separate scenario schema admits only one inert response envelope, the
-selected ordering, and the owned handoff/receipt paths. It retains bounded
-protocol data without treating it as launch permission. Existing wire-only cases
-still reject all handoff, receipt and frame-program fields. No external review
+Their bounded scenario bytes retain the actual response envelope, ordering and
+handoff/receipt data without treating them as launch permission. The original
+tests certify those application results; the guard does not reconstruct them.
+No external review
 or denied-review retry is introduced by these controlled fixture cases.
 
 Three further original HTTP families share the same role-server constructor:
@@ -1291,7 +1291,7 @@ immutable snapshot to the pinned local cleanup script. It no longer predicts
 raw protocol/progress/no-handoff/receipt values. That script can affect writable
 private compartment scratch, not protected host/USER data, immutable inputs or
 observer profiles. Original receipt, report, completion and cleanup assertions
-remain mandatory. RUNNER review scenarios retain their exact inert-frame checks.
+remain mandatory. RUNNER review scenarios use the same byte-preservation rule.
 Directory/metadata acquisition and SHA-256 syntax checks share one implementation;
 retired delegated fixed-inline entries no longer duplicate their actual routers.
 
@@ -1299,13 +1299,13 @@ Approval source fixtures use the compartment's short `/tmp` as TMPDIR, avoiding
 Unix socket pathname overflow without changing the product or exposing host tmp.
 Named Unix IPC is delegated from the native audit hook to an authenticated
 observer decision, only for the controlled approval test module. Bind requires
-the root or the exact READY-bound controlled durable worker
-and limited to the two original temporary-directory prefixes, a canonical
+the root or the exact READY-bound controlled durable worker and is limited to
+the two original temporary-directory prefixes, a canonical
 UID-20000/mode-0700 directory and the fixed `control` leaf. Connection requires
 the retained bind generation and a UID-20000/mode-0600 socket. Other named Unix
 effects still poison execution. This is local fixture IPC, not native provider
-approval acceptance. The original review-count regression admits 65 inert
-fixture events only for its exact case; the original 64-review assertion stays.
+approval acceptance. The original review-count regression supplies 65 fixture
+events; its actual 64-review assertion stays.
 
 CI mutation fixtures can separate the current three-command static-check step
 into three equivalent steps before applying their original command mutations.
@@ -1319,8 +1319,20 @@ The copied-repository CI mutation cases admit only initialization, the installed
 must equal the sealed candidate before imports normalize to those sealed bytes;
 the intentionally modified workflow/documentation and original cwd remain.
 Historical crosswalk queries remain confined to pinned public v0.2.0 paths.
-The denial runner admits its fixed idle process and inert denial-only transport;
+The denial runner admits its fixed idle process and pinned local review transport;
 neither these declarations nor own-PID signal-zero probes accept a denied review.
+
+Review-wire, RUNNER and denial scenarios are bounded fixture data. The observer
+keeps acquired bytes unchanged in its protected snapshot; path, no-alias,
+UID-20000, mode-0644 and 131,072-byte checks remain. It no longer predicts JSON
+fields, delays, review status, ordering or handoff/receipt results. The pinned
+fixture has no eval, exec, subprocess or scenario-selected provider command.
+Previously forbidden fields may select its existing private scratch writes or
+fixed local worker `end_node` branch; these effects are contained by the private
+filesystem/network boundary and are not necessarily confined to one case root.
+They cannot write protected source, observer profiles or USER data, acquire new
+child authority, retry a native review or prove provider acceptance. Original
+denial, invalid-context, review-count, completion and cleanup assertions remain.
 
 The nine controlled approval-owner subprocess cases bind one parent-lifetime MCP
 entry, one pinned synthetic ACP adapter, a reconstructed transport relay and its

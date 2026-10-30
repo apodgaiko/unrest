@@ -1,11 +1,9 @@
 """Original controlled review-wire fixtures; no external reviewer is launched."""
 import hashlib
-import json
 from pathlib import Path
 
 from case_inventory import identity
 from content_manifest import Refused, read_regular
-from control_transport import unique
 from launch_policy import build_expected,source_unit,admit_expected
 
 TEST='tests/test_provider_review.py'
@@ -49,17 +47,7 @@ def scenario(file,owned,case=None):
     if (str(file.resolve())!=str(file) or file.name!='scenario.json'
             or not file.parent.is_relative_to(owned/'pytest') or file.parent==owned/'pytest'):
         raise Refused('review-wire owned scenario path')
-    body,info,_=read_regular(file,131072,uid=20000,mode=0o644)
-    value=json.loads(body,object_pairs_hook=unique)
-    if (len(body)!=info.st_size or type(value) is not dict or set(value)!={'events','delay','raw_frame'}
-            or type(value['events']) is not list or len(value['events'])>(65 if case==COUNT_CASE else 3)
-            or type(value['delay']) is not int or value['delay'] not in (0,30)
-            or value['raw_frame'] is not None and (type(value['raw_frame']) is not str or len(value['raw_frame'])>70000)
-            or type(value['raw_frame']) is str and len(value['raw_frame'].encode())>131072):
-        raise Refused('review-wire inert scenario schema or bytes')
-    # No handoff, MCP URL, frame program or command fields: these inputs only
-    # produce fixture protocol bytes and the original finite sleep.
-    return body
+    return read_regular(file,131072,uid=20000,mode=0o644)[0]
 
 
 RUNNER=tuple(FRAMES+'::test_actual_runner_matching_id_order_and_owned_cleanup['+value+']'
@@ -69,20 +57,7 @@ RUNNER=tuple(FRAMES+'::test_actual_runner_matching_id_order_and_owned_cleanup['+
 def runner_scenario(case,base):
     if case not in RUNNER:
         raise Refused('review runner exact case')
-    body,_,_=read_regular(base/'scenario.json',131072,uid=20000,mode=0o644)
-    value=json.loads(body,object_pairs_hook=unique)
-    if (type(value) is not dict or set(value)!={'events','frames','ordering','handoff','mcp_receipt'}
-            or value['events']!=[] or type(value['frames']) is not list or len(value['frames'])!=1
-            or value['ordering']!=case.rsplit('[',1)[1][:-1]
-            or value['handoff']!=str(base/'home/projects/project/.unrest-runtime/missions/mission-001/attempts/attempt-1__w1.json')
-            or value['mcp_receipt']!=str(base/'mcp-receipt')):
-        raise Refused('review runner inert scenario scope')
-    frame=value['frames'][0]
-    if (type(frame) is not dict or set(frame)!={'jsonrpc','method','params','id','result'}
-            or frame['jsonrpc']!='2.0' or frame['method']!='session/update' or frame['id']!='$prompt_id'
-            or frame['result']!={} or type(frame['params']) is not dict):
-        raise Refused('review runner finite response envelope')
-    return body
+    return read_regular(base/'scenario.json',131072,uid=20000,mode=0o644)[0]
 
 
 def proposal(host,actor,raw):
@@ -147,17 +122,6 @@ def denial_proposal(host,actor,raw):
         env=environment(host.meta_environment(),base/'home','project','w1','work','attempt-1')
         env.update(INITIAL_AGENT_MODE='agent',CODEX_CONFIG='{"approval_policy":"on-request","model_reasoning_effort":"medium","sandbox_mode":"workspace-write"}')
         body,_,_=read_regular(base/'scenario.json',131072,uid=20000,mode=0o644)
-        value=json.loads(body,object_pairs_hook=unique)
-        handoff=str(base/'home/projects/project/.unrest-runtime/missions/mission-001/attempts/attempt-1__w1.json') if case==DENIAL[0] else None
-        if (type(value) is not dict or set(value)!={'events','delay','handoff'} or value['delay']!=30
-                or value['handoff']!=handoff or type(value['events']) is not list or len(value['events'])!=1):
-            raise Refused('denial inert scenario exact handoff')
-        try:
-            denied=value['events'][0]['update']['rawInput']['review']['status']=='denied'
-        except (KeyError,TypeError):
-            denied=False
-        if not denied:
-            raise Refused('denial scenario cannot approve')
         snapshot=host.directory/('denial-'+hashlib.sha256(case.encode()).hexdigest()+'.json')
         role,kind,payload='review-wire','python-script',PIN
     expected=build_expected(case,native,pin,vector,tuple(sorted(env.items())),cwd,kind,payload)
