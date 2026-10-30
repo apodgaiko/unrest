@@ -1,10 +1,8 @@
 """Original fresh-process inspections and sealed-patch refusal replay."""
-import json
 from pathlib import Path
 
-from content_manifest import Refused,read_regular
+from content_manifest import Refused
 from owned_fixture import retain
-from control_transport import unique
 from launch_policy import build_expected,source_unit,literal
 
 FRONTIER='tests/test_coordinator.py::TestCurrentEvidenceFrontier::test_frontier_reconstructs_byte_identically_in_fresh_interpreters'
@@ -53,8 +51,4 @@ def expected(host,argv,cwd,environment,native,pin):
     record=home/'projects'/project_id/'.unrest-runtime/project.json'
     if record.resolve()!=record:
         raise Refused('inspection aliased project record')
-    raw,_,_=read_regular(record,65536,uid=OWNER)
-    value=json.loads(raw,object_pairs_hook=unique)
-    if type(value) is not dict or value.get('id')!=project_id or value.get('workspace_dir')!=str(root/'workspace'):
-        raise Refused('inspection actual original project identity')
     return build_expected(case,native,pin,vector,tuple(sorted(environment.items())),expected_cwd,'python-script' if case==SEALED else 'python-command',REPLAY_PIN if case==SEALED else None)

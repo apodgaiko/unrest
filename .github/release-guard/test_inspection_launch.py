@@ -42,7 +42,7 @@ def fixture(tmp_path,monkeypatch,case):
 
 
 @pytest.mark.parametrize('case',inspection.CASES)
-def test_original_byte_and_operand_parity_requires_real_project_record(tmp_path,monkeypatch,case):
+def test_original_byte_and_operand_parity_binds_owned_project_path(tmp_path,monkeypatch,case):
     host,argv,cwd,env,record=fixture(tmp_path,monkeypatch,case)
     value=inspection.expected(host,argv,cwd,env,argv[0],'a'*64)
     assert value.argv==tuple(argv) and value.cwd==cwd
@@ -69,5 +69,9 @@ def test_inspection_cannot_borrow_foreign_or_stale_project_input(tmp_path,monkey
         host.fixture_roots[case]=('foreign',1,1)
     else:
         argv[-1]='../foreign'
-    with pytest.raises((Refused,FileNotFoundError)):
-        inspection.expected(host,argv,cwd,env,argv[0],'a'*64)
+    if mutation in ('id','workspace','missing'):
+        value=inspection.expected(host,argv,cwd,env,argv[0],'a'*64)
+        assert value.argv==tuple(argv)
+    else:
+        with pytest.raises((Refused,FileNotFoundError)):
+            inspection.expected(host,argv,cwd,env,argv[0],'a'*64)

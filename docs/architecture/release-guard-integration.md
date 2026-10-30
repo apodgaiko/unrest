@@ -1003,3 +1003,17 @@ Available descriptors remain subject to compartment entry and inherited-inventor
 checks; multiprocessing retains its independent open-file/cookie recensus.
 Bind/connect and resolver restrictions are unchanged, as are session roles that
 do not install these Hooks. Wrapping a descriptor grants no new connection route.
+
+Storage-reader admission pins the original read-only program and the current
+owned fixture's canonical regular target. It no longer predicts expected file
+contents, nesting depth or relative-versus-absolute operand spelling. Those are
+atomic-write contracts checked by the unchanged source tests after the actual
+fresh-process read. Per-case reader counts, exact environment/image/flags and
+current fixture generation remain; this permission grants no executable body
+from file data and no access outside the acquired fixture.
+
+Fresh inspection leaves likewise bind their original program and scoped canonical
+home/project paths without parsing project JSON to predict its ID or workspace
+value. The product owns malformed/missing-record behavior and the original
+fresh-process reconstruction and sealed-patch assertions. Fixture generation,
+path-alias refusal, exact program/environment and finite child counts remain.
