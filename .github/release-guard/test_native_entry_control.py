@@ -19,7 +19,7 @@ import sys
 import time
 import traceback
 
-CASES = ('product-order-resolver-positive', 'product-order-resolver-fallback', 'product-order-positive', 'product-order-fallback', 'fastpath-positive', 'compile-bytes', 'compile-current', 'positive', 'caught-process', 'caught-network', 'bad-case', 'bad-argv',
+CASES = ('private-network-positive','private-unix-path','private-unix-abstract','private-unix-prefix','private-process','product-order-resolver-positive', 'product-order-resolver-fallback', 'product-order-positive', 'product-order-fallback', 'fastpath-positive', 'compile-bytes', 'compile-current', 'positive', 'caught-process', 'caught-network', 'bad-case', 'bad-argv',
          'bad-flags', 'bad-identity', 'bad-native', 'bad-entry', 'bad-nonce',
          'bad-token', 'bad-observer', 'extra-fd', 'bad-bootstrap', 'bad-environment', 'bad-cwd',
          'source-reject-control', 'source-reject-unknown', 'source-reject-profile')
@@ -33,6 +33,13 @@ def worker(case, binding, output):
     from test_native_profile import BODIES
     from process_ledger import Birth, Ledger, canonical
 
+    network_before=os.readlink('/proc/self/ns/net')
+    if case.startswith('private-'):
+        import ctypes
+        from network_scope import configure
+        if ctypes.CDLL(None,use_errno=True).unshare(0x40000000):
+            raise RuntimeError('private native-control network namespace')
+        configure(network_before)
     root = Path(binding['profiles'])
     if case.startswith('source-reject-'):
         binding = binding['production']
@@ -100,7 +107,8 @@ def worker(case, binding, output):
                    'argv': [native['path'], '-I', '-S', '-c', program], 'environment': {}, 'cwd': os.getcwd(),
                    'flags': [1, 1, 0], 'native': native['path'], 'native_sha256': native['sha256'],
                    'entry_sha256': binding['bootstrap']['sha256'], 'nonce': nonce, 'token': token,
-                   'seal': seal, 'generation': 1, 'mount_namespace': os.readlink('/proc/self/ns/mnt')}
+                   'seal': seal, 'generation': 1, 'mount_namespace': os.readlink('/proc/self/ns/mnt'),
+                   'network_before':network_before}
         if case == 'source-reject-unknown':
             profile['schema'] = 'unknown'
         elif case == 'source-reject-profile':
@@ -201,13 +209,14 @@ def worker(case, binding, output):
         consume(trace)
         raw = result['root_parent_wait_raw']
         actual_ready = ledger.process(birth).stage
-        expected_status = 0 if case in ('positive','fastpath-positive','product-order-positive','product-order-resolver-positive') else 86 << 8
+        positive=case in ('positive','fastpath-positive','product-order-positive','product-order-resolver-positive','private-network-positive')
+        expected_status = 0 if positive else 86 << 8
         if raw != expected_status or result['poison']:
             raise RuntimeError('native controlled return or trace refused')
         if case in BODIES:
             if next_control != 1 or failures:
                 raise RuntimeError('native readiness order incomplete')
-            marker = b'NATIVE_BODY_OK' if case in ('positive','fastpath-positive','product-order-positive','product-order-resolver-positive') else b'REFUSAL_CAUGHT'
+            marker = b'NATIVE_BODY_OK' if positive else b'REFUSAL_CAUGHT'
             if marker not in captured:
                 raise RuntimeError('native controlled body absent')
         elif b'NATIVE_BODY_OK' in captured or b'UNAPPROVED_BODY' in captured:

@@ -1,5 +1,8 @@
 """Network namespace containment; application TCP topology is not certification."""
 import os
+import fcntl
+import socket
+import struct
 from pathlib import Path
 from content_manifest import Refused
 
@@ -33,3 +36,19 @@ def isolated(before):
                 or fields[0]!='0'*31+'1' and not int(fields[8],16)&0x200):
             raise Refused('source external IPv6 route')
     return namespace
+
+
+def configure(before):
+    if os.getuid()!=0:
+        raise Refused('private network setup requires its trusted root')
+    isolated(before)
+    with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as control:
+        request=struct.pack('16sH14x',b'lo',0)
+        current=fcntl.ioctl(control.fileno(),0x8913,request)
+        flags=struct.unpack_from('H',current,16)[0]
+        fcntl.ioctl(control.fileno(),0x8914,struct.pack('16sH14x',b'lo',flags|1))
+        # glibc AI_ADDRCONFIG excludes 127.0.0.1 itself. A second loopback
+        # address supplies real IPv4 discovery without another interface/route.
+        fcntl.ioctl(control.fileno(),0x8916,struct.pack('16sH2x4s16x',
+            b'lo:guard',socket.AF_INET,socket.inet_aton('127.0.0.2')))
+    return isolated(before)

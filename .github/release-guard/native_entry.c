@@ -16,7 +16,7 @@
 #ifndef GUARD_CONTROL_SOCKET
 #error fixed observer channel required
 #endif
-static int entering = 0, entered = 0, poisoned = 0;
+static int entering = 0, entered = 0, poisoned = 0, private_compartment = 0;
 static _Thread_local int checking = 0;
 static PyObject *policy = NULL, *script_target = NULL;
 static int forbidden(const char *event) {
@@ -35,6 +35,25 @@ static int guard_audit(const char *event, PyObject *args, void *unused) {
         PyTuple_GET_SIZE(args) == 2 && PyUnicode_Check(PyTuple_GET_ITEM(args,1)) &&
         PyUnicode_CompareWithASCIIString(PyTuple_GET_ITEM(args,1),GUARD_CONTROL_SOCKET) == 0)
         return 0;  /* Only the fixed protected observer channel, never a caller path. */
+    if (entered && private_compartment && !Py_IsFinalizing() && !strncmp(event,"socket.",7)) {
+        int address_event = !strcmp(event,"socket.bind") || !strcmp(event,"socket.connect") ||
+            !strcmp(event,"socket.sendto") || !strcmp(event,"socket.sendmsg");
+        if (!address_event) return 0;
+        if (PyTuple_Check(args) && PyTuple_GET_SIZE(args) == 2) {
+            PyObject *address = PyTuple_GET_ITEM(args,1);
+            if (PyTuple_CheckExact(address) || (address == Py_None && !strcmp(event,"socket.sendmsg")))
+                return 0;
+            if (!strcmp(event,"socket.connect")) {
+                if (PyUnicode_CheckExact(address) &&
+                    PyUnicode_CompareWithASCIIString(address,GUARD_CONTROL_SOCKET) == 0) return 0;
+                if (PyBytes_CheckExact(address) && PyBytes_GET_SIZE(address) == (Py_ssize_t)strlen(GUARD_CONTROL_SOCKET) &&
+                    !memcmp(PyBytes_AS_STRING(address),GUARD_CONTROL_SOCKET,strlen(GUARD_CONTROL_SOCKET))) return 0;
+            }
+        }
+        poisoned = 1;
+        PyErr_SetString(PyExc_RuntimeError,"private Unix address refused");
+        return -1;
+    }
     int main_compile = 0;
     if (script_target != NULL && !strcmp(event,"compile") && PyTuple_Check(args) &&
         PyTuple_GET_SIZE(args) == 2 && PyUnicode_Check(PyTuple_GET_ITEM(args,1))) {
@@ -97,6 +116,7 @@ static int guard_audit(const char *event, PyObject *args, void *unused) {
             policy = Py_NewRef(candidate);
         }
         Py_DECREF(result);
+        private_compartment = PyDict_GetItemString(globals,"PRIVATE_COMPARTMENT") == Py_True;
         Py_DECREF(module);
         entered = 1;
         entering = 0;

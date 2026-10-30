@@ -12,6 +12,7 @@ if __name__ == '_release_native_entry':
 from native_entry import acquire
 
 BODY_READY = False
+PRIVATE_COMPARTMENT = False
 BODIES = {
     'product-order-positive': 'import os\ntry: os.system("/usr/bin/true")\nexcept RuntimeError as error:\n assert str(error)=="PRODUCT_DENIED"\n print("NATIVE_BODY_OK",flush=True)\nelse: raise AssertionError("product denial absent")',
     'product-order-fallback': 'import os\ntry: os.system("/usr/bin/true")\nexcept ValueError: print("REFUSAL_CAUGHT",flush=True)\nelse: raise AssertionError("native fallback absent")',
@@ -26,11 +27,49 @@ BODIES = {
 }
 
 
+BODIES['private-network-positive'] = """
+import os,socket,sys
+from pathlib import Path
+for host,port in (('127.0.0.1',12345),(b'127.0.0.1','12345')):
+    rows=socket.getaddrinfo(host,port,socket.AF_INET,socket.SOCK_STREAM,0,socket.AI_PASSIVE|socket.AI_ADDRCONFIG)
+    assert rows and all(row[0]==socket.AF_INET and row[4]==('127.0.0.1',12345) for row in rows)
+assert {name for _,name in socket.if_nameindex()}=={'lo'}
+with socket.socket() as listener:
+    listener.bind(('127.0.0.1',0));listener.listen()
+    with socket.socket() as client:
+        client.connect(listener.getsockname())
+        with listener.accept()[0] as peer:
+            client.sendall(b'tcp');assert peer.recv(3)==b'tcp'
+with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as receiver:
+    receiver.bind(('127.0.0.1',0));receiver.settimeout(1)
+    with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as sender:
+        sender.sendto(b'udp',receiver.getsockname());assert receiver.recvfrom(3)[0]==b'udp'
+left,right=socket.socketpair()
+with left,right:
+    left.sendall(b'pair');assert right.recv(4)==b'pair'
+control=os.fsencode(Path(sys.executable).parents[2]/'profiles/control.sock')
+sys.audit('socket.connect',object(),control)
+print('NATIVE_BODY_OK',flush=True)
+"""
+for name,address in (('path',repr('/tmp/forbidden-native-socket')),('abstract',repr(b'\0forbidden-native-socket'))):
+    BODIES['private-unix-'+name] = (
+        "import socket\ntry:\n with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as stream: "
+        f"stream.connect({address})\nexcept RuntimeError: print('REFUSAL_CAUGHT',flush=True)")
+BODIES['private-unix-prefix'] = (
+    "import os,sys\nfrom pathlib import Path\n"
+    "control=os.fsencode(Path(sys.executable).parents[2]/'profiles/control.sock')\n"
+    "try: sys.audit('socket.connect',object(),control+b'\\0suffix')\n"
+    "except RuntimeError: print('REFUSAL_CAUGHT',flush=True)")
+BODIES['private-process'] = (
+    "import os\ntry: os.system('/usr/bin/true')\n"
+    "except RuntimeError: print('REFUSAL_CAUGHT',flush=True)")
+
+
 def consume(directory, event, arguments):
-    global BODY_READY, POLICY, SCRIPT_TARGET
+    global BODY_READY, POLICY, SCRIPT_TARGET, PRIVATE_COMPARTMENT
     root, profile = acquire(directory)
     fields = {'schema', 'case', 'identity', 'observer', 'argv', 'environment', 'cwd', 'flags',
-              'native', 'native_sha256', 'entry_sha256', 'nonce', 'token', 'seal', 'generation', 'mount_namespace'}
+              'native', 'native_sha256', 'entry_sha256', 'nonce', 'token', 'seal', 'generation', 'mount_namespace', 'network_before'}
     if type(profile) is not dict or set(profile) != fields or profile['schema'] != 'unrest.native-control.v1':
         raise ValueError('native profile schema')
     sys.path.insert(0, str(Path(__file__).parent))
@@ -90,6 +129,14 @@ def consume(directory, event, arguments):
     client = Client(root, profile)
     if client.request('body-ready', {}) != {'ok': True}:
         raise ValueError('native readiness refused')
+    if case.startswith('private-'):
+        from network_scope import isolated
+        isolated(profile['network_before'])
+        PRIVATE_COMPARTMENT=True
+        SCRIPT_TARGET=None
+        def policy(event,args):
+            return False
+        POLICY=policy
     sys.path.pop(0)
     sys.dont_write_bytecode = True
     if case in ('fastpath-positive','compile-bytes','compile-current'):

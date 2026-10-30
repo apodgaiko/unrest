@@ -60,16 +60,51 @@ class FilterProgram(ctypes.Structure):
                 ("instructions", ctypes.POINTER(FilterInstruction))]
 
 
-def install_observation_filter() -> None:
-    """Inherit unremovable exec/wait stops without stopping unrelated syscalls."""
-    if sys.platform != "linux" or os.uname().machine != "x86_64":
-        raise RuntimeError("unsupported observation filter ABI")
+def observation_filter():
     rows = [(0x20, 0, 0, 4), (0x15, 1, 0, 0xC000003E),
             (0x06, 0, 0, 0x80000000), (0x20, 0, 0, 0),
             (0x35, 0, 1, 0x40000000), (0x06, 0, 0, 0x80000000)]
-    for number in (59, 61, 322):  # execve, wait4, execveat
+    for number in (59, 61, 322, 425, 426, 427):  # exec/wait and forbidden io_uring
         rows.extend([(0x15, 0, 1, number), (0x06, 0, 0, 0x7FF00000)])
-    rows.append((0x06, 0, 0, 0x7FFF0000))
+    # Only excluded socket domains/types/protocols stop the tracer. Permitted
+    # traffic stays in the private network namespace without per-packet stops.
+    rows.extend([
+        (0x15, 1, 0, 41),
+        (0x15, 0, 24, 53),
+        (0x20, 0, 0, 16),
+        (0x15, 15, 0, 16),
+        (0x15, 6, 0, 1),
+        (0x15, 2, 0, 2),
+        (0x15, 1, 0, 10),
+        (0x06, 0, 0, 0x7FF00000),
+        (0x20, 0, 0, 32),
+        (0x15, 4, 0, 6),
+        (0x15, 3, 0, 17),
+        (0x20, 0, 0, 32),
+        (0x15, 1, 0, 0),
+        (0x06, 0, 0, 0x7FF00000),
+        (0x20, 0, 0, 24),
+        (0x54, 0, 0, 0xFFF7F7FF),
+        (0x15, 9, 0, 1),
+        (0x15, 8, 0, 2),
+        (0x06, 0, 0, 0x7FF00000),
+        (0x20, 0, 0, 32),
+        (0x15, 1, 0, 0),
+        (0x06, 0, 0, 0x7FF00000),
+        (0x20, 0, 0, 24),
+        (0x54, 0, 0, 0xFFF7F7FF),
+        (0x15, 1, 0, 3),
+        (0x06, 0, 0, 0x7FF00000),
+        (0x06, 0, 0, 0x7FFF0000),
+    ])
+    return rows
+
+
+def install_observation_filter() -> None:
+    """Inherit unremovable exec/wait observation and excluded socket/ring stops."""
+    if sys.platform != "linux" or os.uname().machine != "x86_64":
+        raise RuntimeError("unsupported observation filter ABI")
+    rows=observation_filter()
     instructions = (FilterInstruction * len(rows))(*(FilterInstruction(*row) for row in rows))
     program = FilterProgram(len(rows), instructions)
     if LIBC.prctl(38, 1, 0, 0, 0) != 0 or LIBC.prctl(22, 2, ctypes.byref(program), 0, 0) != 0:
@@ -258,8 +293,8 @@ class OwnedTrace:
                     "identity": dict(self.identities[pid]), "requested_pid": requested})
             if number == 59:  # execve
                 self.admit_exec(pid, value)
-            elif number == 322:  # execveat has a distinct ABI; never silently admit.
-                self.poison.append("unsupported_execveat")
+            elif number in (322,425,426,427) or operation==3 and number in (41,53):
+                self.poison.append("unsupported_execveat" if number==322 else "forbidden_socket_or_ring")
                 self.denied.add(pid)
                 value.orig_rax = (1 << 64) - 1
                 ptrace(13, pid, data=ctypes.byref(value))
@@ -269,7 +304,8 @@ class OwnedTrace:
                 value.rax = ((1 << 64) - errno.EPERM)
                 ptrace(13, pid, data=ctypes.byref(value))
                 self.denied.remove(pid)
-                self.records.append({"kind": "exec_syscall_return", "pid": pid,
+                kind="exec_syscall_return" if pending and pending['syscall'] in (59,322) else "denied_syscall_return"
+                self.records.append({"kind": kind, "pid": pid, "syscall": pending['syscall'] if pending else None,
                                      "return": -errno.EPERM, "denied": True})
             elif pending and pending["syscall"] == 61 and signed(value.rax) > 0:
                 if self.identities[pid] != pending["caller_identity"]:

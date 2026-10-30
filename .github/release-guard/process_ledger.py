@@ -266,8 +266,8 @@ class Ledger:
         elif kind == 'exec_attempt':
             if row.get('accepted') is not True:
                 raise Refused('ledger denied exec')
-        elif kind in {'cleanup_incomplete', 'exec_syscall_return'}:
-            if kind == 'cleanup_incomplete' or row.get('denied') is True:
+        elif kind in {'cleanup_incomplete', 'exec_syscall_return', 'denied_syscall_return'}:
+            if kind != 'exec_syscall_return' or row.get('denied') is True:
                 raise Refused('ledger cleanup or denied syscall')
         elif kind not in {'exec_memory_boundary', 'kernel_vfork_done'}:
             raise Refused('ledger unknown kernel record')

@@ -456,3 +456,10 @@ def test_deferred_group_kill_keeps_exact_thread_identity_and_single_terminal(mut
         emit(ledger,'tracer_terminal_wait',pid=102,raw=9,normalized=-9,identity=thread_id)
     with pytest.raises(Refused):
         emit(ledger,'tracer_terminal_wait',pid=102,raw=9,normalized=-9,identity=thread_id)
+
+
+@pytest.mark.parametrize('denied',(False,True))
+def test_excluded_socket_or_ring_record_is_never_source_completion(denied):
+    ledger,_,_=setup()
+    with pytest.raises(Refused,match='denied syscall'):
+        emit(ledger,'denied_syscall_return',pid=100,syscall=41,denied=denied,return_code=-1)

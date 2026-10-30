@@ -393,3 +393,22 @@ def test_waitid_only_reaping_cannot_supply_original_parent_wait4_evidence():
     assert len(terminal)==1 and terminal[0]['normalized']==23
     assert not any(row['kind']=='original_parent_wait4' for row in result['records'])
     assert root!=children[0]
+
+
+@pytest.mark.parametrize('number,operands',[(41,(40,1,0)),(41,(16,3,31)),
+    (425,(1,0,0)),(426,(-1,0,0)),(427,(-1,0,0))])
+def test_caught_excluded_socket_or_ring_cannot_clear_kernel_poison(number,operands,tmp_path):
+    body=("import ctypes,errno;libc=ctypes.CDLL(None,use_errno=True);"
+          f"assert libc.syscall({number},{','.join(map(str,operands))})==-1;"
+          "assert ctypes.get_errno()==errno.EPERM;print('caught-denial',flush=True)")
+    argv=[sys.executable,'-I','-S','-c',body]
+    allowed=[{'path':sys.executable,'argv':argv,
+        'sha256':hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest(),
+        'environment':{},'cwd':os.getcwd()}]
+    _,result=run_control(argv,allowed,True)
+    (tmp_path/f'socket-ring-{number}-{operands[0]}.json').write_text(json.dumps(result,sort_keys=True))
+    assert result['root_parent_wait_raw']==0
+    assert result['poison']==['forbidden_socket_or_ring']
+    rows=[row for row in result['records'] if row['kind']=='denied_syscall_return']
+    assert len(rows)==1 and rows[0]['syscall']==number and rows[0]['return']==-errno.EPERM and rows[0]['denied'] is True
+    assert not any(row['kind']=='cleanup_incomplete' for row in result['records'])

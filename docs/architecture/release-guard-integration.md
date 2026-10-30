@@ -1075,3 +1075,28 @@ matcher never infers an expected declaration from a request. Failed comparison
 creates no intent, and a pending admission creates no fixture snapshot or token
 binding. Existing module/native alias handling remains at ingress and exec
 admission; it is not replaced by a generic executable allowance.
+
+The native entry has an inactive compartment socket gateway for the planned
+namespace-based model. Only an exact Py_True exported by the byte-pinned
+bootstrap after validation and authenticated READY activates it. Existing
+production bootstrap does not yet export that gate. Native diagnostic controls
+exercise private TCP/UDP, libc address discovery, route-netlink and anonymous
+Unix pairs, alongside sticky named-Unix and process-effect refusals.
+
+The inherited seccomp program permits namespace-contained socket classes:
+INET/INET6 stream/datagram with protocol0/TCP/UDP, Unix stream/datagram with
+protocol0, and RAW route-netlink with protocol0. Other socket/socketpair attempts
+stop the tracer and poison the result even if caught. All three io_uring entry
+syscalls are also denied, closing their alternative socket-creation path.
+Permitted traffic creates no additional tracer stops. Exec/wait observation and
+all original-parent retirement requirements remain unchanged. These controls
+establish no source checkpoint or native-provider acceptance by themselves.
+
+Trusted setup adds 127.0.0.2 as a secondary address on the same private lo device.
+This supports genuine glibc AI_ADDRCONFIG discovery: glibc excludes the literal
+127.0.0.1 address when determining available IPv4, rather than treating every
+address on lo alike. There is still only lo and no external gateway or usable
+external route. Setup checks a fresh isolated namespace before changing it,
+requires root, then repeats its interface/route census. The source retains CAP0.
+The native positive control uses the actual libc resolver and its requested
+flags; it does not substitute a result or waive a lookup failure.

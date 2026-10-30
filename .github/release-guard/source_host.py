@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import base64
 import ctypes
-import fcntl
 import hashlib
 import json
 import os
@@ -16,9 +15,7 @@ from pathlib import Path
 import select
 import shutil
 import signal
-import socket
 import stat
-import struct
 import subprocess
 import sys
 import tarfile
@@ -186,13 +183,8 @@ def isolate(metadata, support, output):
     native_input=metadata.get('_native_input')
     if native_input is not None:
         points['/native']=native_input['root']
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as stream:
-        request = struct.pack('16sH14x', b'lo', 0)
-        current = fcntl.ioctl(stream.fileno(), 0x8913, request)
-        flags = struct.unpack_from('H', current, 16)[0]
-        fcntl.ioctl(stream.fileno(), 0x8914, struct.pack('16sH14x', b'lo', flags | 1))
-    from network_scope import isolated
-    metadata['network_namespace']=isolated(network_before)
+    from network_scope import configure
+    metadata['network_namespace']=configure(network_before)
     from filesystem_scope import enter
     return enter({**metadata, 'mounts': points}, support, output)
 
