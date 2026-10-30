@@ -1298,7 +1298,8 @@ retired delegated fixed-inline entries no longer duplicate their actual routers.
 Approval source fixtures use the compartment's short `/tmp` as TMPDIR, avoiding
 Unix socket pathname overflow without changing the product or exposing host tmp.
 Named Unix IPC is delegated from the native audit hook to an authenticated
-observer decision, only for the controlled approval test module. Bind is root-only
+observer decision, only for the controlled approval test module. Bind requires
+the root or the exact READY-bound controlled durable worker
 and limited to the two original temporary-directory prefixes, a canonical
 UID-20000/mode-0700 directory and the fixed `control` leaf. Connection requires
 the retained bind generation and a UID-20000/mode-0600 socket. Other named Unix
@@ -1331,5 +1332,24 @@ bytes, argv, environment, cwd and actual parent. MCP READY precedes adapter laun
 each chain parent must have its own native READY before launching a descendant.
 Root cleanup probes or SIGKILL address only independently admitted relay/backend
 births with actual bounded ancestry. Actual original-parent numeric waits remain
-mandatory. This declaration excludes the separate durable-owner crash cases and
-does not prove genuine provider acceptance or waive missing waits.
+mandatory for that chain. This does not prove genuine provider acceptance or
+waive missing waits.
+
+The seven durable approval cases use exactly the pinned
+`tests.fixtures.approval_run_executor:execute` entry, one retained run request,
+generation 1, owned home and closed environment. Four success/cancel cases keep
+ordinary original-parent waits. The three intentional owner-SIGKILL cases may
+adopt exactly its admitted READY MCP and adapter followers into namespace PID 1.
+Birth, UID, generation, inherited PGID/SID and private namespaces must remain
+unchanged except for actual observed PPID 1. If a follower reaches its kernel
+exit stop before reparenting, the tracer holds that real stop for at most 20
+seconds while allowing other owned tasks to progress. No exit is synthesized.
+
+Each follower requires an independent PID-1 numeric wait receipt matching its
+kernel exit and tracer terminal status; the worker separately requires the
+root's actual attributed SIGKILL wait. Original parent identities and missing
+original-parent waits remain recorded, explicitly `original_parent_wait_proven=false`
+and `namespace_init_wait_proven=true`. Relay/backend retain their original-parent
+wait requirements. This grants no resumed launch/review authority and changes no
+historical restart or denial disposition. Signal-zero probes retain actual zombie
+liveness; a terminal observation alone never becomes disappearance.

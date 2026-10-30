@@ -134,7 +134,7 @@ def proposal(host,actor,raw):
     return admit_worker(host,actor,raw,home,(WORKERS if custom else CASES)[case],env,maximum,binding,custom)
 
 
-def admit_worker(host,actor,raw,home,operation,env,maximum,binding=None,custom=False):
+def admit_worker(host,actor,raw,home,operation,env,maximum,binding=None,custom=False,executor=None):
     case=host.case
     argv=raw['argv']
     if len(argv)!=13 or not re.fullmatch('run:[a-f0-9]{64}',argv[6]):
@@ -149,7 +149,7 @@ def admit_worker(host,actor,raw,home,operation,env,maximum,binding=None,custom=F
         raise Refused('worker retained request arguments')
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
     vector=[native,'-m','unrest_harness.run_worker','--project-root',str(home),'--run-id',run,
-            '--executor','executor_fixture:execute' if custom else 'unrest_harness.runtime_executor:execute','--custody-root-id','local:unrest-run-control','--generation','1']
+            '--executor',executor or ('executor_fixture:execute' if custom else 'unrest_harness.runtime_executor:execute'),'--custody-root-id','local:unrest-run-control','--generation','1']
     expected=build_expected(case,native,pin,tuple(vector),tuple(sorted(env.items())),str(home),'python-module',native_digest(Path(host.meta['checkout'])/'src/unrest_harness/run_worker.py'))
     answer=admit_expected(host,actor,raw,expected,'fixed-inline',[native,'-I','-S',*vector[1:]],maximum=maximum,
                           fields={'run_worker':True,'execution_fixture':binding,'run_id':run,

@@ -12,9 +12,15 @@ from control_transport import unique
 from cohort_controller import publish
 from linux_observation import process_identity,credential_identity
 from process_ledger import Birth,canonical
+from approval_launch import CRASH as APPROVAL_CRASH
+
+CLOSEOUT=(*ADOPT,*APPROVAL_CRASH)
 
 
 def refresh(host):
+    if host.case in APPROVAL_CRASH:
+        from approval_adoption import refresh as approval_refresh
+        return approval_refresh(host)
     if host.case not in ADOPT:
         return
     for actor in host.actors.values():
@@ -53,14 +59,21 @@ def wait_request(host,actor,process):
 
 
 def closeout(host,children):
-    if host.case not in ADOPT:
+    if host.case not in CLOSEOUT:
         return True
     adopted=[actor for actor in children if host.ledger.process(actor['birth']).adopted_identity is not None]
     if not adopted:
-        return True
-    if host.case not in ADOPT or len(adopted)!=1:
+        return host.case not in APPROVAL_CRASH
+    if len(adopted)!=(2 if host.case in APPROVAL_CRASH else 1):
         raise Refused('composed adoption closeout population')
-    actor=adopted[0]
+    if host.case in APPROVAL_CRASH:
+        from approval_adoption import certified_owner
+        if adopted!=certified_owner(host):
+            raise Refused('approval follower closeout exact population')
+    return all(receipt(host,actor) for actor in adopted)
+
+
+def receipt(host,actor):
     process=host.ledger.process(actor['birth'])
     if process.terminal is None:
         return False
@@ -97,7 +110,7 @@ def host_tick(directory):
             continue
         body,_,_=read_regular(path,4096,uid=20001,mode=0o444)
         value=json.loads(body,object_pairs_hook=unique)
-        if (set(value)!={'case','started','identity','token'} or value['case'] not in ADOPT
+        if (set(value)!={'case','started','identity','token'} or value['case'] not in CLOSEOUT
                 or type(value['started']) is not float or not 0<=time.monotonic()-value['started']<=20
                 or path.name!='composed-closeout-'+value['token']+'.json'):
             raise Refused('composed init exact request')

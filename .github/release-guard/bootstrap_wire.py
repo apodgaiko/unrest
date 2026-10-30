@@ -30,8 +30,8 @@ class Client:
                        'generation': self.generation, 'id': self.random(16).hex(),
                        'kind': kind, 'payload': payload}
             from cohort_controller import WAIVED
-            from composed_cases import ADOPT
-            seconds=22 if kind=='case-finish' and payload.get('case') in (*WAIVED,*ADOPT) else self.seconds
+            from composed_adoption import CLOSEOUT
+            seconds=22 if kind=='case-finish' and payload.get('case') in (*WAIVED,*CLOSEOUT) else self.seconds
             stream = self.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             try:
                 stream.settimeout(seconds)

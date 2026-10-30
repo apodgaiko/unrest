@@ -108,7 +108,8 @@ class Observer:
         command_class = {**dict.fromkeys(('approval-adapter','approval-relay','approval-backend'),'controlled-approval-fixture'),'root': 'bootstrap-root', 'acp': 'controlled-acp',
                          'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline','plan-python':'plan-python','mp-child':'mp-child','mp-tracker':'mp-tracker','review-wire':'review-wire','pytest-regression':'pytest-regression','desktop':'desktop',**dict.fromkeys(('archive-checker','archive-leaf','archive-installed'),'archive-python')}[role]
         from run_worker_launch import ALL_CASES as RUN_WORKERS
-        new_session = role in ('backend','delayed-backend','acp','workspace-owned','session-adapter','session-inline') or role=='mcp' and case in HTTP_CASES and vector[3]=='-c' or role=='fixed-inline' and case in (*ROLE_CASES,*RUN_WORKERS)
+        from approval_launch import RUNS as APPROVAL_RUNS
+        new_session = role in ('backend','delayed-backend','acp','workspace-owned','session-adapter','session-inline') or role=='mcp' and case in HTTP_CASES and vector[3]=='-c' or role=='fixed-inline' and case in (*ROLE_CASES,*RUN_WORKERS,*APPROVAL_RUNS)
         self.ledger.register(actor['birth'], token, (), case=case,
                              command_class=command_class, new_session=new_session, expected_generation=1)
         if new_session:
@@ -155,6 +156,11 @@ class Observer:
                     self.meta_environment(), self.meta['checkout'], os.urandom(16).hex())
         from composed_adoption import refresh
         refresh(self)
+
+    def before_exit(self,trace,pid):
+        self.consume(trace)
+        from approval_adoption import exiting
+        return exiting(self,pid)
 
     def meta_environment(self):
         if self.full:
@@ -247,6 +253,10 @@ class Observer:
             if self.case==CASE:
                 return
         if actor['role'] == 'fixed-inline' and actor['case'] == self.case and not self.finished:
+            from approval_launch import RUNS as APPROVAL_RUNS,worker_owner
+            if self.case in APPROVAL_RUNS:
+                worker_owner(self,actor)
+                return
             from cohort_controller import CASES as CRASH,owner
             if self.case in CRASH:
                 owner(self,actor)
@@ -403,7 +413,7 @@ class Observer:
                 if waived is None:
                     return None
                 from composed_adoption import closeout as adopted_closeout
-                from composed_cases import ADOPT
+                from composed_adoption import CLOSEOUT
                 if not adopted_closeout(self,children):
                     return None
                 ordinary=children if not waived else [value for value in children if value['birth'] not in waived]
@@ -411,7 +421,7 @@ class Observer:
                         or any(not self.completed_child(value) for value in ordinary)
                         or any(not value['consumed'] for value in self.intents.values() if value['case'] == self.case)
                         or any(not (self.git.reaped(value) if value['role']=='git-helper' else
-                            self.ledger.reaped(value['birth'], value['token']) or self.case in ADOPT and self.ledger.process(value['birth']).init_wait is not None) for value in ordinary)):
+                            self.ledger.reaped(value['birth'], value['token']) or self.case in CLOSEOUT and self.ledger.process(value['birth']).init_wait is not None) for value in ordinary)):
                     raise Refused('source original case actual cleanup incomplete')
                 if self.full:
                     self.outcomes.append(dict(payload))

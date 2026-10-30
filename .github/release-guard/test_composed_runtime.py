@@ -97,8 +97,9 @@ def fixture(tmp_path,monkeypatch):
     birth=SimpleNamespace(pid=42)
     actor={'case':cases.HERMETIC,'birth':birth,'token':'parent','body_ready':True,'role':'fixed-inline',
         'profile':{'environment':{'LANG':'C.UTF-8','PATH':os.defpath}}}
-    row={'case':cases.HERMETIC,'role':'fixed-inline','birth':birth,'token':'parent','consumed':True,
+    row={'ticket':1,'case':cases.HERMETIC,'role':'fixed-inline','birth':birth,'token':'parent','consumed':True,
         'composed_roles':cases.PAIR,'composed_project':str(project)}
+    actor['intent']=row
     host=SimpleNamespace(case=cases.HERMETIC,meta={'checkout':str(ROOT)},binding={'entry':{'path':'/native','sha256':'a'*64}},
         fixture_roots={('completion-role',cases.HERMETIC):(str(tmp_path),)},intents={1:row},seen=[],
         ledger=SimpleNamespace(reaped=lambda *args:True),executed=lambda row:row['consumed'])

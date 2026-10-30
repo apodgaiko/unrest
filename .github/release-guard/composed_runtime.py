@@ -85,11 +85,10 @@ def project_root(host,parent,identity):
 
 
 def owner(host,actor):
-    rows=[row for row in host.intents.values() if row['case']==host.case and row.get('birth')==actor['birth']
-        and row['token']==actor['token'] and row['consumed']]
-    if len(rows)!=1 or not actor['body_ready'] or not host.executed(rows[0]):
+    from source_observer import bound_intent
+    row=bound_intent(host,actor)
+    if row is None or row['case']!=host.case or not actor['body_ready'] or not host.executed(row):
         raise Refused('composed actual parent identity')
-    row=rows[0]
     if 'composed_roles' in row and row['role']=='fixed-inline':
         return row,row['composed_roles'],Path(row['composed_project'])
     if host.case in DIRECT and row.get('server_slot')==0 and row['role']=='mcp':
@@ -115,8 +114,8 @@ def nested(host,actor,raw):
 
 
 def query_quota(host,actor):
-    rows=[row for row in host.intents.values() if row['case']==host.case and row['role']=='mcp' and 'node_role' in row
-        and row.get('birth')==actor['birth'] and row['token']==actor['token'] and row['consumed']]
-    if len(rows)!=1 or actor['role']!='mcp' or not actor['body_ready']:
+    from source_observer import bound_intent
+    row=bound_intent(host,actor)
+    if row is None or row['case']!=host.case or 'node_role' not in row or actor['role']!='mcp' or not actor['body_ready']:
         raise Refused('composed exact node-owned Git query')
-    return query_count(host.case,rows[0]['node_role'])
+    return query_count(host.case,row['node_role'])

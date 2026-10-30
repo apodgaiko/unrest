@@ -172,15 +172,12 @@ def environment(checkout,parent,case,ordinal,ambient,*,native=None,observed=None
 
 
 def actor_slot(host,actor):
+    from source_observer import bound_intent
+    row=bound_intent(host,actor)
     if (host.case not in CASES or actor['case']!=host.case or not actor['body_ready']
-            or not host.ledger.body_ready(actor['birth'],actor['token'])):
+            or row is None or not host.ledger.body_ready(actor['birth'],actor['token'])):
         raise Refused('completion actual ready server')
-    rows=[row for row in host.intents.values() if row['case']==host.case and 'server_slot' in row
-          and row['consumed'] and row.get('birth')==actor['birth'] and row['token']==actor['token']]
-    if len(rows)!=1:
-        raise Refused('completion unique server generation')
-    row=rows[0]
-    slot=row['server_slot']
+    slot=row.get('server_slot')
     if type(slot) is not int or not 0<=slot<len(schedule(host.case)):
         raise Refused('completion finite server slot')
     kind=schedule(host.case)[slot][0]

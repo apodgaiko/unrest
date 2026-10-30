@@ -21,7 +21,10 @@ def unix(host,actor,event,address):
     generation=(info.st_dev,info.st_ino)
     key=('approval-unix',host.case,address)
     if event=='socket.bind':
-        if actor['role']!='root' or key in host.fixture_roots or path.exists() or path.is_symlink():
+        if actor['role']!='root':
+            from approval_launch import worker_owner
+            worker_owner(host,actor)
+        if key in host.fixture_roots or path.exists() or path.is_symlink():
             raise Refused('approval private Unix repeated bind')
         host.fixture_roots[key]=generation
     else:

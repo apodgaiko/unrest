@@ -305,14 +305,23 @@ class Ledger:
         process=self.process(birth)
         return Birth.read(process.adopted_identity) if process.adopted_identity is not None else birth
 
-    def adopt(self, birth: Birth, observed: dict) -> None:
+    def adopt(self, birth: Birth, observed: dict, *, follower: Birth | None = None) -> None:
         process=self.process(birth)
         actual=canonical(observed)
         expected={**process.registered_identity,'ppid':1}
+        if follower is not None:
+            from approval_launch import CRASH
+            owner=self.process(follower)
+            if (process.case not in CRASH or owner.case!=process.case or process.parent!=follower or not owner.new_session
+                    or not owner.session_complete or owner.exit is None or owner.exit[1]!=9
+                    or process.generation!=process.registered_generation or process.generation!=1
+                    or owner.generation!=owner.registered_generation or owner.generation!=1
+                    or (actual['pgid'],actual['sid'])!=(follower.pid,follower.pid)):
+                raise Refused('ledger exact approval follower session')
         if (process.adopted_identity is not None or process.parent is None
-                or self.process(process.parent).exit is None or not process.new_session
-                or not process.session_complete or not self.body_ready(birth,process.token)
-                or actual!=expected or (actual['pgid'],actual['sid'])!=(birth.pid,birth.pid)):
+                or self.process(process.parent).exit is None or not self.body_ready(birth,process.token)
+                or actual!=expected or follower is None and (not process.new_session
+                    or not process.session_complete or (actual['pgid'],actual['sid'])!=(birth.pid,birth.pid))):
             raise Refused('ledger exact live namespace adoption')
         process.adopted_identity=actual
 

@@ -1,5 +1,6 @@
 """Controlled relay byte reconstruction and independently observed ancestry."""
 import hashlib
+import json
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -51,12 +52,12 @@ def test_relay_requires_exact_fixture_and_four_scoped_literals(tmp_path,monkeypa
         assert approval.relay(host,tmp_path,path)==(hashlib.sha256(path.read_bytes()).hexdigest(),pin)
 
 
-@pytest.mark.parametrize('mutation',[None,'case','role','signal','group','parent','reused','not-ready','retired'])
+@pytest.mark.parametrize('mutation',[None,'case','role','signal','group','parent','reused','not-ready','zombie','reaped'])
 def test_descendant_signal_requires_actual_bound_chain(tmp_path,monkeypatch,mutation):
     root=SimpleNamespace(pid=10)
     adapter=SimpleNamespace(pid=11)
     child=SimpleNamespace(pid=12)
-    owner={'birth':root,'body_ready':True}
+    owner={'birth':root,'body_ready':True,'role':'root'}
     actor={'birth':child,'case':approval.CASES[0],'role':'approval-backend','body_ready':True,'signals':set()}
     processes={12:SimpleNamespace(parent=adapter,exit=None,terminal=None),11:SimpleNamespace(parent=root)}
     host=SimpleNamespace(case=approval.CASES[0],root_only=lambda value:None,actors={12:actor},
@@ -64,6 +65,11 @@ def test_descendant_signal_requires_actual_bound_chain(tmp_path,monkeypatch,muta
     import linux_observation
     import process_ledger
     monkeypatch.setattr(linux_observation,'process_identity',lambda pid:'identity')
+    def credentials(pid):
+        if mutation=='reaped':
+            raise ProcessLookupError()
+        return 'identity'
+    monkeypatch.setattr(linux_observation,'credential_identity',credentials)
     monkeypatch.setattr(process_ledger.Birth,'read',lambda value:child if mutation!='reused' else root)
     payload={'pid':12,'signal':0,'group':False}
     if mutation=='case':
@@ -78,15 +84,15 @@ def test_descendant_signal_requires_actual_bound_chain(tmp_path,monkeypatch,muta
         processes[11].parent=None
     elif mutation=='not-ready':
         actor['body_ready']=False
-    elif mutation=='retired':
+    elif mutation in ('zombie','reaped'):
         processes[12].terminal=(1,0,0)
-    if mutation not in (None,'retired'):
+    if mutation not in (None,'zombie','reaped'):
         with pytest.raises(Refused):
             approval.signal(host,owner,payload)
         assert actor['signals']==set()
     else:
-        assert approval.signal(host,owner,payload)=={'ok':True,'live':mutation!='retired'}
-        assert actor['signals']==({0} if mutation is None else set())
+        assert approval.signal(host,owner,payload)=={'ok':True,'live':mutation!='reaped'}
+        assert actor['signals']==set()
 
 
 def test_normalization_selects_only_the_measured_controlled_chain_image(monkeypatch):
@@ -152,3 +158,53 @@ def test_adapter_waits_for_authenticated_mcp_ready(tmp_path,monkeypatch):
          'cwd':str(tmp_path/'workspace'),'environment':{},'stdin':None}
     assert approval.proposal(host,{'role':'root'},raw) is None
     assert not calls
+
+
+@pytest.mark.parametrize('mutation',[None,'executor','environment','request-generation','argv-generation','cwd'])
+def test_durable_worker_keeps_exact_executor_request_and_private_environment(tmp_path,monkeypatch,mutation):
+    import run_worker_launch
+    native='/sealed/python'
+    base=tmp_path/'case'
+    home=base/'run-home'
+    root=base/'run-fixture'
+    run='run:'+'a'*64
+    path=home/'.unrest/runs'/run[4:]/'request.json'
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({'run_id':run,'operation':'advance_project','generation':2 if mutation=='request-generation' else 1,'arguments':{'project_id':'project'}}))
+    path.chmod(0o600)
+    read=run_worker_launch.read_regular
+    monkeypatch.setattr(run_worker_launch,'read_regular',lambda file,limit,**kwargs:read(file,limit,**{**kwargs,'uid':os.getuid()}))
+    monkeypatch.setattr(approval,'retain',lambda *args:base)
+    env={'LANG':'C.UTF-8','PATH':os.defpath,'PYTHONPATH':str(CHECKOUT)+':'+str(CHECKOUT/'src'),
+        'UNREST_HOME':str(root/'home'),'UNREST_PROJECTS_DIR':str(root/'home/projects'),
+        'CONTROLLED_RUN_ROOT':str(root),'CONTROLLED_RUN_NATIVE':str(base/'controlled-backend'),
+        'CONTROLLED_RUN_TRACE':str(base/'run-methods.jsonl'),
+        'CONTROLLED_RUN_COMMAND':native+' '+str(CHECKOUT/approval.ADAPTER)+' '+str(base/'run-scenario.json')}
+    vector=[native,'-m','unrest_harness.run_worker','--project-root',str(home),'--run-id',run,
+        '--executor','tests.fixtures.approval_run_executor:execute','--custody-root-id','local:unrest-run-control','--generation','1']
+    raw={'argv':vector,'environment':env,'cwd':str(home),'stdin':None}
+    if mutation=='executor':
+        vector[8]='foreign:execute'
+    elif mutation=='environment':
+        env['CODEX_PATH']='/foreign'
+    elif mutation=='argv-generation':
+        vector[-1]='2'
+    elif mutation=='cwd':
+        raw['cwd']=str(base/'foreign')
+    calls=[]
+    host=SimpleNamespace(case=approval.RUNS[0],meta={'checkout':str(CHECKOUT)},
+        binding={'entry':{'path':native,'sha256':'a'*64}},root_only=lambda actor:None,intents={})
+    def admit(actor,value,role,translated,payload,**options):
+        calls.append((value,role,translated,options))
+        host.intents[1]={}
+        return {'ticket':1,'token':'worker'}
+    host.admit_launch=admit
+    if mutation:
+        with pytest.raises(Refused):
+            approval.worker(host,{'role':'root'},raw)
+        assert not calls
+    else:
+        assert approval.worker(host,{'role':'root'},raw)['ticket']==1
+        assert host.intents[1]['approval_worker'] is True
+        assert calls[0][1]=='fixed-inline' and calls[0][3]['maximum']==1
+        assert host.intents[1]['run_worker'] is True

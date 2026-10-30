@@ -185,7 +185,7 @@ class OwnedTrace:
     def __init__(self, child: int, allowed: list[dict[str, Any]], timeout: float,
                  *, on_tick: Any = None, resolve_exec: Any = None, validate_wait: Any = None,
                  start_write: int, on_attached: Any = None, selective: bool = False,
-                 cleanup_seconds: float = 60, full_source: bool = False):
+                 cleanup_seconds: float = 60, full_source: bool = False, on_exit: Any = None):
         if sys.platform != "linux" or os.uname().machine != "x86_64":
             raise RuntimeError("unsupported trace ABI")
         if (child <= 0 or type(timeout) not in (int, float)
@@ -214,6 +214,8 @@ class OwnedTrace:
         self.cleanup_seconds = cleanup_seconds
         self.foreign: set[int] = set()
         self.on_tick = on_tick
+        self.on_exit = on_exit
+        self.deferred_exits: dict[int, tuple[int,float]] = {}
         self.resolve_exec = resolve_exec
         self.validate_wait = validate_wait
         self.selective = selective
@@ -369,6 +371,23 @@ class OwnedTrace:
         self.records.append({'kind': 'kernel_child', 'parent': pid,
                              'child': child.value, 'event': raw >> 16,
                              'identity': self.identities[child.value]})
+
+    def _exiting(self,pid,raw):
+        if self.on_exit is not None and self.on_exit(self,pid) is False:
+            self.deferred_exits.setdefault(pid,(raw,time.monotonic()))
+            return False
+        self.records.append({'kind':'kernel_exit','pid':pid,'raw':raw})
+        return True
+
+    def _resume_exits(self):
+        for pid,(raw,started) in list(self.deferred_exits.items()):
+            if time.monotonic()-started>20:
+                raise TimeoutError('owned exit-stop adoption deadline')
+            if self._exiting(pid,raw):
+                ptrace(24 if not self.selective or pid in self.pending else 7,pid)
+                del self.deferred_exits[pid]
+                self.stopped.pop(pid)
+                self.harvested.discard(pid)
 
     def _terminal(self, pid: int, raw: int, *, cleanup: bool) -> None:
         self.active.remove(pid)
@@ -530,6 +549,7 @@ class OwnedTrace:
             while self.active:
                 if self.on_tick is not None:
                     self.on_tick(self)
+                self._resume_exits()
                 if time.monotonic() > self.deadline:
                     raise TimeoutError("owned trace deadline exceeded")
                 # A newborn stop may become waitable before its parent's
@@ -576,8 +596,8 @@ class OwnedTrace:
                 elif event == 6:
                     terminal = ctypes.c_ulong()
                     ptrace(0x4201, pid, data=ctypes.byref(terminal))
-                    self.records.append({"kind": "kernel_exit", "pid": pid,
-                                         "raw": terminal.value})
+                    if not self._exiting(pid,terminal.value):
+                        continue
                 elif event == 128 and pid in self.newborn:
                     self.newborn.remove(pid)
                 elif event == 128 and stop in (

@@ -202,7 +202,7 @@ class Policy:
             self_stop = policy.profile['role']=='session-adapter' and pid==os.getpid() and sig==15 and not group
             resumed=not self_stop and type(pid) is int and pid not in policy.children
             from approval_launch import CASES as APPROVAL
-            approval=resumed and policy.profile['role']=='root' and policy.case in APPROVAL
+            approval=resumed and policy.profile['role'] in ('root','fixed-inline') and policy.case in APPROVAL
             if not self_stop and (type(pid) is not int or resumed):
                 from composed_cases import ADOPT
                 if not approval and (not resumed or policy.profile['role']!='mcp' or policy.case not in ADOPT):

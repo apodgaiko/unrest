@@ -260,7 +260,7 @@ def worker(binding, metadata, raw_directory):
         allowed = [{'pid': child, 'path': vector[0], 'argv': vector, 'environment': environment,
                     'cwd': metadata['checkout'], 'sha256': hashlib.sha256(Path(vector[0]).read_bytes()).hexdigest()}]
         trace = OwnedTrace(child, allowed, timeout, start_write=start_write, selective=True, cleanup_seconds=5, full_source=unexcluded(metadata,binding),
-                           on_attached=lambda: observer.consume(trace), on_tick=observer.tick,
+                           on_attached=lambda: observer.consume(trace), on_tick=observer.tick,on_exit=observer.before_exit,
                            resolve_exec=lambda *args: observer.resolve(trace, *args),
                            validate_wait=lambda *args: observer.validate_wait(trace, *args))
         result = trace.run()
