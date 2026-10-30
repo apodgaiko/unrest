@@ -34,13 +34,8 @@ def nested(host,actor,raw):
     parent=owner(host,actor)
     checkout=Path(host.meta['checkout'])
     home=Path(parent['cwd'])
-    entries=sorted((home/'projects').iterdir())
-    if len(entries)!=1 or not entries[0].is_dir() or entries[0].resolve()!=entries[0]:
-        raise Refused('measurement one original project')
-    project=entries[0]
-    document=record(project/'.unrest-runtime/project.json')
-    if document.get('id')!=project.name or document.get('workspace_dir')!=str(home.parent/'workspace'):
-        raise Refused('measurement original project record')
+    from node_environment import project_path
+    project=project_path(home,parent['run_project'])
     from collections import Counter
     roles=Counter(parent['measurement_roles'])
     source_unit(checkout,MOCK,PINS[MOCK])

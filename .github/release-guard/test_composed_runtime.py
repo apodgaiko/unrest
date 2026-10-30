@@ -109,7 +109,6 @@ def fixture(tmp_path,monkeypatch):
         if path.name=='project.json':
             return {'id':'project','workspace_dir':str(workspace)}
         return {'tasks':{'worker-1':{'status':'running','last_attempt':'2026-10-30T00-00-00Z'}}}
-    monkeypatch.setattr(runtime,'record',record)
     monkeypatch.setattr(measurement_runtime,'record',record)
     monkeypatch.setattr(cleanup_launch,'read_pipe',lambda pid,fd:[fd,10,20])
     def admit(actor,expected,role,vector,pin,**kwargs):

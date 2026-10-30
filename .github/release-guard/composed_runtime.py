@@ -4,7 +4,7 @@ from pathlib import Path
 
 from composed_cases import CASES,STEPS,DIRECT,DIRECT_ROLES,HTTP,ADOPT,UNDELIVERABLE,roles,query_count
 from content_manifest import Refused,read_regular,_key
-from measurement_runtime import record
+from node_environment import project_path
 
 ADAPTER_PIN='245f9fc0eabd9d4ea5c8f701e77380cbadcc137f476d4cf87933d8c9202f06cb'
 DIRECT_PINS=dict(zip(DIRECT,('4db1a5ec24bb138fef3cc6d663efa65986f52b37e51e069048e89bc544e40375',
@@ -75,13 +75,7 @@ def worker(host,actor,raw):
 
 
 def project_root(host,parent,identity):
-    if type(identity) is not str or not identity or Path(identity).name!=identity or identity in ('.','..'):
-        raise Refused('composed original project identifier')
-    path=parent/'.unrest/projects'/identity
-    document=record(path/'.unrest-runtime/project.json')
-    if document.get('id')!=identity or document.get('workspace_dir')!=str(parent/'workspace'):
-        raise Refused('composed acquired project and workspace')
-    return path
+    return project_path(parent/'.unrest',identity)
 
 
 def owner(host,actor):
@@ -92,11 +86,7 @@ def owner(host,actor):
     if 'composed_roles' in row and row['role']=='fixed-inline':
         return row,row['composed_roles'],Path(row['composed_project'])
     if host.case in DIRECT and row.get('server_slot')==0 and row['role']=='mcp':
-        parent=root(host)
-        projects=sorted((parent/'.unrest/projects').iterdir())
-        if len(projects)!=1:
-            raise Refused('composed sole direct project')
-        return row,DIRECT_ROLES[host.case],project_root(host,parent,projects[0].name)
+        return row,DIRECT_ROLES[host.case],None
     raise Refused('composed parent has no node authority')
 
 
@@ -104,6 +94,7 @@ def nested(host,actor,raw):
     from collections import Counter
     _,sequence,project=owner(host,actor)
     parent=root(host)
+    project=project if project is not None else project_root(host,parent,raw['environment'].get('UNREST_PROJECT_ID'))
     file,pin=adapter(host,parent)
     from node_launch import proposal
     return proposal(host,actor,raw,parent/'workspace',actor['profile']['environment'],

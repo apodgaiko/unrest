@@ -1402,3 +1402,18 @@ inherited descriptors, and process/session/adoption generations. Their actual
 identity and byte checks remain. Signal delivery also shares one audit-scoped
 finalizer that clears authorization on both return and exception; each signal
 route retains its independent observer admission.
+
+
+Node assignment contents and project-record id/workspace values are application
+data, not a second authorization source in guard. Assignment values remain
+required bounded UTF-8 strings under the exact environment key set; the admitted
+parent role budget, MCP mode, capability configuration and canonical output
+scope still select execution rights. The original server parses assignments and
+checks their role; unchanged source tests retain the real completion assertions.
+
+A worker's project remains the identifier in its admitted RunControl request.
+The direct-server and defect fixtures may supply a bounded single-component
+project id beneath their retained private home. Canonical project/output paths,
+fixed bodies, complete security environments and parent-specific role budgets
+remain mandatory; guard no longer enumerates one project or predicts its JSON
+truth. Actual run cursor parsing for resumed-signal authorization is retained.

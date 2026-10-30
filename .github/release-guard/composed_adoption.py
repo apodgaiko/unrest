@@ -126,7 +126,8 @@ def host_tick(directory):
 
 def signal(host,actor,payload):
     from completion_roles import actor_slot
-    from composed_runtime import root,record
+    from composed_runtime import root
+    from measurement_runtime import record
     server=actor_slot(host,actor)
     rows=[row for row in host.intents.values() if row['case']==host.case and row.get('adoptable')
         and row.get('pid')==payload['pid'] and host.executed(row)]

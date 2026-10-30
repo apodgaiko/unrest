@@ -1,9 +1,7 @@
 """Exact security settings and scoped application data for owned role processes."""
-import json
 from pathlib import Path
 
 from content_manifest import Refused
-from control_transport import unique
 
 
 def baseline(ambient,home,project):
@@ -24,12 +22,21 @@ def environment(ambient,home,project,node,role,attempt):
     return result
 
 
+def component(value):
+    if (type(value) is not str or not 0<len(value)<=4096 or value in ('.','..')
+            or any(char in value for char in ('/','\\','\0'))):
+        raise Refused('node scoped data component')
+    return value
+
+
+def project_path(home,identity):
+    path=home/'projects'/component(identity)
+    if path.resolve()!=path:
+        raise Refused('node canonical private project')
+    return path
+
+
 def scoped(observed,base,home,project,role,*,module):
-    def component(value):
-        if (type(value) is not str or not 0<len(value)<=4096 or value in ('.','..')
-                or any(char in value for char in ('/','\\','\0'))):
-            raise Refused('node scoped data component')
-        return value
     mission=component(observed.get('UNREST_MISSION_ID'))
     runtime=home/'projects'/project/'.unrest-runtime/missions'/mission
     if role=='terminal_reviewer':
@@ -48,16 +55,8 @@ def scoped(observed,base,home,project,role,*,module):
         data={key:str(path),'UNREST_NODE_ID':node,'UNREST_NODE_TYPE':role}
         if module:
             body=observed.get('UNREST_NODE_ASSIGNMENT','')
-            if type(body) is not str or len(body)>8192:
+            if type(body) is not str or len(body.encode())>8192:
                 raise Refused('node assignment bound')
-            try:
-                value=json.loads(body,object_pairs_hook=unique)
-            except (ValueError,RecursionError):
-                raise Refused('node assignment JSON') from None
-            if (type(value) is not dict or set(value)!={'targets','task_type'} or value['task_type']!=role
-                    or type(value['targets']) is not list or len(value['targets'])>128
-                    or any(type(item) is not str or not 0<len(item)<=4096 or '\0' in item for item in value['targets'])):
-                raise Refused('node assignment data shape')
             data['UNREST_NODE_ASSIGNMENT']=body
     if not valid or path.resolve()!=path:
         raise Refused('node output outside acquired project')

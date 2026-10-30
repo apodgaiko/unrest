@@ -206,7 +206,7 @@ def test_resumed_signals_require_admission_and_exact_cursor_without_fake_popen(t
     def record(path):
         assert path==tmp_path/'.unrest/.unrest-runtime/runs'/(_safe_token(run)+'.worker.json')
         return cursor
-    monkeypatch.setattr(composed_runtime,'record',record)
+    monkeypatch.setattr(__import__('measurement_runtime'),'record',record)
     actual={**observed,'namespaces':{'pid':'pid:[123]'}}
     monkeypatch.setattr(adoption,'process_identity',lambda pid:actual)
     payload={'pid':child.pid,'signal':15,'group':True}

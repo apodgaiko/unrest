@@ -137,14 +137,10 @@ def test_substantive_defect_keeps_two_distinct_pinned_roles_and_owned_attempts(t
             'UNREST_WORKSPACE':str(tmp_path/'workspace'),'UNREST_PROJECT_ID':'p','UNREST_MISSION_ID':'mission-001',
             'UNREST_NODE_ID':role,'UNREST_NODE_TYPE':role,
             'UNREST_HANDOFF_PATH':str(project/'.unrest-runtime/missions/mission-001/attempts'/(spawn+'__'+role+'.json'))}
-        if mutation in ('project','workspace'):
-            with pytest.raises(Refused):
-                roles.environment(ROOT,tmp_path,case,index,{'HOME':'/owned/home'},observed=observed)
-        else:
-            environment=roles.environment(ROOT,tmp_path,case,index,{'HOME':'/owned/home'},observed=observed)
-            assert environment['UNREST_NODE_ID']==environment['UNREST_NODE_TYPE']==role
-            assert environment['UNREST_PROJECT_ID']=='p'
-            assert environment['UNREST_WORKSPACE']==str(tmp_path/'workspace')
-            assert environment['UNREST_HANDOFF_PATH'].endswith('__'+role+'.json')
-            assert roles.mode(case,index)==('worker' if role=='work' else 'validator')
-            assert not any(key.endswith('_ACP_COMMAND') for key in environment)
+        environment=roles.environment(ROOT,tmp_path,case,index,{'HOME':'/owned/home'},observed=observed)
+        assert environment['UNREST_NODE_ID']==environment['UNREST_NODE_TYPE']==role
+        assert environment['UNREST_PROJECT_ID']=='p'
+        assert environment['UNREST_WORKSPACE']==str(tmp_path/'workspace')
+        assert environment['UNREST_HANDOFF_PATH'].endswith('__'+role+'.json')
+        assert roles.mode(case,index)==('worker' if role=='work' else 'validator')
+        assert not any(key.endswith('_ACP_COMMAND') for key in environment)

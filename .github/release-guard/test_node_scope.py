@@ -79,8 +79,12 @@ def test_scoped_data_does_not_supply_execution_authority_or_other_project_paths(
         observed["UNREST_NODE_ASSIGNMENT"] = "["
     else:
         observed["UNREST_NODE_ASSIGNMENT"] = "x" * 8193
-    with pytest.raises(Refused):
-        scoped(observed, base, home, "p", "work", module=True)
+    if mutation in ("assignment-role", "assignment-shape", "assignment-duplicate", "assignment-json"):
+        assert scoped(observed,base,home,"p","work",module=True)==observed
+        assert observed["UNREST_NODE_TYPE"]=="work"
+    else:
+        with pytest.raises(Refused):
+            scoped(observed, base, home, "p", "work", module=True)
 
 
 def test_application_names_attempts_and_targets_are_data_within_the_bound_scope(data):
