@@ -236,44 +236,36 @@ class Observer:
             raise Refused('source root-only operation')
 
     def launch_owner(self, actor):
-        if actor['role'] in ('approval-adapter','approval-relay') and self.case in approval_launch.CASES and actor['case']==self.case and actor['body_ready'] and not self.finished:
-            return
-        if actor['role'] == 'root':
+        if actor['role']=='root':
             self.root_only(actor)
             return
-        if actor['role']=='archive-checker' and actor['case']==self.case and actor['body_ready'] and not self.finished:
-            if self.case==package_cases.POSITIVE:
-                return
-        if actor['role']=='desktop' and actor['case']==self.case and not self.finished:
-            if self.case==desktop_launch.CASE:
-                return
-        if actor['role'] == 'fixed-inline' and actor['case'] == self.case and not self.finished:
-            if self.case in approval_launch.RUNS:
-                approval_launch.worker_owner(self,actor)
-                return
-            if self.case in cohort_controller.CASES:
-                cohort_controller.owner(self,actor)
-                return
+        if self.finished or actor['case']!=self.case:
+            raise Refused('source original launch owner')
+        role=actor['role']
+        if role in ('approval-adapter','approval-relay') and self.case in approval_launch.CASES and actor['body_ready']:
+            return
+        if role=='archive-checker' and self.case==package_cases.POSITIVE and actor['body_ready']:
+            return
+        if role=='desktop' and self.case==desktop_launch.CASE:
+            return
+        if role=='fixed-inline':
             from composed_cases import CASES as COMPOSED
-            if self.case in COMPOSED:
-                from composed_runtime import owner
-                owner(self,actor)
-                return
-            if self.case in ROLE_CASES:
-                actor_slot(self,actor)
-                return
-            if self.case==run_worker_launch.MEASUREMENT_PROJECT:
-                from measurement_runtime import owner
-                owner(self,actor)
-                return
+            from composed_runtime import owner as composed_owner
+            from measurement_runtime import owner as measurement_owner
+            for cases,authorize in ((approval_launch.RUNS,approval_launch.worker_owner),
+                    (cohort_controller.CASES,cohort_controller.owner),(COMPOSED,composed_owner),
+                    (ROLE_CASES,actor_slot),((run_worker_launch.MEASUREMENT_PROJECT,),measurement_owner)):
+                if self.case in cases:
+                    authorize(self,actor)
+                    return
             if self.case in run_worker_launch.DESCENDANTS and any(value.get('run_worker') and value.get('birth')==actor['birth'] and value['token']==actor['token'] for value in self.intents.values()):
                 return
-            if sum(value.get('fixed_operation') == 'check' and value['token'] == actor['token'] for value in self.intents.values()) != 1:
+            if sum(value.get('fixed_operation')=='check' and value['token']==actor['token'] for value in self.intents.values())!=1:
                 raise Refused('fixed inline has no query authority')
             return
-        if actor['role'] == 'session-adapter' and actor['case'] == self.case == SESSION_TIMEOUT and not self.finished:
+        if role=='session-adapter' and self.case==SESSION_TIMEOUT:
             return
-        if self.finished or actor['role'] not in ('root', 'mcp') or actor['role'] == 'mcp' and actor['case'] != self.case:
+        if role!='mcp':
             raise Refused('source original launch owner')
 
 

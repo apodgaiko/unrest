@@ -59,3 +59,32 @@ def test_unknown_case_has_no_generic_python_route(prepared):
     with pytest.raises(Refused,match='no declaration'):
         proposal(host,{},raw)
     assert not requests
+
+
+@pytest.mark.parametrize('role,family',(('approval-adapter','approval'),('approval-relay','approval'),
+    ('archive-checker','archive'),('desktop','desktop'),('session-adapter','session'),('mcp','mcp')))
+@pytest.mark.parametrize('mutation',(None,'case','finished','not-ready'))
+def test_shared_owner_frontier_preserves_role_specific_readiness(role,family,mutation):
+    import source_observer as observer
+    case={'approval':observer.approval_launch.CASES[0],'archive':observer.package_cases.POSITIVE,
+        'desktop':observer.desktop_launch.CASE,'session':observer.SESSION_TIMEOUT,'mcp':'local-case'}[family]
+    host=SimpleNamespace(case=case,finished=mutation=='finished')
+    actor={'role':role,'case':'foreign' if mutation=='case' else case,'body_ready':mutation!='not-ready'}
+    refused=mutation in ('case','finished') or mutation=='not-ready' and family in ('approval','archive')
+    if refused:
+        with pytest.raises(Refused):
+            observer.Observer.launch_owner(host,actor)
+    else:
+        observer.Observer.launch_owner(host,actor)
+
+
+def test_fixed_owner_routing_keeps_composed_before_overlapping_role_family(monkeypatch):
+    import source_observer as observer
+    import composed_runtime
+    from composed_cases import HERMETIC
+    seen=[]
+    monkeypatch.setattr(composed_runtime,'owner',lambda host,actor:seen.append('composed'))
+    monkeypatch.setattr(observer,'actor_slot',lambda host,actor:pytest.fail('overlapping fallback'))
+    host=SimpleNamespace(case=HERMETIC,finished=False)
+    observer.Observer.launch_owner(host,{'role':'fixed-inline','case':HERMETIC})
+    assert seen==['composed']
