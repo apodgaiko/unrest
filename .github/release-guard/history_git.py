@@ -55,7 +55,8 @@ def commands(checkout,case):
 
 
 def proposal(host,actor,raw):
-    from git_observer import image
+    from git_observer import issue
+    from git_commands import Command
     checkout=Path(host.meta['checkout'])
     if host.case==CLI:
         if raw['argv'][0]==host.binding['entry']['path']:
@@ -71,9 +72,8 @@ def proposal(host,actor,raw):
     if raw['executable']!='/usr/bin/git' or raw['stdin'] is not None or tuple(raw['argv'][1:]) not in commands(checkout,host.case):
         raise Refused('history exact readonly command')
     environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':host.case+' (call)'}
-    expected=build_expected(host.case,'/usr/bin/git',image(),tuple(raw['argv']),
-        tuple(sorted(environment.items())),raw['cwd'] if host.case==CLI else str(checkout),'native')
-    return admit_expected(host,actor,raw,expected,'git-custody',['/usr/bin/git',*raw['argv'][1:]],maximum=2 if host.case==REPOSITORY else 128)
+    command=Command(tuple(raw['argv']),raw['cwd'] if host.case==CLI else str(checkout))
+    return issue(host,actor,raw,command,environment,role='git-custody',maximum=2 if host.case==REPOSITORY else 128)
 
 
 def cli_proposal(host,actor,raw):

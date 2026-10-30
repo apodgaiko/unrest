@@ -112,11 +112,4 @@ def proposal(host,actor,raw):
     records=[row for row in host.intents.values() if row['case']==host.case and row['role']=='git-command']
     repository=raw['cwd']
     value,environment=command(Path(host.meta['checkout']),host.case,repository,len(records),raw['argv'])
-    if raw['executable']!='/usr/bin/git' or raw['stdin'] is not None or raw['environment']!=environment:
-        raise Refused('candidate fixture exact executable environment or input')
-    from git_observer import image
-    from launch_policy import build_expected
-    expected=build_expected(host.case,'/usr/bin/git',image(),value.argv,
-        tuple(sorted(environment.items())),repository,'native')
-    answer=host.git.launch(actor,'init' if not records else 'candidate-command',repository,value,expected,list(value.argv))
-    return None if answer is None else {**answer,'translated':list(value.argv)}
+    return host.git.launch(actor,'init' if not records else 'candidate-command',repository,value,raw,environment)

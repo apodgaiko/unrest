@@ -80,18 +80,9 @@ def proposal(host, actor, raw):
     vector, role, maximum, inherited, port = None, None, 1, [], None
     custody=case in (*CONTROLLED,*COHORT_GIT) and argv[0]=='/usr/bin/git'
     if custody:
-        from custody_git import command as custody_command,ENVIRONMENT
-        from git_observer import image
-        from launch_policy import build_expected
-        value,custody_kind=custody_command(case,tuple(argv),cwd,owned)
-        expected=build_expected(
-            case,
-            '/usr/bin/git', image(),
-            value.argv,
-            tuple(sorted(ENVIRONMENT.items())),
-            cwd, 'native',
-        )
-        script_pin,vector=None,list(value.argv)
+        from custody_git import command as custody_command,launch
+        value,kind=custody_command(case,tuple(argv),cwd,owned)
+        return launch(host,actor,value,kind,raw)
     elif case in PLANS:
         model = plan_expected(case,cwd,owned,native,pin)
         expected, vector = model.expected,list(model.vector)
@@ -254,9 +245,6 @@ def proposal(host, actor, raw):
     if case in PLANS:
         from plan_observer import launch
         answer=launch(host,actor,model)
-    elif custody:
-        from custody_git import launch
-        answer=launch(host,actor,value,custody_kind,expected)
     else:
         answer=host.admit_launch(actor,expected,role,vector,script_pin,
             maximum=maximum,inherited=inherited,port=port)

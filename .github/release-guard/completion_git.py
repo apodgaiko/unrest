@@ -5,8 +5,7 @@ from completion_roles import CASES,SOURCE,ROOT_QUERIES,DEFECT,schedule,root,acto
 from content_manifest import Refused
 from custody_git import repository
 from git_commands import Command
-from git_observer import image
-from launch_policy import admit_expected,build_expected
+from git_observer import issue
 from composed_cases import CASES as COMPOSED,queries
 
 FIXTURE=(('git','init','-q'),('git','-c','user.name=Test','-c','user.email=test@example.invalid',
@@ -79,15 +78,7 @@ def proposal(host,actor,raw):
         vector=('git','rev-parse','HEAD')
         command=Command(vector,str(workspace))
         environment=dict(actor['profile']['environment'])
-    expected=build_expected(case,'/usr/bin/git',image(),vector,
-        tuple(sorted(environment.items())),str(workspace),'native')
-    translated=['/usr/bin/git',*vector[1:]]
-    answer=admit_expected(host,actor,raw,expected,'git-command',translated,
-        maximum=len(commands)+ROOT_QUERIES.get(case,0)+(queries(case) if case in COMPOSED else sum(row[2] for row in schedule(case))))
-    if answer is None:
-        return None
-    intent=host.intents[answer['ticket']]
-    intent.update(command=command,repository=str(workspace),operation='completion-fixture' if is_fixture else 'completion-head',
-        fixture_git=is_fixture)
-    host.git.commands[intent['token']]=intent
-    return answer
+    return issue(host,actor,raw,command,environment,
+        maximum=len(commands)+ROOT_QUERIES.get(case,0)+(queries(case) if case in COMPOSED else sum(row[2] for row in schedule(case))),
+        fields={'command':command,'repository':str(workspace),'operation':'completion-fixture' if is_fixture else 'completion-head',
+            'fixture_git':is_fixture})

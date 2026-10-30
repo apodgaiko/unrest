@@ -3,7 +3,7 @@ from pathlib import Path
 import re
 import stat
 from content_manifest import Refused
-from launch_policy import source_unit,build_expected
+from launch_policy import source_unit
 from git_commands import Command,match as match_command
 
 OWNER=20000
@@ -64,13 +64,7 @@ def proposal(host,actor,raw):
                 raise Refused('measurement single shared Git operation')
             operation,value=next(iter(matches.items()))
             environment.update(value.additions)
-    if raw['environment']!=environment:
-        raise Refused('measurement original Git environment')
-    from git_observer import image
-    expected=build_expected(host.case,'/usr/bin/git',image(),value.argv,
-        tuple(sorted(environment.items())),value.cwd,'native')
-    answer=host.git.launch(actor,operation,repository,value,expected,['/usr/bin/git',*argv[1:]])
-    return None if answer is None else {**answer,'translated':['/usr/bin/git',*argv[1:]]}
+    return host.git.launch(actor,operation,repository,value,raw,environment)
 
 
 def cold_root(host,path):

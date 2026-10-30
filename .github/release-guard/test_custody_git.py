@@ -56,6 +56,8 @@ __import__('sys').addaudithook(_audit)
 @pytest.mark.parametrize('replacement',['repository','metadata'])
 def test_same_path_replacement_cannot_inherit_prior_repository_facts(monkeypatch,replacement):
     import custody_git
+    import git_observer
+    monkeypatch.setattr(git_observer,'image',lambda:'a'*64)
     from types import SimpleNamespace
     cwd = '/owned/pytest/case/cohort/base'
     directory = ((cwd,1,10,20000),)
@@ -70,11 +72,15 @@ def test_same_path_replacement_cannot_inherit_prior_repository_facts(monkeypatch
 
 def test_deferred_constructor_does_not_consume_a_git_command(monkeypatch):
     import custody_git
+    import git_observer
+    monkeypatch.setattr(git_observer,'image',lambda:'a'*64)
     from types import SimpleNamespace
     cwd = '/owned/pytest/case/cohort/base'
     host = SimpleNamespace(case=CASE,meta={'owned':'/owned'},intents={},root_only=lambda actor:None,
         admit_launch=lambda *args,**kwargs:None,
         git=SimpleNamespace(custody_roots={},commands={}))
     monkeypatch.setattr(custody_git,'repository',lambda *args,**kwargs:(((cwd,1,10,20000),),(1,20,20000)))
-    assert custody_git.launch(host,None,*custody_git.command(CASE,tuple([*PREFIX,'rev-parse','HEAD']),cwd,Path('/owned')),None) is None
+    assert custody_git.launch(host,None,*custody_git.command(CASE,tuple([*PREFIX,'rev-parse','HEAD']),cwd,Path('/owned')),
+        {'executable':'/usr/bin/git','argv':[*PREFIX,'rev-parse','HEAD'],'cwd':cwd,
+         'stdin':None,'environment':custody_git.ENVIRONMENT}) is None
     assert not host.intents and not host.git.commands

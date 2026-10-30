@@ -10,6 +10,7 @@ from content_manifest import Refused
 import completion_git as git
 import completion_roles as roles
 from git_observer import HOME_CONFIG
+import git_observer
 
 
 @pytest.fixture
@@ -22,7 +23,7 @@ def fixture(tmp_path,monkeypatch):
     home.mkdir()
     (home/'.gitconfig').write_bytes(HOME_CONFIG)
     monkeypatch.setattr(roles,'OWNER',os.getuid())
-    monkeypatch.setattr(git,'image',lambda:'a'*64)
+    monkeypatch.setattr(git_observer,'image',lambda:'a'*64)
     def repository(path,owned,*,initialize):
         root=Path(path)
         info=root.stat()

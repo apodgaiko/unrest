@@ -32,6 +32,19 @@ def image(file='/usr/bin/git'):
     return native_digest(target)
 
 
+def issue(host,actor,raw,command,environment,*,role='git-command',maximum=128,fields=None):
+    from launch_policy import build_expected,admit_expected
+    if raw['executable']!='/usr/bin/git' or raw['stdin']!=command.stdin:
+        raise Refused('Git exact executable and input')
+    expected=build_expected(host.case,'/usr/bin/git',image(),command.argv,
+        tuple(sorted(environment.items())),command.cwd,'native')
+    vector=['/usr/bin/git',*command.argv[1:]]
+    answer=admit_expected(host,actor,raw,expected,role,vector,maximum=maximum,fields=fields)
+    if answer is not None and fields is not None:
+        host.git.commands[answer['token']]=host.intents[answer['ticket']]
+    return answer
+
+
 class Git:
     def __init__(self, observer):
         self.host = observer
@@ -81,26 +94,19 @@ class Git:
         if not path.is_dir() or str(path.resolve(strict=True)) != location:
             raise Refused('git original worktree directory')
 
-    def launch(self, actor, operation, repository, command, expected, vector):
+    def launch(self, actor, operation, repository, command, raw, environment):
         host = self.host
         host.root_only(actor)
         if host.case not in CASES:
             raise Refused('Git finite case')
-        if operation=='owned-process':
-            return self.owned_launch(actor,repository,expected,vector)
         from git_fixtures import SLOTS,fixture as declared_fixture
         family=declared_fixture(host.case).family if host.case in SLOTS else 'workspaces' if host.case.startswith('tests/test_workspaces.py::') else 'evolution'
         if operation not in OPERATIONS[family]:
             raise Refused('Git finite operation declaration')
         root = self.repository(repository, operation, family)
         self.location(root, command.cwd)
-        answer = host.admit_launch(actor,expected,'git-command',vector,None,maximum=128)
-        if answer is None:
-            return None
-        intent = host.intents[answer['ticket']]
-        intent.update(command=command, repository=str(root), operation=operation)
-        self.commands[intent['token']] = intent
-        return answer
+        return issue(host,actor,raw,command,environment,
+            fields={'command':command,'repository':str(root),'operation':operation})
 
     def reserve_helper(self, birth, parent):
         host = self.host

@@ -31,6 +31,23 @@ def host_value(**changes):
     return SimpleNamespace(**fields)
 
 
+def wire_git(host,calls):
+    from pathlib import Path
+    from git_observer import Git
+    repositories=host.git.repositories
+    host.git=Git(host)
+    host.git.repositories=repositories
+    host.git.repository=lambda repository,*args:Path(repository)
+    host.git.location=lambda *args:None
+    host.root_only=lambda actor:None
+    host.intents={}
+    def admit(actor,expected,role,vector,pin,**options):
+        calls.append((expected,role,vector,options))
+        host.intents[1]={}
+        return {'ok':True,'ticket':1,'token':'t'}
+    host.admit_launch=admit
+
+
 @pytest.mark.parametrize(
     "operation,location,fields",
     [
@@ -98,9 +115,9 @@ def test_complete_vector_matches_exact_template_and_bounded_operands(
 
 @pytest.mark.parametrize("mutation", ["argv", "cwd", "environment", "stdin", "family"])
 def test_proposal_mutation_never_reaches_launch(monkeypatch, mutation):
-    import git_proposals
+    import git_observer
 
-    monkeypatch.setattr(git_proposals, "image", lambda: "a" * 64)
+    monkeypatch.setattr(git_observer, "image", lambda: "a" * 64)
     calls = []
     host = SimpleNamespace(
         case=CASES[0],
@@ -121,6 +138,7 @@ def test_proposal_mutation_never_reaches_launch(monkeypatch, mutation):
         },
         "stdin": None,
     }
+    wire_git(host,calls)
     if mutation == "argv":
         raw["argv"].append("--bare")
     elif mutation == "cwd":
@@ -137,9 +155,9 @@ def test_proposal_mutation_never_reaches_launch(monkeypatch, mutation):
 
 
 def test_producer_reply_is_recursively_json_finite(monkeypatch):
-    import git_proposals
+    import git_observer
 
-    monkeypatch.setattr(git_proposals, "image", lambda: "a" * 64)
+    monkeypatch.setattr(git_observer, "image", lambda: "a" * 64)
     host = SimpleNamespace(
         case=CASES[0],
         git=SimpleNamespace(repositories={(CASES[0],REPO): {"path": REPO, "setup": 5}}),
@@ -159,7 +177,7 @@ def test_producer_reply_is_recursively_json_finite(monkeypatch):
         },
         "stdin": None,
     }
-    host.git.launch = lambda *args: host.launch(None,None)
+    wire_git(host,[])
     # Use the real fixed producer template rather than a fabricated stdout value.
     raw["argv"] = ["git", "rev-parse", "HEAD"]
     answer = prepare(host, {}, raw)
@@ -191,9 +209,9 @@ def test_owned_process_refuses_undeclared_stdin_before_admission():
 
 
 def test_evolution_uses_shared_workspace_query_after_its_fixture_setup(monkeypatch):
-    import git_proposals
+    import git_observer
 
-    monkeypatch.setattr(git_proposals, "image", lambda: "a" * 64)
+    monkeypatch.setattr(git_observer, "image", lambda: "a" * 64)
     case = CASES[13]
     calls = []
     host = SimpleNamespace(
@@ -203,11 +221,7 @@ def test_evolution_uses_shared_workspace_query_after_its_fixture_setup(monkeypat
         meta_environment=lambda: {"PATH": "/bin:/usr/bin"},
     )
 
-    def launch(actor, operation, repository, command, expected, vector):
-        calls.append((operation,repository,command,expected,vector))
-        return {"ok": True, "ticket": 1, "token": "t"}
-
-    host.git.launch = launch
+    wire_git(host,calls)
     raw = {
         "case": case,
         "executable": "/usr/bin/git",
@@ -222,9 +236,9 @@ def test_evolution_uses_shared_workspace_query_after_its_fixture_setup(monkeypat
     }
     answer = prepare(host, {}, raw)
     assert answer["translated"] == ['/usr/bin/git',*raw["argv"][1:]]
-    assert calls[0][:2] == ("inside", REPO)
-    assert calls[0][2].argv == tuple(raw["argv"])
-    assert calls[0][3].case == case and calls[0][3].argv == tuple(raw["argv"])
+    assert host.intents[1]["operation"] == "inside"
+    assert host.intents[1]["repository"] == REPO
+    assert calls[0][0].case == case and calls[0][0].argv == tuple(raw["argv"])
     raw["argv"] = ["git", "commit", "-m", "child self commit"]
     with pytest.raises(Refused):
         prepare(host, {}, raw)
@@ -246,10 +260,10 @@ def test_shared_repository_operations_exist_for_both_product_families(family, op
 
 @pytest.mark.parametrize('branch',['main','master'])
 def test_proposal_update_targets_only_authored_main_or_master(monkeypatch,branch):
-    import git_proposals
+    import git_observer
     from git_fixtures import SLOTS
 
-    monkeypatch.setattr(git_proposals,'image',lambda:'a'*64)
+    monkeypatch.setattr(git_observer,'image',lambda:'a'*64)
     case=next(iter(SLOTS))
     calls=[]
     host=SimpleNamespace(case=case,
@@ -257,6 +271,7 @@ def test_proposal_update_targets_only_authored_main_or_master(monkeypatch,branch
                             launch=lambda *args:calls.append(args) or {'ticket':1}),
         binding={'entry':{'path':'/native/python','sha256':'b'*64}},
         meta_environment=lambda:{'PATH':'/bin:/usr/bin'})
+    wire_git(host,calls)
     raw={'executable':'/usr/bin/git','argv':['git','update-ref','refs/heads/'+branch,TREE,REV],
          'cwd':REPO,'stdin':None,'environment':{'PATH':'/bin:/usr/bin','PYTEST_VERSION':'9.0.2',
             'PYTEST_CURRENT_TEST':case+' (call)'}}

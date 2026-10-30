@@ -3,7 +3,6 @@
 from content_manifest import Refused
 from git_commands import match as match_command,Command,SETUP
 from git_sites import CASES,OPERATIONS,OWNED_BODY,SHARED_OPERATIONS
-from git_observer import image
 from launch_policy import build_expected
 
 
@@ -43,6 +42,12 @@ def prepare(host,actor,raw):
             raw['cwd'], 'python-command',
         )
         vector=[native,'-I','-S','-c',OWNED_BODY]
+        host.root_only(actor)
+        if raw['environment']!=dict(expected.environment):
+            raise Refused('Git owned process environment differs')
+        answer=host.git.owned_launch(actor,repository,expected,vector)
+        return None if answer is None else {**answer,'translated':vector}
+
     else:
         if raw['executable']!='/usr/bin/git':
             raise Refused('Git proposal original executable')
@@ -61,17 +66,4 @@ def prepare(host,actor,raw):
         operation,command=next(iter(candidates.items()))
         phase=(fixture.phase if fixture is not None else 'setup') if operation in SETUP else 'call'
         environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' ('+phase+')',**dict(command.additions)}
-        expected=build_expected(
-            case,
-            '/usr/bin/git', image(),
-            command.argv,
-            tuple(sorted(environment.items())),
-            command.cwd, 'native',
-        )
-        vector=['/usr/bin/git',*command.argv[1:]]
-    if raw['environment']!=dict(expected.environment) or raw['cwd']!=expected.cwd:
-        raise Refused('Git proposal environment or cwd differs')
-    answer=host.git.launch(actor,operation,repository,command,expected,vector)
-    if answer is None:
-        return None
-    return {**answer,'translated':vector}
+        return host.git.launch(actor,operation,repository,command,raw,environment)

@@ -13,14 +13,17 @@ from launch_policy import build_expected
 
 
 @pytest.mark.parametrize('failure',[None,'repository','location'])
-def test_selected_git_command_retains_repository_and_worktree_custody(failure):
+def test_selected_git_command_retains_repository_and_worktree_custody(failure,monkeypatch):
+    import git_observer
+    monkeypatch.setattr(git_observer,'image',lambda:'b'*64)
     calls=[]
     host=SimpleNamespace(case=CASES[0],root_only=lambda actor:None,intents={},
         ledger=Ledger('synthetic-direct-git'))
-    git=Git(host)
+    git=host.git=Git(host)
     host.ledger.reaped=lambda *args:failure!='unreaped'
     command=Command(('git','rev-parse','HEAD'),'/owned/project')
     value=build_expected(host.case, '/usr/bin/git', 'b'*64, command.argv, (), command.cwd, 'native')
+    raw={'executable':'/usr/bin/git','argv':list(command.argv),'stdin':None,'environment':{},'cwd':command.cwd}
     def repository(*args):
         calls.append(('repository',args))
         if failure=='repository':
@@ -38,12 +41,12 @@ def test_selected_git_command_retains_repository_and_worktree_custody(failure):
     host.admit_launch=admit
     if failure:
         with pytest.raises(Refused):
-            git.launch({},'head',command.cwd,command,value,list(command.argv))
+            git.launch({},'head',command.cwd,command,raw,{})
         assert not host.intents and all(kind!='admit' for kind,_ in calls)
     else:
-        assert git.launch({},'head',command.cwd,command,value,list(command.argv))['ok'] is True
+        assert git.launch({},'head',command.cwd,command,raw,{})['ok'] is True
         assert [kind for kind,_ in calls]==['repository','location','admit']
-        assert calls[2][1]==(value,'git-command',list(command.argv),None)
+        assert calls[2][1]==(value,'git-command',['/usr/bin/git',*command.argv[1:]],None)
         assert git.commands['new'] is host.intents[1]
         assert host.intents[1]['command'] is command
 

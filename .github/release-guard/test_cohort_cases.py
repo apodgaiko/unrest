@@ -42,6 +42,8 @@ def test_pre_send_stops_allow_one_owned_startup_pair_but_no_second(boundary):
 
 def test_git_quota_remains_case_wide_without_intermediate_wait_ordering(monkeypatch):
     import custody_git
+    import git_observer
+    monkeypatch.setattr(git_observer,'image',lambda:'a'*64)
     from types import SimpleNamespace
     case=TEST+'::test_actual_four_arm_timing_and_model_conformance[equal-True-True]'
     cwd='/owned/pytest/case/other'
@@ -51,10 +53,13 @@ def test_git_quota_remains_case_wide_without_intermediate_wait_ordering(monkeypa
         git=SimpleNamespace(custody_roots={},commands={}))
     monkeypatch.setattr(custody_git,'repository',lambda *args,**kwargs:(((cwd,1,10,20000),),(1,20,20000)))
     selected=command(case,(*PREFIX,'rev-parse','HEAD'),cwd,Path('/owned'))
-    assert custody_git.launch(host,None,*selected,None) is None
+    assert custody_git.launch(host,None,*selected,{'executable':'/usr/bin/git','argv':list(selected[0].argv),
+        'cwd':selected[0].cwd,'stdin':None,'environment':custody_git.ENVIRONMENT}) is None
     prior['repository']=cwd
-    assert custody_git.launch(host,None,*selected,None) is None
+    assert custody_git.launch(host,None,*selected,{'executable':'/usr/bin/git','argv':list(selected[0].argv),
+        'cwd':selected[0].cwd,'stdin':None,'environment':custody_git.ENVIRONMENT}) is None
     prior['repository']='/owned/pytest/case/first'
     host.intents={i:prior for i in range(CASES[case][1])}
     with pytest.raises(Refused,match='command bound'):
-        custody_git.launch(host,None,*selected,None)
+        custody_git.launch(host,None,*selected,{'executable':'/usr/bin/git','argv':list(selected[0].argv),
+        'cwd':selected[0].cwd,'stdin':None,'environment':custody_git.ENVIRONMENT})

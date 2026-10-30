@@ -15,10 +15,15 @@ def host(monkeypatch):
         binding={'entry':{'path':'/native/python'}},intents={},seen=[])
     value.root_only=lambda actor:None
     value.meta_environment=lambda:{'PATH':'/usr/bin:/bin'}
-    def launch(*args):
-        value.seen.append(args)
+    from git_observer import Git
+    value.git=Git(value)
+    value.git.repository=lambda repository,*args:Path(repository)
+    value.git.location=lambda *args:None
+    def admit(actor,expected,role,vector,pin,**options):
+        value.seen.append(expected)
+        value.intents[1]={}
         return {'ticket':1,'token':'child','ok':True}
-    value.git=SimpleNamespace(launch=launch,repositories={})
+    value.admit_launch=admit
     return value
 
 def raw(host,args):
@@ -34,7 +39,7 @@ def test_every_original_source_fixture_has_exact_commands(host,case):
     for args in (['init','-q'],['add','.'],['ls-files','-z','--stage']):
         result=measurement.proposal(host,{'role':'root'},raw(host,args))
         assert result['translated']==['/usr/bin/git',*args]
-        assert host.seen[-1][1]==('init' if args[0]=='init' else 'measurement-command')
+        assert host.intents[1]['operation']==('init' if args[0]=='init' else 'measurement-command')
 
 @pytest.mark.parametrize('args',(['add','USER'],['commit','-m','fixture'],['config','user.name','extra'],['ls-files','--others']))
 def test_other_commands_refuse_before_any_launch(host,args):
@@ -45,7 +50,7 @@ def test_other_commands_refuse_before_any_launch(host,args):
 def test_provider_or_other_environment_cannot_be_inherited(host):
     request=raw(host,['init','-q'])
     request['environment']['OPENAI_API_KEY']='canary'
-    with pytest.raises(Refused,match='original Git environment'):
+    with pytest.raises(Refused,match='original launch operands'):
         measurement.proposal(host,{'role':'root'},request)
     assert not host.seen
 

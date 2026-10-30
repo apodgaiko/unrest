@@ -988,3 +988,10 @@ FD closure and prebody extra-descriptor census still protect observer custody;
 the sensitive inventory and multiprocessing descriptor checks remain separate.
 Product tests retain real output, pipe-drain and completion assertions. The guard
 does not certify standard-stream routing or output-value provenance.
+
+Git families share one native declaration and intent issuer. It compares the
+complete argv/environment/cwd plus executable and stdin, then binds the measured
+image and actual-parent intent through the existing ledger. Family adapters
+still select command forms, original parameter/ordinal restrictions, repository
+generations, actor roles, quotas and helper eligibility before issuance. The
+shared issuer grants no new Git form, config key, provider route or descendant.

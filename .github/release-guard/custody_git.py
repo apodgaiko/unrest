@@ -76,7 +76,7 @@ def repository(cwd, owned, *, initialize):
     return tuple(identities),metadata_identity
 
 
-def launch(host,actor,result,kind,expected):
+def launch(host,actor,result,kind,raw):
     from cohort_controller import parent
     parent(host,actor)
     prior = [v for v in host.intents.values() if v['case'] == host.case and v['role'] == 'git-custody']
@@ -90,10 +90,6 @@ def launch(host,actor,result,kind,expected):
     if previous is not None and (previous[0] != identity[0] or previous[1] is not None and previous[1] != identity[1]):
         raise Refused('custody Git replaced repository generation')
     host.git.custody_roots[key] = identity
-    answer = host.admit_launch(actor,expected,'git-custody',list(result.argv),None,maximum=maximum)
-    if answer is None:
-        return None
-    intent = host.intents[answer['ticket']]
-    intent.update(command=result,repository=result.cwd,operation='custody-'+kind)
-    host.git.commands[intent['token']] = intent
-    return answer
+    from git_observer import issue
+    return issue(host,actor,raw,result,ENVIRONMENT,role='git-custody',maximum=maximum,
+        fields={'command':result,'repository':result.cwd,'operation':'custody-'+kind})
