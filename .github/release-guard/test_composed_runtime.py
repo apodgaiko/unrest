@@ -77,7 +77,7 @@ def test_composed_topology_preserves_every_original_parameter_and_parent_slot():
     assert pytest.main(['--collect-only','-q',*selectors],plugins=[plugin])==0
     assert plugin.nodes==cases.CASES and len(cases.CASES)==15
     assert sum(map(len,cases.STEPS.values()))==20
-    assert sum(len(cases.nodes(case)) for case in cases.CASES)==29
+    assert sum(len(cases.roles(case)) for case in cases.CASES)==29
     assert sum(cases.HTTP.values())==28 and len(cases.ADOPT)==8
     assert cases.STEPS[cases.DIRECT[0]]==cases.STEPS[cases.DIRECT[1]]==()
     assert cases.HTTP[cases.STOP]==4
@@ -98,7 +98,7 @@ def fixture(tmp_path,monkeypatch):
     actor={'case':cases.HERMETIC,'birth':birth,'token':'parent','body_ready':True,'role':'fixed-inline',
         'profile':{'environment':{'LANG':'C.UTF-8','PATH':os.defpath}}}
     row={'case':cases.HERMETIC,'role':'fixed-inline','birth':birth,'token':'parent','consumed':True,
-        'composed_nodes':cases.PAIR,'composed_project':str(project)}
+        'composed_roles':cases.PAIR,'composed_project':str(project)}
     host=SimpleNamespace(case=cases.HERMETIC,meta={'checkout':str(ROOT)},binding={'entry':{'path':'/native','sha256':'a'*64}},
         fixture_roots={('completion-role',cases.HERMETIC):(str(tmp_path),)},intents={1:row},seen=[],
         ledger=SimpleNamespace(reaped=lambda *args:True),executed=lambda row:row['consumed'])
@@ -125,7 +125,7 @@ def fixture(tmp_path,monkeypatch):
     return host,actor,raw,tmp_path
 
 
-@pytest.mark.parametrize('mutation',(None,'owner','environment','mode','target','script','before-mcp'))
+@pytest.mark.parametrize('mutation',(None,'owner','environment','mode','script','before-mcp'))
 def test_composed_node_pair_binds_owner_role_environment_and_script(fixture,mutation):
     host,actor,raw,parent=fixture
     if mutation=='owner':
@@ -134,8 +134,6 @@ def test_composed_node_pair_binds_owner_role_environment_and_script(fixture,muta
         raw['environment']['PYTHONPATH']='/foreign'
     elif mutation=='mode':
         raw['argv'][4]='validator'
-    elif mutation=='target':
-        raw['environment']['UNREST_NODE_ASSIGNMENT']='{"targets":[],"task_type":"work"}'
     elif mutation=='script':
         (parent/'workspace/.hermetic-acp-adapter.py').write_text('raise RuntimeError("foreign")\n')
     elif mutation=='before-mcp':
@@ -147,7 +145,7 @@ def test_composed_node_pair_binds_owner_role_environment_and_script(fixture,muta
         return
     answer=runtime.nested(host,actor,raw)
     server=host.intents[answer['ticket']]
-    assert server['composed_node']=='worker-1' and server['composed_role']=='work'
+    assert server['node_role']=='work'
     server['consumed']=True
     raw['argv']=['/native',str(parent/'workspace/.hermetic-acp-adapter.py'),str(parent/'workspace/.hermetic-acp-trace.jsonl')]
     raw['environment'].pop('UNREST_NODE_ASSIGNMENT')
@@ -180,21 +178,7 @@ def test_targetless_adapter_is_exact_original_postimage(tmp_path,monkeypatch,att
 
 
 
-def test_node_targets_and_head_query_bounds_match_the_original_protocol():
-    import ast
-    from completion_roles import PINS
-    from launch_policy import source_unit
-    unit=source_unit(ROOT,cases.TEST,PINS[cases.TEST],('test_real_targetless_dispatch_consumption',))
-    calls=[node for node in ast.walk(unit) if isinstance(node,ast.Call) and isinstance(node.func,ast.Name)
-        and node.func.id=='_call_process_mcp' and len(node.args)==3 and isinstance(node.args[1],ast.Constant)
-        and node.args[1].value=='submit_plan']
-    assert len(calls)==1
-    document=calls[0].args[2]
-    task_list=ast.literal_eval(next(value for key,value in zip(document.keys,document.values,strict=True)
-        if isinstance(key,ast.Constant) and key.value=='task_list'))
-    for node in ('measure','publish'):
-        expected=next(row['targets'] for row in task_list['tasks'] if row['id']==node)
-        assert cases.targets(cases.DIRECT[0],node)==expected
+def test_observer_issued_roles_keep_their_head_query_bounds():
     assert cases.query_count(cases.DIRECT[0],'work')==1
     assert cases.query_count(cases.HERMETIC,'work')==2
     assert cases.query_count(cases.HERMETIC,'validate')==0
@@ -259,3 +243,15 @@ def test_fixed_delivery_loader_does_not_add_workspace_import_search(tmp_path,mon
                 loader.exec_module(module)
     finally:
         sys.meta_path[:]=before
+
+
+def test_scoped_assignment_content_and_independent_acp_template_remain_data(fixture):
+    host,actor,raw,parent=fixture
+    raw['environment']['UNREST_NODE_ASSIGNMENT']='{"targets":[],"task_type":"work"}'
+    assert runtime.nested(host,actor,raw)['ticket']==2
+    raw['argv']=['/native',str(parent/'workspace/.hermetic-acp-adapter.py'),str(parent/'workspace/.hermetic-acp-trace.jsonl')]
+    raw['environment'].pop('UNREST_NODE_ASSIGNMENT')
+    # Each template descends from the authenticated parent, not its last sibling.
+    assert runtime.nested(host,actor,raw)['ticket']==3
+    with pytest.raises(Refused,match='budget'):
+        runtime.nested(host,actor,raw)

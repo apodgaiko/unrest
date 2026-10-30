@@ -131,11 +131,17 @@ def test_substantive_defect_keeps_two_distinct_pinned_roles_and_owned_attempts(t
     assert bodies[0]==bodies[1] and 'independent validator found the defect' in bodies[1]
     ast.parse(bodies[0])
     for index,role in enumerate(('work','validate')):
-        if mutation is not None:
+        spawn='another-attempt' if mutation=='attempt' else state['tasks'][role]['last_attempt']
+        observed={'HOME':'/owned/home','UNREST_HOME':str(tmp_path/'.unrest'),
+            'UNREST_PROJECTS_DIR':str(tmp_path/'.unrest/projects'),'PYTHONPATH':str(ROOT/'src'),
+            'UNREST_WORKSPACE':str(tmp_path/'workspace'),'UNREST_PROJECT_ID':'p','UNREST_MISSION_ID':'mission-001',
+            'UNREST_NODE_ID':role,'UNREST_NODE_TYPE':role,
+            'UNREST_HANDOFF_PATH':str(project/'.unrest-runtime/missions/mission-001/attempts'/(spawn+'__'+role+'.json'))}
+        if mutation in ('project','workspace'):
             with pytest.raises(Refused):
-                roles.environment(ROOT,tmp_path,case,index,{'HOME':'/owned/home'})
+                roles.environment(ROOT,tmp_path,case,index,{'HOME':'/owned/home'},observed=observed)
         else:
-            environment=roles.environment(ROOT,tmp_path,case,index,{'HOME':'/owned/home'})
+            environment=roles.environment(ROOT,tmp_path,case,index,{'HOME':'/owned/home'},observed=observed)
             assert environment['UNREST_NODE_ID']==environment['UNREST_NODE_TYPE']==role
             assert environment['UNREST_PROJECT_ID']=='p'
             assert environment['UNREST_WORKSPACE']==str(tmp_path/'workspace')

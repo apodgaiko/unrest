@@ -182,8 +182,7 @@ def proposal(host, actor, raw):
             base=retain(host,candidate,case.split('::')[1][:30],20000)
         role='sleep' if argv[0] in ('/bin/sleep','sleep') else 'session-invalid' if case in STARTUP_CASES else 'mock-acp'
         maximum=2 if case in BATCH_CASES or (case==ORDINARY[2] and role=='sleep') else 1
-        ordinal=sum(row['case']==case and row['role']=='mock-acp' for row in host.intents.values()) if case in BATCH_CASES and role=='mock-acp' else 0
-        expected = ordinary_expected(case,role,cwd,checkout,native,pin,root_environment,owned,base=base,ordinal=ordinal)
+        expected = ordinary_expected(case,role,cwd,checkout,native,pin,root_environment,owned,base=base,observed=raw['environment'])
         script_pin = expected.payload_sha256
         vector = list(expected.argv) if role in ('sleep','session-invalid') else [native,'-I','-S',*expected.argv[1:]]
     elif case in DECLARATIONS:

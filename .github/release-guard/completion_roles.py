@@ -136,13 +136,13 @@ def mode(case,ordinal):
     return 'orchestrator' if family=='restart' and ordinal>0 else 'validator' if role=='validate' else 'worker'
 
 
-def environment(checkout,parent,case,ordinal,ambient,*,native=None):
+def environment(checkout,parent,case,ordinal,ambient,*,native=None,observed=None):
     family,role,scenario=CASES[case]
     http=schedule(case)[ordinal][0]=='http'
     result=dict(ambient) if http else {key:value for key,value in ambient.items() if not key.startswith('UNREST_')}
     result.update(UNREST_HOME=str(parent/'.unrest'),UNREST_PROJECTS_DIR=str(parent/'.unrest/projects'))
     if family=='defect':
-        from measurement_runtime import record,running
+        from measurement_runtime import record
         projects=sorted((parent/'.unrest/projects').iterdir())
         if len(projects)!=1:
             raise Refused('completion independent validator project count')
@@ -150,11 +150,9 @@ def environment(checkout,parent,case,ordinal,ambient,*,native=None):
         if document.get('id')!=projects[0].name or document.get('workspace_dir')!=str(parent/'workspace'):
             raise Refused('completion independent validator project scope')
         role='work' if ordinal==0 else 'validate'
-        runtime,spawn=running(projects[0],role)
-        result.update(PYTHONPATH=str(checkout/'src'),UNREST_PROJECT_ID=projects[0].name,UNREST_MISSION_ID='mission-001',
-            UNREST_NODE_ID=role,UNREST_NODE_TYPE=role,UNREST_WORKSPACE=str(parent/'workspace'),
-            UNREST_HANDOFF_PATH=str(runtime/'attempts'/(spawn+'__'+role+'.json')))
-        return result
+        from node_environment import scoped
+        result.update(PYTHONPATH=str(checkout/'src'),UNREST_WORKSPACE=str(parent/'workspace'))
+        return scoped(observed,result,parent/'.unrest',projects[0].name,role,module=False)
     if http:
         result['PYTHONPATH']=str(checkout/'src')
         for name in ('WORKER','VALIDATOR','TERMINAL_REVIEWER'):

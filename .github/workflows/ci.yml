@@ -35,7 +35,7 @@ jobs:
         run: uv sync --locked
       - name: Guard size and admission controls
         run: |
-          uv run python .github/release-guard/size_budget.py --root "$PWD" --test-support tools/check_distribution.py --check
+          uv run python .github/release-guard/size_budget.py --root "$PWD" --support tools/check_distribution.py --check
           timeout --signal=TERM --kill-after=5 120 uv run --no-sync pytest -q .github/release-guard
       - name: Package imports and supported CLI surfaces
         run: |

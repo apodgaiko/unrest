@@ -9,14 +9,14 @@ MATRIX=tuple(TEST+'::test_composed_completion_refusal_matrix_uses_original_gener
 DEFECT=TEST+'::test_composed_defective_work_reaches_independent_validator_dissent'
 UNDELIVERABLE=TEST+'::test_composed_undeliverable_nudge_continues_without_body_persistence'
 DIRECT=tuple(TEST+'::test_real_targetless_dispatch_consumption['+str(attention)+']' for attention in (False,True))
-WORK=(('worker-1','work'),)
-PAIR=(*WORK,('validator-1','validate'))
-REVIEW=((None,'terminal_reviewer'),)
-# Each row binds HTTP parent slot, operation, project slot, and node/role sequence.
+WORK=('work',)
+PAIR=(*WORK,'validate')
+REVIEW=('terminal_reviewer',)
+# Each row binds HTTP parent slot, operation, project slot, and role budgets.
 STEPS={
     HERMETIC:((0,'advance_project',0,PAIR),(0,'decide_attention',0,()),(0,'end_mission',0,REVIEW)),
     STOP:((0,'advance_project',0,PAIR),(1,'decide_attention',0,()),
-        (1,'advance_project',0,(('validator-2','validate'),)),(1,'advance_project',1,(('cancel-worker','work'),))),
+        (1,'advance_project',0,('validate',)),(1,'advance_project',1,('work',))),
     PARITY[0]:((0,'advance_project',0,WORK),),
     PARITY[1]:((0,'advance_project',0,PAIR),),
     PARITY[2]:((0,'advance_project',0,PAIR),(0,'decide_attention',0,()),(0,'end_mission',0,REVIEW)),
@@ -24,7 +24,7 @@ STEPS={
     DEFECT:((0,'advance_project',0,PAIR),),UNDELIVERABLE:((0,'advance_project',0,WORK),),
     **dict.fromkeys(DIRECT,()),
 }
-DIRECT_NODES={DIRECT[0]:(('measure','work'),('publish','work')),DIRECT[1]:(('measure','work'),)}
+DIRECT_ROLES={DIRECT[0]:('work','work'),DIRECT[1]:WORK}
 HTTP={HERMETIC:1,STOP:4,**dict.fromkeys(PARITY,3),
     **{case:2 if index<4 else 1 for index,case in enumerate(MATRIX)},
     DEFECT:1,UNDELIVERABLE:1,**dict.fromkeys(DIRECT,1)}
@@ -32,21 +32,17 @@ ADOPT={STOP:0,PARITY[0]:0,PARITY[1]:0,PARITY[2]:2,**dict.fromkeys(MATRIX[:4],0)}
 CASES=tuple(HTTP)
 
 
-def nodes(case):
-    return tuple(node for row in STEPS[case] for node in row[3])+DIRECT_NODES.get(case,())
+def roles(case):
+    return tuple(role for row in STEPS[case] for role in row[3])+DIRECT_ROLES.get(case,())
 
 
 def queries(case):
-    return sum(query_count(case,role) for _,role in nodes(case))
+    return sum(query_count(case,role) for role in roles(case))
 
 
 
 def query_count(case,role):
     return (1 if case in DIRECT else 2) if role=='work' else 0
-
-
-def targets(case,node):
-    return ([] if node=='measure' else ['VAL-RESULT']) if case in DIRECT else ['VAL-COMPOSED']
 
 
 def ps_limit(case):

@@ -12,8 +12,9 @@ import pytest
 from effect_proposals import proposal
 from test_proposal_support import operands
 from content_manifest import Refused
-from ordinary_acp import CASES, MOCK, PINS, environment, expected, plain_environment
+from ordinary_acp import CASES, MOCK, PINS, expected, plain_environment
 import ordinary_acp
+from test_role_data_oracle import ordinary_environment as environment
 from source_observer import Observer
 from process_ledger import Birth
 
@@ -162,6 +163,7 @@ def test_host_refuses_ordinary_request_mutations(tmp_path, mutation):
         "a" * 64,
         observer.meta_environment(),
         tmp_path,
+        observed=environment(CASES[0],cwd.parent,observer.meta_environment()),
     )
     request = operands(result)
     changed = deepcopy(request)
@@ -322,7 +324,8 @@ def test_startup_failure_uses_exact_original_owned_non_executable_format(tmp_pat
         workspace=tmp_path
     if mutation is None:
         value=expected(case,'session-invalid',str(workspace),Path('/checkout'),'/native','a'*64,
-            {'HOME':'/home','TMPDIR':'/tmp','PATH':'/usr/bin:/bin'},tmp_path)
+            {'HOME':'/home','TMPDIR':'/tmp','PATH':'/usr/bin:/bin'},tmp_path,
+            observed=environment(case,base,{'HOME':'/home','TMPDIR':'/tmp','PATH':'/usr/bin:/bin'}))
         assert value.argv==('./invalid-format-'+suffix,) and value.executable==str(file)
         assert value.payload_kind=='expected-exec-failure'
         assert value.payload_sha256==hashlib.sha256(file.read_bytes()).hexdigest()
@@ -330,7 +333,8 @@ def test_startup_failure_uses_exact_original_owned_non_executable_format(tmp_pat
     else:
         with pytest.raises((Refused,OSError)):
             expected(case,'session-invalid',str(workspace),Path('/checkout'),'/native','a'*64,
-                {'HOME':'/home','TMPDIR':'/tmp','PATH':'/usr/bin:/bin'},tmp_path)
+                {'HOME':'/home','TMPDIR':'/tmp','PATH':'/usr/bin:/bin'},tmp_path,
+            observed=environment(case,base,{'HOME':'/home','TMPDIR':'/tmp','PATH':'/usr/bin:/bin'}))
 
 
 @pytest.mark.parametrize('case',(*ordinary_acp.TEMPLATE_CASES,*ordinary_acp.BATCH_CASES))
@@ -370,7 +374,10 @@ def test_added_mock_launches_have_closed_identity_environment_and_quota(tmp_path
     cwd=base/'workspace'
     cwd.mkdir(parents=True)
     root_env={'HOME':'/owned/home','TMPDIR':'/owned/tmp','PATH':'/usr/bin:/bin'}
-    value=expected(case,'mock-acp',str(cwd),root,'/native','a'*64,root_env,tmp_path)
+    fixture_env=environment(case,base,root_env)
+    if case in ordinary_acp.TEMPLATE_CASES:
+        fixture_env.update({key:value for key,value in ordinary_acp.template_environment(case,root).items() if key in ('LANG','PATH')})
+    value=expected(case,'mock-acp',str(cwd),root,'/native','a'*64,root_env,tmp_path,observed=fixture_env)
     raw=operands(value)
     raw.pop('source_line',None)
     calls=[]

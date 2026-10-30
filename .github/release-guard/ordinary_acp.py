@@ -39,41 +39,21 @@ TEMPLATE_CASES=tuple(TEST+'::'+name+'['+role+'-'+provider+']'
 BATCH_CASES=tuple(TEST+'::test_dispatch_batch_serializes_mcp_startup_and_preserves_sibling_success['+provider+']'
                   for provider in ('claude','codex'))
 EXECUTION_CASES=(*CASES,*STARTUP_CASES,*TEMPLATE_CASES,*BATCH_CASES)
+ROLES={CASES[0]:'work',CASES[1]:'validate',CASES[2]:'validate',MOCK_CASE:'work',
+    **dict(zip(STARTUP_CASES,('work','validate','terminal_reviewer'),strict=True)),
+    **{case:'work' if '[worker-' in case else 'validate' for case in TEMPLATE_CASES},
+    **dict.fromkeys(BATCH_CASES,'validate')}
 
 
-def environment(case, base, root_environment, ordinal=0):
-    from node_environment import environment as role_environment
-    if case not in EXECUTION_CASES:
-        raise Refused('ordinary finite case')
-    if case in STARTUP_CASES:
-        role='work' if case==STARTUP_CASES[0] else 'validate' if case==STARTUP_CASES[1] else 'terminal_reviewer'
-        spawn='2026-08-30T05-00-00Z' if role=='terminal_reviewer' else '2026-08-30T04-00-00Z-'+role
-        return role_environment(root_environment,base/'.unrest','p1','startup-'+role,role,spawn)
-    if case in (*TEMPLATE_CASES,*BATCH_CASES):
-        if ordinal not in range(2 if case in BATCH_CASES else 1):
-            raise Refused('ordinary mock ordinal')
-        if case in BATCH_CASES:
-            provider=case.rsplit('[',1)[1][:-1]
-            node,role,spawn=f'v{ordinal}','validate',f'2026-08-10T07-00-00Z-{ordinal:04d}'
-        else:
-            selected,provider=case.rsplit('[',1)[1][:-1].split('-')
-            role='work' if selected=='worker' else 'validate'
-            credential=case in TEMPLATE_CASES[4:]
-            node=provider+'-'+role+('-format-credential' if credential else '')
-            spawn=f"2026-07-29T{'08' if credential else '05'}-00-00Z-{provider}-{role}"
-        result=role_environment(root_environment,base/'.unrest','p1',node,role,spawn)
-        if provider=='codex':
-            result.update(INITIAL_AGENT_MODE='agent',CODEX_CONFIG='{"approval_policy":"on-request","model_reasoning_effort":"medium","sandbox_mode":"workspace-write"}')
-        return result
-    role = 'work' if case==MOCK_CASE else case.rsplit('[', 1)[1][:-1]
-    node, spawn = ('v-good', '2026-08-10T07-05-00Z-0000') if role == 'claude' else (
-        'plan-' + role, '2026-08-30T00-00-00Z-' + role)
-    if case==MOCK_CASE:
-        node,spawn='w1','2026-05-17T00-00-00Z'
-    result=role_environment(root_environment,base/'.unrest','p1',node,'validate' if role=='claude' else role,spawn)
-    if role == 'claude':
-        result['ANTHROPIC_API_KEY'] = 'batch-crash-known-value'  # Original public redaction canary.
-    return result
+def environment(case,base,ambient,observed):
+    from node_environment import baseline,scoped
+    role=ROLES[case]
+    result=baseline(ambient,base/'.unrest','p1')
+    if case in (*TEMPLATE_CASES,*BATCH_CASES) and case.rsplit('[',1)[1][:-1].split('-')[-1]=='codex':
+        result.update(INITIAL_AGENT_MODE='agent',CODEX_CONFIG='{"approval_policy":"on-request","model_reasoning_effort":"medium","sandbox_mode":"workspace-write"}')
+    if case==CASES[2]:
+        result['ANTHROPIC_API_KEY']='batch-crash-known-value'
+    return scoped(observed,result,base/'.unrest','p1',role,module=False)
 
 
 def system_sleep():
@@ -110,7 +90,7 @@ def template_environment(case,checkout):
         f'PAYMENTS_{provider}_{role}_FORMAT_DSN_TEMPLATE_URI_V22'.upper():value}
 
 
-def expected(case, role, cwd, checkout, native, native_pin, root_environment, owned, *, base=None,ordinal=0):
+def expected(case, role, cwd, checkout, native, native_pin, root_environment, owned, *, base=None,observed=None):
     if case not in EXECUTION_CASES or role not in (('session-invalid','sleep') if case in STARTUP_CASES else ('mock-acp', 'sleep')):
         raise Refused('ordinary closed launch role')
     if role == 'sleep':
@@ -124,7 +104,10 @@ def expected(case, role, cwd, checkout, native, native_pin, root_environment, ow
         if case==MOCK_CASE:
             if base is None:
                 raise Refused('mock-agent owned fixture absent')
-            leaf=environment(case,base,root_environment)
+            from node_environment import baseline
+            selected={**baseline(root_environment,base/'.unrest','p1'),
+                **{key:observed.get(key) for key in ('UNREST_HANDOFF_PATH','UNREST_NODE_ID','UNREST_NODE_TYPE')}}
+            leaf=environment(case,base,root_environment,selected)
             env.update({key:leaf[key] for key in ('UNREST_HANDOFF_PATH','UNREST_NODE_ID','UNREST_NODE_TYPE')})
         vector, executable, pin, kind, payload = (('sleep' if case==MOCK_CASE else '/bin/sleep'), '30'), ('/usr/bin/sleep' if case==MOCK_CASE else '/bin/sleep'), system_sleep(), 'native', None
     elif role=='session-invalid':
@@ -139,16 +122,16 @@ def expected(case, role, cwd, checkout, native, native_pin, root_environment, ow
             raise Refused('ordinary exact invalid-format fixture')
         vector=('./'+file.name,)
         executable,kind,payload=str(file),'expected-exec-failure',None
-        env=environment(case,base,root_environment)
+        env=environment(case,base,root_environment,observed)
     else:
         home = Path(cwd)
         if (not home.is_absolute() or str(home.resolve()) != cwd or home.name != 'workspace'
                 or not home.parent.is_relative_to(owned / 'pytest') or home.parent == owned / 'pytest'):
             raise Refused('ordinary owned project workspace')
-        env = environment(case, home.parent, root_environment,ordinal)
+        ambient=dict(root_environment)
         if case in TEMPLATE_CASES:
-            env.update({key:value for key,value in template_environment(case,checkout).items()
-                        if key in ('LANG','PATH')})
+            ambient.update({key:value for key,value in template_environment(case,checkout).items() if key in ('LANG','PATH')})
+        env=environment(case,home.parent,ambient,observed)
         vector = (native, str(checkout / MOCK))
         executable, pin, kind, payload = native, native_pin, 'python-script', PINS[MOCK]
     return build_expected(case, executable, pin, vector, tuple(sorted(env.items())), cwd, kind, payload)

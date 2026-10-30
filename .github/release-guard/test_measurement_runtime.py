@@ -16,7 +16,7 @@ def fixture(tmp_path,monkeypatch):
     project.mkdir(parents=True)
     birth=object()
     parent={'role':'fixed-inline','case':runtime.PROJECT,'token':'worker','birth':birth,
-        'consumed':True,'measurement_nodes':('p1-work','p1-validate'),'cwd':str(home)}
+        'consumed':True,'measurement_roles':('work','validate'),'cwd':str(home)}
     host=SimpleNamespace(case=runtime.PROJECT,meta={'checkout':str(ROOT)},
         binding={'entry':{'path':'/native/python','sha256':'a'*64}},intents={1:parent},
         ledger=SimpleNamespace(reaped=lambda *args:True),executed=lambda row:row['consumed'],seen=[])
@@ -67,7 +67,7 @@ def test_mcp_node_has_exact_parent_cursor_arguments_and_environment(fixture,muta
         raw['stdin']='foreign'
     if mutation is None:
         answer=runtime.nested(host,actor,raw)
-        assert host.intents[answer['ticket']]['measurement_node']=='p1-work'
+        assert host.intents[answer['ticket']]['node_role']=='work'
         expected,role,vector,pin,options=host.seen[0]
         assert role=='mcp' and options['maximum']==6 and options['inherited']==[[7,10,20]]
         assert vector==['/native/python','-I','-S',*raw['argv'][1:]]
@@ -78,12 +78,16 @@ def test_mcp_node_has_exact_parent_cursor_arguments_and_environment(fixture,muta
         assert not host.seen
 
 
-def test_acp_cannot_start_before_its_exact_server_executes(fixture):
+def test_acp_template_requires_its_own_metadata_and_parent_budget(fixture):
     host,actor,raw=fixture
     raw['argv']=['/native/python',str(ROOT/runtime.MOCK)]
-    with pytest.raises(Refused,match='server pair'):
+    with pytest.raises(Refused,match='security environment'):
         runtime.nested(host,actor,raw)
     assert not host.seen
+    raw['environment'].pop('UNREST_NODE_ASSIGNMENT')
+    assert runtime.nested(host,actor,raw)['ticket']==2
+    with pytest.raises(Refused,match='budget'):
+        runtime.nested(host,actor,raw)
 
 
 @pytest.mark.parametrize('role',['mcp','mock-acp'])

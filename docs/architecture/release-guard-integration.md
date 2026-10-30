@@ -24,11 +24,11 @@ that scope. `size_budget.py` reports current bytes and lines; an independent
 closure review must check external dependencies. Neither size nor component
 checks certify a release.
 
-`tools/check_distribution.py` is retained test support. Its disclosed runner seam
-requests execution and grants no permission. Reports using `--test-support
- tools/check_distribution.py` retain its complete bytes, hash, line count and
-combined total. Permission or containment logic added there must be reclassified
-as enforcement.
+`tools/check_distribution.py` is the retained distribution oracle. The primary
+release budget counts its complete file inside the same ceiling using
+`--support tools/check_distribution.py`; it grants no execution permission through
+its runner seam. The older `--test-support` report remains available for historical
+comparison, with the separate oracle count visible, but is not the release gate.
 
 ## Execution and cleanup
 
@@ -922,3 +922,24 @@ may precede the exact group's leader exit observation. That terminal fact remain
 pending corroboration: the later leader exit must match it. The earlier member
 exit is never overwritten, no parent-wait evidence is inferred, and a missing or
 mismatched leader exit cannot certify completion.
+
+Role subprocess admission treats node names, mission IDs, attempt names and target
+contents as bounded application data inside the acquired project. Case-selected
+parent role/template budgets, actual parent birth/token/READY and complete
+security-environment equality remain authority. Module roles come from the exact
+module-mode template; ACP roles can consume only their separately authored parent
+budget. MCP and ACP templates have separate counters, including pending intents;
+neither obtains permission from being the last sibling to execute. Git query
+permission uses the role stored by the observer, not a later metadata claim.
+
+Task-state reads, active terminal-review snapshot searches and predicted target
+content are retired from guard admission. The original product tests retain all
+application state, node, target, timing and cleanup assertions. Scoped output paths
+must retain their project/mission/directory/filename relationship without symlink
+escape; assignment JSON remains bounded, duplicate-free and role-consistent.
+Provider selectors, import paths, permissions, recovery switches, native images,
+script bytes and inherited descriptors remain exact. All eight composed adoption
+worker indices, operations, originating server slots and retained request/project
+qualifications are unchanged. Original fixture-value constructors used only to
+build guard-test inputs are retained in test_role_data_oracle.py; production
+enforcement does not import that test oracle.

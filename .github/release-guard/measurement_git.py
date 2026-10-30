@@ -122,5 +122,5 @@ def worker(host,actor,raw):
         'UNREST_WORKER_ACP_COMMAND':command,'UNREST_VALIDATOR_ACP_COMMAND':command}
     answer=admit_worker(host,actor,raw,home,operation,env,len(steps))
     if answer is not None:
-        host.intents[answer['ticket']]['measurement_nodes']=nodes
+        host.intents[answer['ticket']]['measurement_roles']=nodes
     return answer

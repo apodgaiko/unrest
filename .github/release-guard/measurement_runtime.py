@@ -1,7 +1,6 @@
 """Six original local ACP nodes beneath the exact measurement RunControl workers."""
 import json
 import os
-import re
 from pathlib import Path
 
 from content_manifest import Refused,read_regular
@@ -9,16 +8,16 @@ from control_transport import unique
 from launch_policy import source_unit
 from run_worker_launch import MEASUREMENT_PROJECT as PROJECT
 
-PROJECT_STEPS=((1,'start_project',()),(1,'submit_plan',()),(1,'advance_project',('p1-work','p1-validate')),
-    (6,'start_project',()),(6,'submit_plan',()),(6,'advance_project',('p2-initial-work','p2-initial-validate')),
-    (6,'decide_attention',()),(6,'advance_project',('p2-corrected-work','p2-corrected-validate')))
+PROJECT_STEPS=((1,'start_project',()),(1,'submit_plan',()),(1,'advance_project',('work','validate')),
+    (6,'start_project',()),(6,'submit_plan',()),(6,'advance_project',('work','validate')),
+    (6,'decide_attention',()),(6,'advance_project',('work','validate')))
 MOCK='tests/mock_measurement_acp.py'
 PINS={'tests/mock_measurement_acp.py': '47d099bd120a96d86d1e052567744be63b3c103a11a043ad40976776d1f400dd'}
 
 
 def owner(host,actor):
     rows=[row for row in host.intents.values() if row['case']==PROJECT and row['role']=='fixed-inline'
-        and row.get('measurement_nodes') and row.get('birth')==actor['birth'] and row['token']==actor['token']]
+        and row.get('measurement_roles') and row.get('birth')==actor['birth'] and row['token']==actor['token']]
     if (host.case!=PROJECT or actor['role']!='fixed-inline' or not actor['body_ready']
             or len(rows)!=1 or not host.executed(rows[0])):
         raise Refused('measurement nested original worker identity')
@@ -29,15 +28,6 @@ def record(path):
     body,_,_=read_regular(path,65536,uid=20000,forbidden=0o6022)
     return json.loads(body,object_pairs_hook=unique)
 
-
-
-def running(project,node):
-    runtime=project/'.unrest-runtime/missions/mission-001'
-    state=record(runtime/'task-state.json')['tasks'].get(node,{})
-    attempt=state.get('last_attempt')
-    if state.get('status')!='running' or type(attempt) is not str or not re.fullmatch(r'20\d\d-\d\d-\d\dT\d\d-\d\d-\d\dZ(?:-\d{4}){0,2}',attempt):
-        raise Refused('actual running node attempt')
-    return runtime,attempt
 
 
 def nested(host,actor,raw):
@@ -51,25 +41,9 @@ def nested(host,actor,raw):
     document=record(project/'.unrest-runtime/project.json')
     if document.get('id')!=project.name or document.get('workspace_dir')!=str(home.parent/'workspace'):
         raise Refused('measurement original project record')
-    records=[row for row in host.intents.values() if row['case']==PROJECT and row.get('parent')==actor['birth']]
-    servers=[row for row in records if row['role']=='mcp']
-    module=raw['argv'][1:3]==['-m','unrest_harness']
-    if module:
-        if len(servers)>=len(parent['measurement_nodes']):
-            raise Refused('measurement finite original node quota')
-        if any(not row['consumed'] or not host.ledger.reaped(row['birth'],row['token']) for row in records):
-            raise Refused('measurement next node before actual waits')
-        node=parent['measurement_nodes'][len(servers)]
-    else:
-        if not servers or not host.executed(servers[-1]) or any(row.get('measurement_node')==servers[-1]['measurement_node'] and row['role']=='mock-acp' for row in records):
-            raise Refused('measurement ACP original server pair')
-        node=servers[-1]['measurement_node']
-    role='validate' if node.endswith('validate') else 'work'
-    runtime,attempt=running(project,node)
-    from node_environment import environment as role_environment
-    environment=role_environment({'LANG':'C.UTF-8','PATH':os.defpath},home,project.name,node,role,attempt)
+    from collections import Counter
+    roles=Counter(parent['measurement_roles'])
     source_unit(checkout,MOCK,PINS[MOCK])
     from node_launch import proposal
-    return proposal(host,actor,raw,home.parent/'workspace',environment,role,
-        ['VAL-MEASURE-REJECT' if '-initial-' in node else 'VAL-MEASURE'],checkout/MOCK,PINS[MOCK],(),6,
-        {'measurement_node':node},'mock-acp')
+    return proposal(host,actor,raw,home.parent/'workspace',{'LANG':'C.UTF-8','PATH':os.defpath},
+        home,project.name,roles,checkout/MOCK,PINS[MOCK],(),6,{},'mock-acp')

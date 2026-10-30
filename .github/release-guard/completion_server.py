@@ -49,7 +49,7 @@ def proposal(host,actor,raw):
     if raw['argv'][:1]==['ps']:
         from http_cases import proposal as inventory
         return inventory(host,actor,raw)
-    from composed_cases import CASES as COMPOSED,nodes
+    from composed_cases import CASES as COMPOSED,roles
     if host.case in COMPOSED and raw['argv'][1:3]==['-m','unrest_harness.run_worker']:
         from composed_runtime import worker
         return worker(host,actor,raw)
@@ -76,7 +76,7 @@ def proposal(host,actor,raw):
     checkout=Path(host.meta['checkout'])
     selected_mode=mode(case,slot)
     ambient={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}
-    env=environment(checkout,parent,case,slot,ambient,native=native)
+    env=environment(checkout,parent,case,slot,ambient,native=native,observed=raw['environment'])
     body=program(checkout,parent,case,slot)
     port=None
     if kind=='http':
@@ -92,5 +92,5 @@ def proposal(host,actor,raw):
     answer=admit_expected(host,actor,raw,value,'mcp' if kind=='http' else 'fixed-inline',translated,
         fields={'server_slot':slot,'input_pipe':kind=='stdio','server_stdio':kind=='stdio',
             'execution_fixture':bootstrap(host,parent) if case in COMPOSED else None},
-        maximum=len(schedule(case))+(len(nodes(case)) if case in COMPOSED else 0),port=port)
+        maximum=len(schedule(case))+(len(roles(case)) if case in COMPOSED else 0),port=port)
     return answer

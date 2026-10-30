@@ -1,11 +1,10 @@
 """Owned composed fixtures and exact parent-bound original node sequences."""
 import os
-import re
 from pathlib import Path
 
-from composed_cases import CASES,STEPS,DIRECT,DIRECT_NODES,HTTP,ADOPT,UNDELIVERABLE,nodes,query_count,targets
+from composed_cases import CASES,STEPS,DIRECT,DIRECT_ROLES,HTTP,ADOPT,UNDELIVERABLE,roles,query_count
 from content_manifest import Refused,read_regular,_key
-from measurement_runtime import record,running
+from measurement_runtime import record
 
 ADAPTER_PIN='245f9fc0eabd9d4ea5c8f701e77380cbadcc137f476d4cf87933d8c9202f06cb'
 DIRECT_PINS=dict(zip(DIRECT,('4db1a5ec24bb138fef3cc6d663efa65986f52b37e51e069048e89bc544e40375',
@@ -70,7 +69,7 @@ def worker(host,actor,raw):
     if host.fixture_roots.setdefault(key,project)!=project or any(value==project for current,value in host.fixture_roots.items()
             if type(current) is tuple and len(current)==3 and current[:2]==key[:2] and current!=key):
         raise Refused('composed distinct retained project slots')
-    row.update(composed_nodes=sequence,composed_project=str(path),composed_worker=index,
+    row.update(composed_roles=sequence,composed_project=str(path),composed_worker=index,
         adoptable=index==ADOPT.get(host.case,-1))
     return answer
 
@@ -91,57 +90,33 @@ def owner(host,actor):
     if len(rows)!=1 or not actor['body_ready'] or not host.executed(rows[0]):
         raise Refused('composed actual parent identity')
     row=rows[0]
-    if 'composed_nodes' in row and row['role']=='fixed-inline':
-        return row,row['composed_nodes'],Path(row['composed_project'])
+    if 'composed_roles' in row and row['role']=='fixed-inline':
+        return row,row['composed_roles'],Path(row['composed_project'])
     if host.case in DIRECT and row.get('server_slot')==0 and row['role']=='mcp':
         parent=root(host)
         projects=sorted((parent/'.unrest/projects').iterdir())
         if len(projects)!=1:
             raise Refused('composed sole direct project')
-        return row,DIRECT_NODES[host.case],project_root(host,parent,projects[0].name)
+        return row,DIRECT_ROLES[host.case],project_root(host,parent,projects[0].name)
     raise Refused('composed parent has no node authority')
 
 
 def nested(host,actor,raw):
+    from collections import Counter
     _,sequence,project=owner(host,actor)
-    records=[row for row in host.intents.values() if row['case']==host.case and row.get('parent')==actor['birth']]
-    servers=[row for row in records if 'composed_node' in row and row['role']=='mcp']
-    module=raw['argv'][1:3]==['-m','unrest_harness']
-    if module:
-        if len(servers)>=len(sequence) or any(not row['consumed'] or not host.ledger.reaped(row['birth'],row['token']) for row in records):
-            raise Refused('composed node sequence before actual waits')
-        node,role=sequence[len(servers)]
-    else:
-        if not servers or not host.executed(servers[-1]) or any(row.get('composed_node')==servers[-1]['composed_node'] and row['role']=='cleanup-acp' for row in records):
-            raise Refused('composed original ACP server pair')
-        node,role=servers[-1]['composed_node'],servers[-1]['composed_role']
-    runtime=project/'.unrest-runtime/missions/mission-001'
-    if role=='terminal_reviewer':
-        snapshots=[record(path) for path in sorted((runtime/'supervision').glob('*.json')) if not path.name.endswith(('.policy.json','.inbox.json'))]
-        active=[row for row in snapshots if row.get('role')=='terminal_reviewer' and row.get('phase')=='active' and row.get('supervision_status')=='running']
-        if len(active)!=1 or active[0].get('project_id')!=project.name or active[0].get('terminal_review_id')!=active[0].get('attempt_id'):
-            raise Refused('composed original terminal review attempt')
-        attempt=active[0]['attempt_id']
-        if (active[0].get('node_id') is not None or active[0].get('mission_id')!='mission-001'
-                or type(attempt) is not str or not re.fullmatch(r'20\d\d-\d\d-\d\dT\d\d-\d\d-\d\dZ(?:-\d{4}){0,2}',attempt)):
-            raise Refused('composed terminal review identity')
-    else:
-        runtime,attempt=running(project,node)
     parent=root(host)
-    from node_environment import environment
-    ambient=actor['profile']['environment']
-    env=environment(ambient,parent/'.unrest',project.name,node,role,attempt)
     file,pin=adapter(host,parent)
     from node_launch import proposal
-    return proposal(host,actor,raw,parent/'workspace',env,role,targets(host.case,node),file,pin,
-        (str(parent/'workspace/.hermetic-acp-trace.jsonl'),),HTTP[host.case]+len(nodes(host.case)),
-        {'composed_node':node,'composed_role':role,'execution_fixture':bootstrap(host,parent)},'cleanup-acp')
+    return proposal(host,actor,raw,parent/'workspace',actor['profile']['environment'],
+        parent/'.unrest',project.name,Counter(sequence),file,pin,
+        (str(parent/'workspace/.hermetic-acp-trace.jsonl'),),HTTP[host.case]+len(roles(host.case)),
+        {'composed_project':str(project),'execution_fixture':bootstrap(host,parent)},'cleanup-acp')
 
 
 
 def query_quota(host,actor):
-    rows=[row for row in host.intents.values() if row['case']==host.case and row['role']=='mcp' and 'composed_node' in row
+    rows=[row for row in host.intents.values() if row['case']==host.case and row['role']=='mcp' and 'node_role' in row
         and row.get('birth')==actor['birth'] and row['token']==actor['token'] and row['consumed']]
     if len(rows)!=1 or actor['role']!='mcp' or not actor['body_ready']:
         raise Refused('composed exact node-owned Git query')
-    return query_count(host.case,rows[0]['composed_role'])
+    return query_count(host.case,rows[0]['node_role'])
