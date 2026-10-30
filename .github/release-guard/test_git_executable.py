@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from git_policy import SITE_CASES as CASES
+from test_git_catalogue import SITE_CASES as CASES
 from source_entry import direct_native
 
 

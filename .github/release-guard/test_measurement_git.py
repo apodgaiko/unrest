@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 from content_manifest import Refused
 import git_policy as measurement
+import test_git_catalogue as observed
 
 ROOT=Path(__file__).resolve().parents[2]
 
@@ -11,7 +12,7 @@ ROOT=Path(__file__).resolve().parents[2]
 def host(monkeypatch):
     import git_policy as git_observer
     monkeypatch.setattr(git_observer,'image',lambda:'a'*64)
-    value=SimpleNamespace(case=measurement.MEASUREMENT_CASES[0],meta={'checkout':str(ROOT)},
+    value=SimpleNamespace(case=observed.MEASUREMENT_CASES[0],meta={'checkout':str(ROOT)},
         binding={'entry':{'path':'/native/python','sha256':'b'*64}},intents={},seen=[])
     value.root_only=lambda actor:None
     value.meta_environment=lambda:{'PATH':'/usr/bin:/bin'}
@@ -28,12 +29,12 @@ def host(monkeypatch):
 
 def raw(host,args):
     environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':host.case+' (call)'}
-    if args==['ls-files','-z','--stage'] and host.case.split('::')[1] in measurement.MEASUREMENT_SYNTHETIC:
+    if args==['ls-files','-z','--stage'] and host.case.split('::')[1] in observed.MEASUREMENT_SYNTHETIC:
         command='/native/python '+str(ROOT/'tests/mock_measurement_acp.py')
         environment.update(UNREST_WORKER_ACP_COMMAND=command,UNREST_VALIDATOR_ACP_COMMAND=command)
     return {'executable':'/usr/bin/git','argv':['git',*args],'stdin':None,'environment':environment,'cwd':'/owned/pytest/test_case0/source'}
 
-@pytest.mark.parametrize('case',measurement.MEASUREMENT_CASES)
+@pytest.mark.parametrize('case',observed.MEASUREMENT_CASES)
 def test_every_original_source_fixture_has_exact_commands(host,case):
     host.case=case
     for args in (['init','-q'],['add','.'],['ls-files','-z','--stage']):

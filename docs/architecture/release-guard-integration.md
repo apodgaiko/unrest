@@ -1138,3 +1138,14 @@ configuration, credentials, alternates or unrelated refs. Fetch disables lazy
 upstream acquisition and automatic maintenance; the existing complete metadata
 capture and 64 MiB member bound remain. Candidate historical queries stay
 read-only and acquire no new executable permission.
+
+
+Local Git eligibility is now bound to independently byte-pinned original test
+modules and the active root case, rather than a second per-node fixture consumer
+catalogue. This intentionally permits the same closed local Git data operations
+throughout those fixed modules. The old node/slot observations remain only in
+non-production tests to verify original collection; enforcement does not import
+them. Three worker repository bindings, the one owned Python command, nested
+measurement ACP and readonly history queries retain exact separate case rights.
+All directory-generation, image/argv/environment, quota, helper and wait checks
+remain; module membership grants no arbitrary Python or worker execution.

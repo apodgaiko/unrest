@@ -64,8 +64,9 @@ def proposal(host, actor, raw):
     from cohort_controller import CASES as CRASH, proposal as crash_proposal
     if case in CRASH and argv[1:2]==['-c']:
         return crash_proposal(host,actor,raw)
-    from git_policy import SITE_CASES as GIT_CASES
-    if case in GIT_CASES:
+    from git_policy import local_case,OWNED_CASE,HISTORY_CASES,MEASUREMENT_WORKERS
+    if (case in HISTORY_CASES or case in MEASUREMENT_WORKERS and actor['role']!='root'
+            or local_case(case) and argv[0] in ('git','/usr/bin/git') or case==OWNED_CASE):
         from git_policy import workspace_prepare as prepare
         return prepare(host,actor,raw)
     from review_wire import CASES as REVIEW_CASES,proposal as review_proposal

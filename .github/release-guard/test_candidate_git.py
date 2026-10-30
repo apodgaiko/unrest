@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 import git_policy as candidate
+import test_git_catalogue as observed
 from content_manifest import Refused
 
 ROOT=next(path for path in Path(__file__).resolve().parents if (path/'pyproject.toml').is_file())
@@ -17,7 +18,7 @@ def test_all_fixture_consumers_are_exact_normal_collected_nodes(monkeypatch):
         def pytest_collection_finish(self,session):
             nodes.extend(item.nodeid for item in session.items if 'repo' in item.fixturenames)
     assert pytest.main(['--collect-only','-q',candidate.CANDIDATE_TEST],plugins=[Collected()])==0
-    assert tuple(nodes)==candidate.CANDIDATE_CASES and len(nodes)==113
+    assert tuple(nodes)==observed.CANDIDATE_CASES and len(nodes)==113
 
 
 

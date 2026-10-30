@@ -6,7 +6,7 @@ import re
 
 from content_manifest import Refused,read_regular,native_digest
 from control_transport import unique
-from git_policy import fixture_root as repository_root, FIXTURE_SLOTS as SLOTS, FIXTURE_SERVER_INQUIRY as SERVER_INQUIRY
+from git_policy import fixture_root as repository_root, WORKER_REPOSITORIES as SLOTS, FIXTURE_SERVER_INQUIRY as SERVER_INQUIRY
 from launch_policy import build_expected,admit_expected,source_unit,literal
 from owned_fixture import retain
 from content_manifest import _key

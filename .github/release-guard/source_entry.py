@@ -14,7 +14,7 @@ from typing import NoReturn
 
 from bootstrap_wire import Client
 from content_manifest import Refused
-from git_policy import SITE_CASES as GIT_CASES
+from git_policy import local_case
 from source_profile import digest, validate
 
 def direct_native(args, kwargs, case, role):
@@ -73,7 +73,7 @@ class Policy:
             raise Refused('source process cwd primitive')
         environment=plain_environment(dict(os.environ) if environment is None else environment)
         commit_input=None
-        if self.case in GIT_CASES and vector[1:2]==['commit-tree'] and vector[3:4]==['-p']:
+        if local_case(self.case) and vector[1:2]==['commit-tree'] and vector[3:4]==['-p']:
             commit_input=getattr(self.local,'run_input',None)
             from git_policy import operand_text
             try:

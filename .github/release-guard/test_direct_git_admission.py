@@ -8,7 +8,7 @@ import pytest
 from content_manifest import Refused
 from git_policy import Command
 from git_policy import Git
-from git_policy import SITE_CASES as CASES
+from test_git_catalogue import SITE_CASES as CASES
 from process_ledger import Ledger
 from launch_policy import build_expected
 

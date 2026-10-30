@@ -128,7 +128,8 @@ def test_worktree_targets_cannot_remove_repository_or_runtime_root(operation,tar
 
 def test_owned_workspace_literal_command_derives_its_inline_digest():
     import hashlib
-    from git_policy import SITE_OWNED_BODY as OWNED_BODY, SITE_CASES as CASES
+    from git_policy import SITE_OWNED_BODY as OWNED_BODY
+    from test_git_catalogue import SITE_CASES as CASES
     from launch_policy import build_expected
     assert build_expected(CASES[7], '/native/python', 'a' * 64, ('/native/python', '-c', OWNED_BODY), (), REPO, 'python-command', None).payload_sha256 == hashlib.sha256(OWNED_BODY.encode()).hexdigest()
 

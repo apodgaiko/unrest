@@ -9,6 +9,7 @@ import pytest
 from content_manifest import Refused
 from launch_policy import source_unit
 import git_policy as fixtures
+import test_git_catalogue as observed
 import owned_fixture
 
 ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
@@ -16,7 +17,7 @@ ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is
 
 @pytest.mark.parametrize('file',tuple(file for file in fixtures.FIXTURE_PINS if file not in (fixtures.CANDIDATE_TEST,fixtures.MEASUREMENT_TEST)))
 def test_setup_commands_are_original_pinned_fixture_literals(file):
-    name=fixtures.FIXTURE_SERVER_INQUIRY.split('::')[1] if file=='tests/test_server.py' else 'repository' if file.endswith(('test_project_adapter.py','test_improve_adapter.py')) else '_repository'
+    name=fixtures.FIXTURE_SERVER_INQUIRY.split('::')[1] if file=='tests/test_server.py' else 'repository' if file.endswith(('test_project_adapter.py','test_improve_adapter.py','test_workspaces.py','test_evolution.py')) else '_repository'
     unit=source_unit(ROOT,file,fixtures.FIXTURE_PINS[file],(name,))
     calls=[node for node in ast.walk(unit) if isinstance(node,ast.Call) and isinstance(node.func,ast.Name) and node.func.id==('git' if file=='tests/test_server.py' else '_git')]
     commands=tuple(tuple(ast.literal_eval(arg) for arg in call.args[0 if file=='tests/test_server.py' else 1:]) for call in calls)
@@ -29,8 +30,8 @@ def test_selected_fixtures_collect_every_original_parameter_without_bodies(monke
     class Collected:
         def pytest_collection_finish(self,session):
             nodes.extend(item.nodeid for item in session.items)
-    assert pytest.main(['--collect-only','-q',*fixtures.FIXTURE_SLOTS],plugins=[Collected()])==0
-    assert tuple(nodes)==tuple(fixtures.FIXTURE_SLOTS) and len(nodes)==170
+    assert pytest.main(['--collect-only','-q',*observed.FIXTURE_SLOTS],plugins=[Collected()])==0
+    assert tuple(nodes)==tuple(observed.FIXTURE_SLOTS) and len(nodes)==170
 
 
 
@@ -43,7 +44,7 @@ def test_additional_repositories_are_bound_to_exact_owned_case_slots(tmp_path,mo
         info=original_lstat(path,*args,**kwargs)
         return SimpleNamespace(st_mode=info.st_mode,st_uid=20000,st_dev=info.st_dev,st_ino=info.st_ino)
     monkeypatch.setattr(Path,'lstat',lstat)
-    case=next(iter(fixtures.FIXTURE_SLOTS))
+    case=next(iter(observed.FIXTURE_SLOTS))
     base=tmp_path/'pytest'/(case.split('::')[1][:30]+'0')
     repository=base/'repo'
     repository.mkdir(parents=True)
@@ -84,7 +85,7 @@ def test_additional_repositories_are_bound_to_exact_owned_case_slots(tmp_path,mo
 def test_repository_keeps_generation_without_attesting_git_configuration(tmp_path,monkeypatch):
     from git_policy import Git
 
-    case=next(iter(fixtures.FIXTURE_SLOTS))
+    case=next(iter(observed.FIXTURE_SLOTS))
     repository=tmp_path/'pytest/case/repo'
     repository.mkdir(parents=True)
     host=SimpleNamespace(case=case,meta={'owned':str(tmp_path)})
@@ -117,4 +118,29 @@ def test_repository_keeps_generation_without_attesting_git_configuration(tmp_pat
 def test_factored_parameter_axes_preserve_the_complete_ordered_fixture_map():
     import hashlib
     import json
-    assert hashlib.sha256(json.dumps([(case,value) for case,value in fixtures.FIXTURE_SLOTS.items() if case!=fixtures.FIXTURE_SERVER_INQUIRY],separators=(',',':')).encode()).hexdigest()=='294ac85f02c8f2ba7cef463ee297fd2d67b1e88c913e4331ad3fcd55276c13c8'
+    assert hashlib.sha256(json.dumps([(case,value) for case,value in observed.FIXTURE_SLOTS.items() if case!=fixtures.FIXTURE_SERVER_INQUIRY],separators=(',',':')).encode()).hexdigest()=='294ac85f02c8f2ba7cef463ee297fd2d67b1e88c913e4331ad3fcd55276c13c8'
+
+
+def test_local_git_eligibility_is_module_bounded_and_byte_pinned(tmp_path):
+    assert fixtures.local_case('tests/test_workspaces.py::original-active-node')
+    assert not fixtures.local_case('tests/foreign.py::node')
+    assert not fixtures.local_case('tests/test_workspaces.py')
+    assert not fixtures.local_case(None)
+    file=tmp_path/'tests/test_workspaces.py'
+    file.parent.mkdir()
+    file.write_text('changed source')
+    host=SimpleNamespace(meta={'checkout':str(tmp_path),'owned':str(tmp_path)},fixture_roots={})
+    with pytest.raises(Refused,match='original source bytes'):
+        fixtures.fixture_root(host,'tests/test_workspaces.py::original-active-node',str(tmp_path/'pytest/case/repo'))
+
+
+def test_retired_catalogue_is_only_a_test_oracle():
+    import ast
+    support=Path(fixtures.__file__).parent
+    for path in support.glob('*.py'):
+        if path.name.startswith('test_'):
+            continue
+        tree=ast.parse(path.read_bytes())
+        assert all(not (isinstance(node,ast.ImportFrom) and node.module=='test_git_catalogue') for node in ast.walk(tree))
+    assert fixtures.CANDIDATE_CANARIES==tuple(tuple(item.split('-',1)) for item in observed.CANDIDATE_CONSUMERS['test_config_canaries_never_called'])
+    assert len(fixtures.CANDIDATE_CANARIES)==14

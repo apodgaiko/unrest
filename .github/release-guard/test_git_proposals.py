@@ -9,7 +9,7 @@ from control_transport import finite
 from git_policy import command_match as match_command
 from test_git_vectors import build
 from git_policy import workspace_prepare as prepare
-from git_policy import SITE_CASES as CASES
+from test_git_catalogue import SITE_CASES as CASES
 
 REPO = "/owned/pytest/case/project"
 REV = "a" * 40
@@ -260,7 +260,7 @@ def test_shared_repository_operations_exist_for_both_product_families(family, op
 @pytest.mark.parametrize('branch',['main','master'])
 def test_proposal_update_targets_only_authored_main_or_master(monkeypatch,branch):
     import git_policy as git_observer
-    from git_policy import FIXTURE_SLOTS as SLOTS
+    from test_git_catalogue import FIXTURE_SLOTS as SLOTS
 
     monkeypatch.setattr(git_observer,'image',lambda:'a'*64)
     case=next(iter(SLOTS))
