@@ -56,14 +56,9 @@ def test_all_original_candidate_setup_vectors_remain_closed():
             rows.append(tuple(ast.literal_eval(arg) for arg in call.args[1:]))
     assert len(rows)==9
     for args in rows:
-        operations=[]
-        for operation in (*candidate.COMMAND_OPERATIONS,'fixture-extra'):
-            try:
-                candidate.command_match(operation,REPOSITORY,REPOSITORY,['/usr/bin/git',*args],None,{},family='workspaces')
-            except Refused:
-                continue
-            operations.append(operation)
-        assert len(operations)==1
+        operation,command=candidate.command_match(REPOSITORY,REPOSITORY,['/usr/bin/git',*args],None,{})
+        assert operation and command.argv==('/usr/bin/git',*args)
+
 
 
 @pytest.mark.parametrize('args',[
@@ -73,11 +68,10 @@ def test_all_original_candidate_setup_vectors_remain_closed():
     ['update-index','--add','--cacheinfo','120000,--exec=foreign,unsupported'],
 ])
 def test_union_rejects_foreign_commands_options_and_object_ids(args):
-    for operation in (*candidate.COMMAND_OPERATIONS,'fixture-extra'):
-        with pytest.raises(Refused):
-            candidate.command_match(operation,REPOSITORY,REPOSITORY,['/usr/bin/git',*args],None,{},family='workspaces')
+    with pytest.raises(Refused):
+        candidate.command_match(REPOSITORY,REPOSITORY,['/usr/bin/git',*args],None,{})
 
 
 def test_closed_canary_write_does_not_add_arbitrary_configuration():
     args=['/usr/bin/git','config','core.hooksPath',str(Path(REPOSITORY).parent/'canary')]
-    assert candidate.command_match('fixture-extra',REPOSITORY,REPOSITORY,args,None,{},family='workspaces').argv==tuple(args)
+    assert candidate.command_match(REPOSITORY,REPOSITORY,args,None,{})[1].argv==tuple(args)

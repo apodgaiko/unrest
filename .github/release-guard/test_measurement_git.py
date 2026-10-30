@@ -40,11 +40,11 @@ def test_every_original_source_fixture_has_exact_commands(host,case):
     for args in (['init','-q'],['add','.'],['ls-files','-z','--stage']):
         result=measurement.workspace_prepare(host,{'role':'root'},raw(host,args))
         assert result['translated']==['/usr/bin/git',*args]
-        assert host.intents[1]['operation']=={'init':'init','add':'stage-base','ls-files':'fixture-extra'}[args[0]]
+        assert host.intents[1]['operation']=={'init':'init','add':'stage-base','ls-files':'local'}[args[0]]
 
 @pytest.mark.parametrize('args',(['add','USER'],['commit','-m','fixture'],['config','user.name','extra'],['ls-files','--others']))
 def test_other_commands_refuse_before_any_launch(host,args):
-    with pytest.raises(Refused,match='one finite operation'):
+    with pytest.raises(Refused,match='does not match a template'):
         measurement.workspace_prepare(host,{'role':'root'},raw(host,args))
     assert not host.seen
 

@@ -52,7 +52,7 @@ def environment(case,base,ambient,observed):
     result=baseline(ambient,base/'.unrest','p1')
     if case in (*TEMPLATE_CASES,*BATCH_CASES,*CRASH_CASES) and case.rsplit('[',1)[1][:-1].split('-')[-1]=='codex':
         result.update(INITIAL_AGENT_MODE='agent',CODEX_CONFIG='{"approval_policy":"on-request","model_reasoning_effort":"medium","sandbox_mode":"workspace-write"}')
-    if case in CRASH_CASES:
+    if case == CRASH_CASES[0]:
         result['ANTHROPIC_API_KEY']='batch-crash-known-value'
     return scoped(observed,result,base/'.unrest','p1',role,module=False)
 

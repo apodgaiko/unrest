@@ -163,3 +163,22 @@ def test_constructor_restores_thread_state_on_success_and_failure(tmp_path, monk
         Process(["/native", "-c", BODY], pass_fds=(8,))
         assert policy.children[123]["token"] == "owned"
     assert policy.local.passfds == (99,)
+
+
+@pytest.mark.parametrize("provider", ["claude", "codex"])
+def test_crash_mock_environment_does_not_forward_another_providers_credential(tmp_path, provider):
+    from node_environment import baseline, environment as node_environment
+    from ordinary_acp import CRASH_CASES, environment
+    base = tmp_path
+    ambient = {"PATH": "/bin"}
+    observed = node_environment(ambient, base / ".unrest", "p1", "v-good", "validate", "attempt")
+    if provider == "claude":
+        observed["ANTHROPIC_API_KEY"] = "batch-crash-known-value"
+    else:
+        observed.update(INITIAL_AGENT_MODE="agent", CODEX_CONFIG='{"approval_policy":"on-request","model_reasoning_effort":"medium","sandbox_mode":"workspace-write"}')
+    case = next(case for case in CRASH_CASES if case.endswith("[" + provider + "]"))
+    assert environment(case, base, ambient, observed) == observed
+    assert baseline(ambient, base / ".unrest", "p1").items() <= observed.items()
+    extra = {**observed, "ANTHROPIC_API_KEY" if provider == "codex" else "CODEX_CONFIG": "foreign"}
+    with pytest.raises(Refused, match="exact security environment"):
+        environment(case, base, ambient, extra)
