@@ -295,24 +295,10 @@ def local_case(case):
 
 
 def directory_custody(root,boundary):
-    identities=[]
     for path in (root,*(parent for parent in root.parents if parent.is_relative_to(boundary))):
         info=path.lstat()
         if not stat.S_ISDIR(info.st_mode) or info.st_uid!=20000 or info.st_mode&0o6022:
             raise Refused('Git owned directory custody')
-        identities.append((str(path),info.st_dev,info.st_ino,info.st_uid))
-    return tuple(identities)
-
-
-def metadata_custody(root):
-    metadata=root/'.git'
-    if not metadata.exists() and not metadata.is_symlink():
-        return None
-    info=metadata.lstat()
-    if (not stat.S_ISDIR(info.st_mode) or metadata.resolve(strict=True)!=metadata
-            or info.st_uid!=20000 or info.st_mode&0o6022):
-        raise Refused('git declared metadata directory')
-    return info.st_dev,info.st_ino,info.st_uid
 
 
 def fixture_root(host,case,repository):
@@ -325,13 +311,8 @@ def fixture_root(host,case,repository):
     if str(path.resolve())!=repository or path==owned or not path.is_relative_to(owned):
         raise Refused('Git case-owned repository')
     base=owned/path.relative_to(owned).parts[0]
-    root,info=acquire(str(base),owned.parent,re.sub(r'[\W]','_',case.split('::')[1])[:30],20000)
-    generation=(str(root),info.st_dev,info.st_ino)
-    if host.fixture_roots.setdefault(('git-fixture',case),generation)!=generation:
-        raise Refused('Git pytest generation changed')
-    identities=directory_custody(path,owned)
-    if host.fixture_roots.setdefault(('git-directory',case,repository),identities)!=identities:
-        raise Refused('Git directory generation changed')
+    acquire(str(base),owned.parent,re.sub(r'[\W]','_',case.split('::')[1])[:30],20000)
+    directory_custody(path,owned)
 
 
 
@@ -488,18 +469,12 @@ class Git:
         self.host = observer
         self.repositories, self.commands = {}, {}
         self.helpers = {}
-        self.custody_roots = {}
 
     def repository(self, repository, operation, family):
         root = Path(repository)
         fixture_root(self.host,self.host.case,repository)
         key=(self.host.case,repository)
-        if key not in self.repositories:
-            if operation != 'init' or (root / '.git').exists():
-                raise Refused('git first original fixture operation')
-            self.repositories[key] = {'path': repository}
-        if metadata_custody(root) is None and operation!='init':
-            raise Refused('git declared metadata missing')
+        self.repositories.setdefault(key,{'path':repository})
         return root
 
     def location(self, root, location):
@@ -672,18 +647,11 @@ def custody_command(case, argv, cwd, owned):
     return Command(argv,cwd),kind
 
 
-def custody_repository(cwd, owned, *, initialize):
+def custody_repository(cwd, owned):
     root = Path(cwd)
     if str(root.resolve(strict=True)) != cwd or not root.is_relative_to(owned/'pytest'):
         raise Refused('custody Git repository alias')
-    identities=directory_custody(root,owned/'pytest')
-    metadata=metadata_custody(root)
-    if initialize:
-        if metadata is not None:
-            raise Refused('custody Git repeated initialization')
-    elif metadata is None:
-        raise Refused('git declared metadata missing')
-    return identities,metadata
+    directory_custody(root,owned/'pytest')
 
 
 def custody_launch(host,actor,result,kind,raw):
@@ -694,12 +662,7 @@ def custody_launch(host,actor,result,kind,raw):
     maximum=4 if host.case in CRASH else COHORT_CASES[host.case][1] if host.case in COHORT_CASES else 128
     if len(prior) >= maximum:
         raise Refused('custody Git finite case command bound')
-    identity = custody_repository(result.cwd,Path(host.meta['owned']),initialize=result.argv[len(CUSTODY_PREFIX)] == 'init')
-    key = host.case,result.cwd
-    previous = host.git.custody_roots.get(key)
-    if previous is not None and (previous[0] != identity[0] or previous[1] is not None and previous[1] != identity[1]):
-        raise Refused('custody Git replaced repository generation')
-    host.git.custody_roots[key] = identity
+    custody_repository(result.cwd,Path(host.meta['owned']))
     return issue(host,actor,raw,result,CUSTODY_ENVIRONMENT,role='git-custody',maximum=maximum,
         fields={'command':result,'repository':result.cwd,'operation':'custody-'+kind})
 
@@ -725,9 +688,7 @@ def completion_application_environment(baseline,observed):
 
 
 def completion_ready(host,workspace):
-    identity=custody_repository(str(workspace),Path(host.meta['owned']),initialize=False)
-    if host.fixture_roots.get(('completion-git-root',host.case))!=identity:
-        raise Refused('completion fixture repository generation changed')
+    custody_repository(str(workspace),Path(host.meta['owned']))
 
 
 def completion_proposal(host,actor,raw):
@@ -748,12 +709,7 @@ def completion_proposal(host,actor,raw):
         is_fixture=len(records)<len(commands)
         if is_fixture:
             vector=commands[len(records)]
-            identity=custody_repository(str(workspace),Path(host.meta['owned']),initialize=not records)
-            key=('completion-git-root',case)
-            previous=host.fixture_roots.setdefault(key,identity)
-            if previous[0]!=identity[0] or previous[1] is not None and previous[1]!=identity[1]:
-                raise Refused('completion fixture repository generation')
-            host.fixture_roots[key]=identity
+            completion_ready(host,workspace)
             environment=base
         else:
             completion_ready(host,workspace)

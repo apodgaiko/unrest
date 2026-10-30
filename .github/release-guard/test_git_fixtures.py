@@ -78,9 +78,9 @@ def test_additional_repositories_are_bound_to_exact_owned_case_slots(tmp_path,mo
         alias=base/'alias'
         alias.symlink_to(repository,target_is_directory=True)
         repository=alias
-    if mutation in (None,'slot'):
+    if mutation in (None,'slot','generation','repository-generation','ancestor-generation','pytest-generation'):
         fixtures.fixture_root(host,case,str(repository))
-        assert host.fixture_roots[('git-fixture',case)][0]==str(base)
+        assert ('git-directory',case,str(repository)) not in host.fixture_roots
     else:
         with pytest.raises(Refused):
             fixtures.fixture_root(host,case,str(repository))
@@ -88,7 +88,7 @@ def test_additional_repositories_are_bound_to_exact_owned_case_slots(tmp_path,mo
 
 
 
-def test_repository_keeps_generation_without_attesting_git_configuration(tmp_path,monkeypatch):
+def test_repository_routes_current_owned_path_without_predicting_git_metadata(tmp_path,monkeypatch):
     from git_policy import Git
 
     case=next(iter(observed.FIXTURE_SLOTS))
@@ -108,13 +108,11 @@ def test_repository_keeps_generation_without_attesting_git_configuration(tmp_pat
     assert set(git.repositories[(case,str(repository))])=={'path'}
     metadata=repository/'.git'
     metadata.rmdir()
-    with pytest.raises(Refused,match='metadata missing'):
-        git.repository(str(repository),'head','workspaces')
+    assert git.repository(str(repository),'head','workspaces')==repository
     foreign=repository.parent/'foreign-metadata'
     foreign.mkdir()
     metadata.symlink_to(foreign,target_is_directory=True)
-    with pytest.raises(Refused,match='metadata directory'):
-        git.repository(str(repository),'head','workspaces')
+    assert git.repository(str(repository),'head','workspaces')==repository
     metadata.unlink()
     metadata.mkdir()
     (metadata/'config').write_bytes(b'[core]\nworktree=/outside\n')

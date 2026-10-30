@@ -24,17 +24,9 @@ def fixture(tmp_path,monkeypatch):
     (home/'.gitconfig').write_bytes(HOME_CONFIG)
     monkeypatch.setattr(roles,'OWNER',os.getuid())
     monkeypatch.setattr(git_observer,'image',lambda:'a'*64)
-    def repository(path,owned,*,initialize):
+    def repository(path,owned):
         root=Path(path)
-        info=root.stat()
-        metadata=root/'.git'
-        if initialize:
-            assert not metadata.exists()
-            value=None
-        else:
-            item=metadata.stat()
-            value=(item.st_dev,item.st_ino,item.st_uid)
-        return ((str(root),info.st_dev,info.st_ino,info.st_uid),),value
+        assert root.resolve()==root and root.is_relative_to(owned/'pytest')
     monkeypatch.setattr(git,'custody_repository',repository)
     parent=object()
     host=SimpleNamespace(case=case,root_birth=parent,meta={'owned':str(tmp_path)},fixture_roots={},intents={},actors={})
@@ -104,12 +96,8 @@ def test_foreign_or_changed_git_inputs_never_become_query_authority(fixture,muta
         (workspace/'.git/HEAD').chmod(0o1644)
     elif mutation=='home':
         (Path(host.meta_environment()['HOME'])/'.gitconfig').write_bytes(b'foreign')
-    if mutation=='generation':
-        with pytest.raises(Refused):
-            git.completion_ready(host,workspace)
-    else:
-        # Product tests own Git data semantics; these bytes confer no launch right.
-        assert git.completion_ready(host,workspace) is None
+    # Product tests own Git data semantics; these bytes confer no launch right.
+    assert git.completion_ready(host,workspace) is None
 
 
 

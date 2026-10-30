@@ -293,7 +293,7 @@ Git containment no longer certifies fixture operation ordering, observed branch
 value continuity, the completion repository's whole-content immutability or HEAD
 value correctness. Original Git/product tests retain those assertions. The guard
 keeps exact authored command forms, phase/environment/cwd, native image, acquired
-repository generations, helper identities and original parent/helper waits.
+canonical owned repository paths, helper identities and original parent/helper waits.
 Git configuration and linked-worktree backlink contents are application data
 inside the private filesystem, not independently reconstructed routing proofs.
 Only main/master update refs
@@ -489,14 +489,14 @@ Measurement source fixtures have a separate finite Git family: the exact
 source-pinned init/add/index-query forms in their owned `source` slot. Synthetic
 protocol tests may carry only the original two mock-ACP command environment
 values for index queries; those strings grant no process permission. Native
-image, readonly home configuration, repository generation, per-case quota and
+image, readonly home configuration, current owned repository custody, per-case quota and
 actual prior parent wait checks reuse the common Git boundary. Cold-workspace
 and nested ACP launches remain separate declarations; this source-fixture slice
 does not certify those paths or authorize live provider/benchmark work.
 
 Cold measurement repositories are confined to the original two repetitions of
-each genuine library test, one acquired run UUID and stable owned directory
-generations. Setup has three exact forms; workspace/evolution operations reuse
+each genuine library test, one acquired run UUID and current owned directory
+custody. Setup has three exact forms; workspace/evolution operations reuse
 the closed shared Git grammar and actual helper/wait custody. The evolution test
 admits exactly its two original start-project RunControl entries with retained
 request identity, fixed executor, complete environment, actual guarded execution
@@ -556,7 +556,7 @@ Cohort campaign cases share the existing controlled backend byte pins and exact
 owner/role pair admission. The closed cohort table binds 35 campaign and 24
 Git-only original cases to finite launch ceilings; its exceptional Git literals
 apply only to their individual negative or integration cases. Custody Git waits
-serialize each acquired repository generation, allowing distinct lane repositories
+join each actual admitted child, allowing distinct lane repositories
 to seal concurrently. Every observed child still needs its actual completion and
 original-parent wait at case closeout; this does not admit controller crash cases.
 
@@ -911,7 +911,7 @@ Neither the stdlib entry pin nor a matching target label attests pickle contents
 children acquire no subprocess or provider-launch authority.
 
 Git commands no longer require a second intermediate wait-order model before
-each subsequent command. Their independently acquired repository generations,
+each subsequent command. Their current canonical owned repository paths,
 fixed command operands, mutation ordinals, parent roles, helper reservations and
 quotas remain. The unique pending-launch join still serializes admission through
 actual exec. Case finalization requires every admitted command and helper to have
@@ -1276,8 +1276,8 @@ provider execution.
 Git proposals use one closed argv parser instead of trying each operation in
 turn. Exact vectors, stdin restrictions, scoped paths and fixture budgets remain;
 checked-out worktree creation retains its distinct helper role. Shared retained
-directory generations include the owned pytest ancestor, replacing duplicate
-repository generation records without shortening the checked ancestor chain.
+directory custody checks include the owned pytest ancestor without retaining
+a mutable Git metadata generation oracle.
 
 The two original missing-handoff/readiness-timeout diagnostics bind a root-owned
 worker MCP and, only for missing handoff, one pinned mock ACP after MCP READY.
@@ -1374,3 +1374,14 @@ the direct child's real worker wait and its explicit cleanup barrier. Only that
 case may signal its own current worker session group after an independently
 attributed cancellation: exact actor/intent, READY, one admitted child and actual
 PGID/SID are required. This is not a generic group-signal or provider permission.
+
+
+Mutable Git metadata is application data, not an executable identity or a retained
+fixture-generation certificate. Admission checks the current canonical owned cwd
+and its complete ancestor ownership/mode chain. It does not predict first-init,
+`.git` existence or inode continuity, or freeze completion repository metadata.
+Git configuration, hooks and attributes can request other processes: those
+requests still need an independently admitted exact executable, vector,
+environment and parent; an unknown fork/exec poisons the run even if caught.
+Protected source/runtime generations, exact helper admission, READY and actual
+numeric waits remain required. Original Git result tests own data semantics.

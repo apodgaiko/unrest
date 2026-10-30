@@ -34,7 +34,7 @@ def test_repository_cannot_leave_the_disposable_case(tmp_path):
     root = tmp_path/'foreign'
     root.mkdir()
     with pytest.raises(Refused):
-        repository(str(root),tmp_path,initialize=True)
+        repository(str(root),tmp_path)
     with pytest.raises(Refused):
         command(CASE,(*PREFIX,'rev-parse','HEAD'),str(root),tmp_path)
 
@@ -54,20 +54,22 @@ __import__('sys').addaudithook(_audit)
 
 
 @pytest.mark.parametrize('replacement',['repository','metadata'])
-def test_same_path_replacement_cannot_inherit_prior_repository_facts(monkeypatch,replacement):
-    import git_policy as custody_git
-    import git_policy as git_observer
-    monkeypatch.setattr(git_observer,'image',lambda:'a'*64)
+def test_mutable_repository_data_does_not_supply_new_command_rights(tmp_path,monkeypatch,replacement):
     from types import SimpleNamespace
-    cwd = '/owned/pytest/case/cohort/base'
-    directory = ((cwd,1,10,20000),)
-    old = directory,(1,20,20000)
-    new = (((cwd,1,11,20000),),(1,20,20000)) if replacement == 'repository' else (directory,(1,21,20000))
-    host = SimpleNamespace(case=CASE,meta={'owned':'/owned'},intents={},root_only=lambda actor:None,
-        git=SimpleNamespace(custody_roots={(CASE,cwd):old}))
-    monkeypatch.setattr(custody_git,'custody_repository',lambda *args,**kwargs:new)
-    with pytest.raises(Refused,match='replaced repository generation'):
-        custody_git.custody_launch(host,None,*custody_git.custody_command(CASE,tuple([*PREFIX,'rev-parse','HEAD']),cwd,Path('/owned')),None)
+    root=tmp_path/'pytest/case/repository'
+    (root/'.git').mkdir(parents=True)
+    original=Path.lstat
+    def owned(path,*args,**kwargs):
+        info=original(path,*args,**kwargs)
+        return SimpleNamespace(st_mode=info.st_mode,st_uid=20000)
+    monkeypatch.setattr(Path,'lstat',owned)
+    assert repository(str(root),tmp_path) is None
+    changed=root if replacement=='repository' else root/'.git'
+    changed.rename(changed.with_name('retired'))
+    changed.mkdir()
+    assert repository(str(root),tmp_path) is None
+    with pytest.raises(Refused,match='undeclared template'):
+        command(CASE,(*PREFIX,'fetch','https://example.invalid/private'),str(root),tmp_path)
 
 
 def test_deferred_constructor_does_not_consume_a_git_command(monkeypatch):
