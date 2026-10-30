@@ -77,5 +77,5 @@ def render(operation,repository,data,*,family='workspaces',fixture=None,branch='
 
 
 def build(operation,repository,location,data,*,family,fixture=None,branch='main'):
-    vector,stdin,environment=render(operation,repository,data,family=family,fixture=fixture,branch=branch)
-    return match(operation,repository,location,vector,stdin,environment,family=family,fixture=fixture,branch=branch)
+    vector,stdin,environment=render(operation,repository,data,family=family,branch=branch)
+    return match(operation,repository,location,vector,stdin,environment,family=family,branch=branch)

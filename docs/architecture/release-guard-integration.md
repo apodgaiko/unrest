@@ -1112,3 +1112,18 @@ private namespace controls. No original product test is removed or weakened.
 
 The pinned `uv` startup uses an anonymous Unix `SOCK_SEQPACKET` pair. This
 contained IPC class is admitted with protocol zero; IP seqpacket remains denied.
+
+
+Disposable local Git fixture choreography is retired. An eligible active root
+may use the closed union of existing local Git command vectors inside its
+acquired pytest subtree, with canonical repository generations, exact image,
+argv/environment/cwd comparison, finite quotas and actual parent waits. The
+guard does not predict setup ordinal, fixture author identity, repository label,
+measurement repetition directory or product branch result. Setup/call metadata
+must still name the active original case. No arbitrary Git command, configuration
+key, remote operation or native child is admitted. Historical public-source
+queries remain separate and read-only. Worker launch sequences, nested ACP,
+adopted process identities, review restrictions and cleanup remain independent.
+All original product tests and parameters remain unchanged; guard-only tests of
+the retired fixture-order and naming predictions are replaced by closed union,
+case-directory custody, foreign-command and native execution controls.

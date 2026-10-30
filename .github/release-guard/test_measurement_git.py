@@ -12,7 +12,7 @@ def host(monkeypatch):
     import git_policy as git_observer
     monkeypatch.setattr(git_observer,'image',lambda:'a'*64)
     value=SimpleNamespace(case=measurement.MEASUREMENT_CASES[0],meta={'checkout':str(ROOT)},
-        binding={'entry':{'path':'/native/python'}},intents={},seen=[])
+        binding={'entry':{'path':'/native/python','sha256':'b'*64}},intents={},seen=[])
     value.root_only=lambda actor:None
     value.meta_environment=lambda:{'PATH':'/usr/bin:/bin'}
     from git_policy import Git
@@ -37,21 +37,21 @@ def raw(host,args):
 def test_every_original_source_fixture_has_exact_commands(host,case):
     host.case=case
     for args in (['init','-q'],['add','.'],['ls-files','-z','--stage']):
-        result=measurement.measurement_proposal(host,{'role':'root'},raw(host,args))
+        result=measurement.workspace_prepare(host,{'role':'root'},raw(host,args))
         assert result['translated']==['/usr/bin/git',*args]
-        assert host.intents[1]['operation']==('init' if args[0]=='init' else 'measurement-command')
+        assert host.intents[1]['operation']=={'init':'init','add':'stage-base','ls-files':'fixture-extra'}[args[0]]
 
 @pytest.mark.parametrize('args',(['add','USER'],['commit','-m','fixture'],['config','user.name','extra'],['ls-files','--others']))
 def test_other_commands_refuse_before_any_launch(host,args):
-    with pytest.raises(Refused,match='original source Git command'):
-        measurement.measurement_proposal(host,{'role':'root'},raw(host,args))
+    with pytest.raises(Refused,match='one finite operation'):
+        measurement.workspace_prepare(host,{'role':'root'},raw(host,args))
     assert not host.seen
 
 def test_provider_or_other_environment_cannot_be_inherited(host):
     request=raw(host,['init','-q'])
     request['environment']['OPENAI_API_KEY']='canary'
     with pytest.raises(Refused,match='original launch operands'):
-        measurement.measurement_proposal(host,{'role':'root'},request)
+        measurement.workspace_prepare(host,{'role':'root'},request)
     assert not host.seen
 
 
@@ -63,37 +63,6 @@ def test_original_source_setup_has_only_the_two_declared_git_calls():
     assert [ast.literal_eval(call.args[0]) for call in calls]==[['git','init','-q'],['git','add','.']]
 
 
-@pytest.mark.parametrize('mutation',(None,'repetition','case','run','alias','generation'))
-def test_cold_repositories_are_exact_case_repetition_and_directory_generations(tmp_path,monkeypatch,mutation):
-    import os
-    monkeypatch.setattr(measurement,'MEASUREMENT_OWNER',os.getuid())
-    case=next(iter(measurement.MEASUREMENT_REAL))
-    base=tmp_path/'pytest/test_case0'
-    path=base/'home/measurement-private'/('a'*32)/'cold-roots/rep-11/workspace'
-    path.mkdir(parents=True)
-    host=SimpleNamespace(case=case,fixture_roots={('git-fixture',case):(str(base),)})
-    if mutation=='repetition':
-        path=path.parent.parent/'rep-01/workspace'
-        path.mkdir(parents=True)
-    elif mutation=='case':
-        host.case=measurement.MEASUREMENT_CASES[0]
-    elif mutation=='run':
-        host.fixture_roots['measurement-run',case]='b'*32
-    elif mutation=='alias':
-        alias=path.parent/'alias'
-        alias.symlink_to(path,target_is_directory=True)
-        path=alias
-    elif mutation=='generation':
-        measurement.measurement_cold_root(host,path)
-        path.rename(path.with_name('old'))
-        path.mkdir()
-    if mutation is None:
-        measurement.measurement_cold_root(host,path)
-        assert host.fixture_roots['measurement-run',case]=='a'*32
-        assert host.fixture_roots['measurement-root',case,str(path)][0][0]==str(path)
-    else:
-        with pytest.raises(Refused):
-            measurement.measurement_cold_root(host,path)
 
 @pytest.mark.parametrize('mutation',(None,'exhausted','pending','unreaped','repetition'))
 def test_evolution_workers_are_two_fixed_start_operations(host,monkeypatch,mutation):
@@ -105,7 +74,7 @@ def test_evolution_workers_are_two_fixed_start_operations(host,monkeypatch,mutat
     host.intents={} if mutation is None or mutation=='repetition' else {1:previous}
     if mutation=='exhausted':
         host.intents[2]=dict(previous)
-    monkeypatch.setattr(measurement,'measurement_cold_root',lambda host,path:None)
+    monkeypatch.setattr(measurement,'fixture_root',lambda *args:None)
     seen=[]
     def admit(*args):
         seen.append(args)

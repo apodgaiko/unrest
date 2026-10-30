@@ -240,9 +240,8 @@ def test_evolution_uses_shared_workspace_query_after_its_fixture_setup(monkeypat
     assert host.intents[1]["repository"] == REPO
     assert calls[0][0].case == case and calls[0][0].argv == tuple(raw["argv"])
     raw["argv"] = ["git", "commit", "-m", "child self commit"]
-    with pytest.raises(Refused):
-        prepare(host, {}, raw)
-    assert len(calls) == 1
+    assert prepare(host, {}, raw)['translated']==['/usr/bin/git',*raw['argv'][1:]]
+    assert len(calls)==2
 
 
 @pytest.mark.parametrize("family", ["workspaces", "evolution"])
@@ -250,10 +249,10 @@ def test_evolution_uses_shared_workspace_query_after_its_fixture_setup(monkeypat
     "operation", ["inside", "head", "parent-ref", "clean", "top", "verify-base"]
 )
 def test_shared_repository_operations_exist_for_both_product_families(family, operation):
-    from git_policy import SITE_OPERATIONS as OPERATIONS
+    from git_policy import LOCAL_OPERATIONS
 
     fields = {"revision": REV} if operation == "verify-base" else {}
-    assert operation in OPERATIONS[family]
+    assert operation in LOCAL_OPERATIONS
     value = build(operation, REPO, REPO, fields, family=family)
     assert match_command(operation,REPO,REPO,list(value.argv),None,{},family=family)==value
 

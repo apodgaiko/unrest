@@ -10,7 +10,6 @@ import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-import ast
 import stat
 from launch_policy import source_unit, build_expected, admit_expected
 from owned_fixture import acquire, retain
@@ -197,6 +196,17 @@ COMMAND_OPERATIONS = (*COMMAND_FIXED,
 )
 
 
+SETUP_FORMS={
+    'init':(('init',),('init','-q'),('init','-b','main'),('init','--initial-branch=main','--object-format=sha1')),
+    'config-name':tuple(('config','user.name',name) for name in ('Workspace Test','Evolution Test','Fixture','Schema Validator','Authority Test','Foundation Integration','Project Adapter Test','Improve Adapter Test','ACT-190 Activation')),
+    'config-email':tuple(('config','user.email',name) for name in ('workspace@example.test','evolution@example.test','fixture@example.invalid','schema@example.test','authority@example.test','foundation@example.test','project-adapter@example.test','improve@example.test','act190@example.test')),
+    'stage-base':tuple(('add',*paths) for paths in (('README.md',),('.',),('README.md','.gitignore'))),
+    'commit-base':tuple(('commit','-m',message) for message in ('base','candidate','unsupported','executable')),
+    'stage-advance':(('add','advance.txt'),),'commit-advance':(('commit','-m','advance parent'),),
+    'stage-child':(('add','child.txt'),),'commit-child':(('commit','-m','child self commit'),),
+}
+
+
 def command_path(value):
     operand_text(value)
     p = PurePosixPath(value)
@@ -213,9 +223,9 @@ def command_location(repo, path, *, target=False):
 
 def command_match(operation, repository, location, argv, stdin, environment, *, family, fixture=None, branch="main"):
     """Match one closed complete vector; dynamic operands grant no extra forms."""
-    if type(family) is not str or family not in ('workspaces','evolution') or type(operation) is not str or operation not in COMMAND_OPERATIONS:
+    if type(family) is not str or family not in ('workspaces','evolution') or type(operation) is not str or operation not in (*COMMAND_OPERATIONS,'fixture-extra'):
         raise Refused('git closed operation')
-    if type(argv) is not list or not argv or any(type(value) is not str for value in argv) or argv[0]!='git':
+    if type(argv) is not list or not argv or any(type(value) is not str for value in argv) or argv[0] not in ('git','/usr/bin/git'):
         raise Refused('git literal argument vector')
     repo,cwd=command_path(repository),command_path(location)
     command_location(repo,cwd)
@@ -224,24 +234,34 @@ def command_match(operation, repository, location, argv, stdin, environment, *, 
     if operation in COMMAND_FIXED:
         if args!=COMMAND_FIXED[operation]:
             raise Refused('git fixed command')
-    elif operation in ('init','config-name','config-email','stage-base','commit-base','stage-advance','commit-advance','stage-child','commit-child'):
-        label='Workspace' if family=='workspaces' else 'Evolution'
-        expected={'init':('init','-b','main'),'config-name':('config','user.name',label+' Test'),
-            'config-email':('config','user.email',family.removesuffix('s')+'@example.test'),
-            'stage-base':('add','README.md'),'commit-base':('commit','-m','base'),
-            'stage-advance':('add','advance.txt'),'commit-advance':('commit','-m','advance parent'),
-            'stage-child':('add','child.txt'),'commit-child':('commit','-m','child self commit')}[operation]
-        if fixture is not None and operation in ('init','config-name','config-email','stage-base','commit-base'):
-            expected=fixture.commands[('init','config-name','config-email','stage-base','commit-base').index(operation)]
-        if (args!=expected or family=='evolution' and operation in ('stage-child','commit-child','stage-advance','commit-advance')):
-            raise Refused('git fixture command or family')
+    elif operation in SETUP_FORMS:
+        if args not in SETUP_FORMS[operation]:
+            raise Refused('git closed setup vector')
+    elif operation=='fixture-extra':
+        forms={('rev-parse','HEAD:lane_a.txt'),('config','core.filemode','false'),
+            ('add','lane_a.txt'),('rm','--cached','lane_a.txt'),('add','extra.txt'),
+            ('update-index','--assume-unchanged','lane_a.txt'),('update-index','--skip-worktree','lane_a.txt'),
+            ('add','-N','extra.txt'),('ls-files','-z','--stage'),('add','.gitignore','candidate.txt'),
+            ('-c','user.name=Unrest Measurement','-c','user.email=measurement@invalid','commit','-q','-m','frozen baseline')}
+        forms.update(('config',key,value.replace('CANARY',str(repo.parent/'canary')))
+            for parameter in CANDIDATE_CONSUMERS['test_config_canaries_never_called']
+            for key,value in (parameter.split('-',1),))
+        if args not in forms:
+            match args:
+                case ('commit-tree',oid,'-m','unrelated'):
+                    operand_digest(oid)
+                case ('update-index','--add','--cacheinfo',entry):
+                    mode,oid,name=entry.split(',') if entry.count(',')==2 else ('','','')
+                    if mode not in ('120000','160000') or name!='unsupported':
+                        raise Refused('Git finite cache entry')
+                    operand_digest(oid)
+                case _:
+                    raise Refused('Git closed fixture vector')
     else:
         match operation,args:
             case ('lease-add',('worktree','add','--detach','--no-checkout',tree,revision)) | (('integration-add'|'rollback-add'),('worktree','add','--detach',tree,revision)):
                 tree=command_path(tree)
                 command_location(repo,tree,target=True)
-                if operation=='rollback-add' and family!='evolution':
-                    raise Refused('git rollback family')
                 operand_digest(revision)
             case ('remove-tree',('worktree','remove','--force',tree)):
                 command_location(repo,command_path(tree),target=True)
@@ -251,15 +271,13 @@ def command_match(operation, repository, location, argv, stdin, environment, *, 
                 operand_digest(revision)
             case (('reset-parent'|'rollback-reset'),('reset','--hard',revision)):
                 operand_digest(revision)
-                if operation=='rollback-reset' and family!='evolution':
-                    raise Refused('git rollback family')
             case ('apply',('apply','--index','--binary',patch)):
                 patch=command_path(patch)
                 if patch.parent!=repo/'.unrest/workspaces/patches' or patch.suffix!='.patch':
                     raise Refused('git patch scope')
                 operand_digest(patch.stem,64)
             case (('update-parent'|'rollback-update'),('update-ref',reference,new,old)):
-                if branch not in ('main','master') or reference!='refs/heads/'+branch or operation=='rollback-update' and family!='evolution':
+                if branch not in ('main','master') or reference!='refs/heads/'+branch:
                     raise Refused('git update reference or rollback family')
                 operand_digest(new)
                 operand_digest(old)
@@ -309,83 +327,6 @@ CANDIDATE_CONSUMERS={
 CANDIDATE_CASES=tuple(CANDIDATE_TEST+'::'+name+('['+parameter+']' if parameter is not None else '') for name,parameters in CANDIDATE_CONSUMERS.items() for parameter in parameters)
 
 
-def candidate_declarations(checkout,case,repository):
-    if case not in CANDIDATE_CASES:
-        raise Refused('candidate exact fixture consumer')
-    unit=source_unit(checkout,CANDIDATE_TEST,CANDIDATE_PIN,('repo',))
-    setup=[]
-    for statement in unit.body:
-        call=statement.value if isinstance(statement,ast.Expr) else statement.value if isinstance(statement,ast.Assign) else None
-        if isinstance(call,ast.Call) and isinstance(call.func,ast.Name) and call.func.id=='git':
-            setup.append(tuple(ast.literal_eval(arg) for arg in call.args[1:]))
-    if len(setup)!=9 or any(type(arg) is not str for row in setup for arg in row):
-        raise Refused('candidate literal fixture setup')
-    name=case.split('::',1)[1]
-    root=Path(repository)
-    extras=[]
-    if name=='test_literal_manifest_and_independent_oracle':
-        extras=[('rev-parse','HEAD^{tree}')]
-    elif name.startswith('test_input_changes_refuse['):
-        parameter=name[len('test_input_changes_refuse['):-1]
-        extras={'mode':[('config','core.filemode','false')], 'staged':[('add','lane_a.txt')],
-            'index-delete':[('rm','--cached','lane_a.txt')], 'index-add':[('add','extra.txt')],
-            'assume':[('update-index','--assume-unchanged','lane_a.txt')],
-            'skip':[('update-index','--skip-worktree','lane_a.txt')], 'intent':[('add','-N','extra.txt')]}.get(parameter,[])
-    elif name.startswith('test_config_canaries_never_called['):
-        parameter=name[len('test_config_canaries_never_called['):-1]
-        key,value=parameter.split('-',1)
-        extras=[('config',key,value.replace('CANARY',str(root.parent/'canary')))]
-    elif name=='test_wrong_ids_types_and_unrelated_history':
-        extras=[('rev-parse','HEAD^{tree}'),('rev-parse','HEAD:lane_a.txt'),('commit-tree',None,'-m','unrelated')]
-    elif name.startswith('test_raw_object_integrity[') and not name.endswith('-ancestry]'):
-        extras=[('rev-parse','HEAD^{tree}'),('rev-parse','HEAD:lane_a.txt')]
-    elif name.startswith('test_unsupported_tree_entries['):
-        mode=name[len('test_unsupported_tree_entries['):-1]
-        extras=([('rev-parse','HEAD:lane_a.txt')] if mode=='120000' else [])+[
-            ('update-index','--add','--cacheinfo',mode+',OID,unsupported'),('commit','-m','unsupported'),('rev-parse','HEAD')]
-    elif name=='test_executable_tracked_file_and_nested_extra':
-        extras=[('add','lane_a.txt'),('commit','-m','executable'),('rev-parse','HEAD')]
-    return tuple(setup),tuple(extras)
-
-
-def candidate_command(checkout,case,repository,ordinal,argv):
-    setup,extras=candidate_declarations(checkout,case,repository)
-    rows=(*setup,*extras)
-    if not 0<=ordinal<len(rows) or not argv or argv[0]!='/usr/bin/git':
-        raise Refused('candidate fixture finite command ordinal')
-    expected=list(rows[ordinal])
-    actual=argv[1:]
-    if None in expected:
-        index=expected.index(None)
-        if len(actual)!=len(expected):
-            raise Refused('candidate object operand shape')
-        operand_digest(actual[index])
-        expected[index]=actual[index]
-    if expected[-1].endswith(',OID,unsupported'):
-        if len(actual)!=len(expected):
-            raise Refused('candidate cache entry operand shape')
-        parts=actual[-1].split(',')
-        if len(parts)!=3 or (parts[0],parts[2])!=(expected[-1].split(',')[0],'unsupported'):
-            raise Refused('candidate cache entry scope')
-        operand_digest(parts[1])
-        expected[-1]=actual[-1]
-    if actual!=expected:
-        raise Refused('candidate original complete command')
-    environment={'PATH':'/usr/bin:/bin','HOME':repository,'LC_ALL':'C',
-        'GIT_CONFIG_NOSYSTEM':'1','GIT_CONFIG_GLOBAL':'/dev/null',
-        'GIT_CONFIG_COUNT':'1','GIT_CONFIG_KEY_0':'maintenance.auto','GIT_CONFIG_VALUE_0':'false',
-        'GIT_AUTHOR_DATE':'2000-01-01T00:00:00+0000','GIT_COMMITTER_DATE':'2000-01-01T00:00:00+0000'}
-    return Command(tuple(argv),repository),environment
-
-
-def candidate_proposal(host,actor,raw):
-    records=[row for row in host.intents.values() if row['case']==host.case and row['role']=='git-command']
-    repository=raw['cwd']
-    value,environment=candidate_command(Path(host.meta['checkout']),host.case,repository,len(records),raw['argv'])
-    return host.git.launch(actor,'init' if not records else 'candidate-command',repository,value,raw,environment)
-
-
-MEASUREMENT_OWNER=20000
 MEASUREMENT_TEST='tests/test_measurement.py'
 MEASUREMENT_PIN='d850dcaf77c4b4ebd08efa87089cbc7b59762d5eb8d7fd0b673a9e043bc3e97f'
 MEASUREMENT_SYNTHETIC=('test_successful_exact_protocol_publishes_sanitized_recomputable_bundle',
@@ -396,80 +337,6 @@ MEASUREMENT_NAMES=(*MEASUREMENT_SYNTHETIC,'test_evolution_cases_use_real_public_
     'test_project_cases_use_real_run_control_and_nested_acp','test_confirmation_and_protocol_drift_do_not_invoke_provider',
     'test_product_digest_excludes_only_results')
 MEASUREMENT_CASES=tuple(MEASUREMENT_TEST+'::'+name for name in MEASUREMENT_NAMES)
-MEASUREMENT_COLD=('inside','top','head','parent-ref','clean','inventory','verify-base','lease-add','checkout','stage-return','diff-return')
-MEASUREMENT_REAL={MEASUREMENT_TEST+'::'+MEASUREMENT_NAMES[-4]:(11,16),MEASUREMENT_TEST+'::'+MEASUREMENT_NAMES[-3]:(1,6)}
-
-
-def measurement_proposal(host,actor,raw):
-    from run_worker_launch import MEASUREMENT_PROJECT
-    if host.case==MEASUREMENT_PROJECT and actor['role']!='root':
-        from measurement_runtime import nested
-        return nested(host,actor,raw)
-    host.root_only(actor)
-    checkout=Path(host.meta['checkout'])
-    source_unit(checkout,MEASUREMENT_TEST,MEASUREMENT_PIN)
-    argv=raw['argv']
-    arguments=tuple(argv[1:])
-    source=Path(raw['cwd']).name=='source'
-    records=[slot for (case,repository),slot in host.git.repositories.items() if case==host.case
-        and (raw['cwd']==repository or raw['cwd'].startswith(repository+'/.unrest-runtime/'))]
-    repository=records[0]['path'] if len(records)==1 else raw['cwd']
-    if len(records)>1 or raw['executable']!='/usr/bin/git' or argv[0]!='git':
-        raise Refused('measurement original source Git command')
-    environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':host.case+' (call)'}
-    if not source or arguments==('ls-files','-z','--stage') and host.case.split('::')[1] in MEASUREMENT_SYNTHETIC:
-        command=host.binding['entry']['path']+' '+str(checkout/'tests/mock_measurement_acp.py')
-        environment.update(UNREST_WORKER_ACP_COMMAND=command,UNREST_VALIDATOR_ACP_COMMAND=command)
-    operation='init' if arguments==('init','-q') else 'measurement-command'
-    if source:
-        if raw['stdin'] is not None or arguments not in (('init','-q'),('add','.'),('ls-files','-z','--stage')):
-            raise Refused('measurement original source Git command')
-        value=Command(tuple(argv),raw['cwd'])
-    else:
-        measurement_cold_root(host,Path(repository))
-        if arguments in (('init','-q'),('add','.gitignore','candidate.txt'),
-                ('-c','user.name=Unrest Measurement','-c','user.email=measurement@invalid','commit','-q','-m','frozen baseline')):
-            if raw['stdin'] is not None or raw['cwd']!=repository:
-                raise Refused('measurement cold setup location or input')
-            value=Command(tuple(argv),repository)
-        else:
-            matches={}
-            for candidate in MEASUREMENT_COLD:
-                try:
-                    matches[candidate]=command_match(candidate,repository,raw['cwd'],argv,raw['stdin'],raw['environment'],family='evolution')
-                except Refused:
-                    pass
-            if len(matches)!=1:
-                raise Refused('measurement single shared Git operation')
-            operation,value=next(iter(matches.items()))
-            environment.update(value.additions)
-    return host.git.launch(actor,operation,repository,value,raw,environment)
-
-
-def measurement_cold_root(host,path):
-    if host.case not in MEASUREMENT_REAL:
-        raise Refused('measurement cold repository case')
-    fixture=host.fixture_roots.get(('git-fixture',host.case))
-    if fixture is None:
-        raise Refused('measurement source fixture must precede cold roots')
-    base=Path(fixture[0])
-    try:
-        parts=path.relative_to(base).parts
-    except ValueError:
-        raise Refused('measurement cold fixture escape') from None
-    if (len(parts)!=6 or parts[:2]!=('home','measurement-private') or not re.fullmatch('[a-f0-9]{32}',parts[2])
-            or parts[3]!='cold-roots' or parts[4] not in tuple(f'rep-{index:02d}' for index in MEASUREMENT_REAL[host.case]) or parts[5]!='workspace'
-            or path.resolve()!=path):
-        raise Refused('measurement exact cold repetition path')
-    identity=[]
-    for directory in (path,*(parent for parent in path.parents if parent.is_relative_to(base))):
-        info=directory.stat(follow_symlinks=False)
-        if not stat.S_ISDIR(info.st_mode) or info.st_uid!=MEASUREMENT_OWNER or info.st_mode&0o6022:
-            raise Refused('measurement cold directory custody')
-        identity.append((str(directory),info.st_dev,info.st_ino))
-    if (host.fixture_roots.setdefault(('measurement-run',host.case),parts[2])!=parts[2]
-            or host.fixture_roots.setdefault(('measurement-root',host.case,str(path)),identity)!=identity):
-        raise Refused('measurement cold generation changed')
 
 
 def measurement_worker(host,actor,raw):
@@ -485,7 +352,7 @@ def measurement_worker(host,actor,raw):
         raise Refused('measurement worker original sequence and waits')
     repetition,operation,nodes=steps[len(records)]
     home=Path(raw['cwd'])
-    measurement_cold_root(host,home.parent/'workspace')
+    fixture_root(host,host.case,str(home.parent/'workspace'))
     if home.name!='harness-home' or home.resolve()!=home or home.parent.name!=f'rep-{repetition:02d}':
         raise Refused('measurement worker original repetition home')
     native=host.binding['entry']['path']
@@ -501,31 +368,6 @@ def measurement_worker(host,actor,raw):
 
 FIXTURE_SERVER_INQUIRY='tests/test_server.py::test_real_run_inquiry_workspace_and_campaign_results_cross_validator'
 
-@dataclass(frozen=True)
-class Fixture:
-    family: str
-    init: tuple[str,...]
-    user: str
-    email: str
-    stage: tuple[str,...]
-    phase: str
-
-    @property
-    def commands(self):
-        return (self.init,('config','user.name',self.user),('config','user.email',self.email),
-                ('add',*self.stage),('commit','-m','base'))
-
-
-FIXTURE_MODULES={
-    'tests/test_server.py':Fixture('workspaces',('init',),'Schema Validator','schema@example.test',('.',),'call'),
-    MEASUREMENT_TEST:Fixture('measurement',('init','-q'),'','',('.',),'call'),
-    CANDIDATE_TEST:Fixture('candidate',('init','--initial-branch=main','--object-format=sha1'),'Fixture','fixture@example.invalid',('.',),'setup'),
-    'tests/test_foundation_authority.py':Fixture('workspaces',('init',),'Authority Test','authority@example.test',('.',),'call'),
-    'tests/test_foundation_integration.py':Fixture('workspaces',('init',),'Foundation Integration','foundation@example.test',('.',),'call'),
-    'tests/test_project_adapter.py':Fixture('workspaces',('init','-b','main'),'Project Adapter Test','project-adapter@example.test',('README.md','.gitignore'),'setup'),
-    'tests/test_improve_adapter.py':Fixture('evolution',('init','-b','main'),'Improve Adapter Test','improve@example.test',('README.md',),'setup'),
-    'tests/test_v04_activation.py':Fixture('activation',('init','-b','main'),'ACT-190 Activation','act190@example.test',('README.md',),'call'),
-}
 FIXTURE_PINS={
     'tests/test_server.py':'0550689ff20fb183ea62b47606bd3e66c5fc1222b5d4166e57e74d546afbb286',
     MEASUREMENT_TEST:MEASUREMENT_PIN,
@@ -577,28 +419,30 @@ FIXTURE_SLOTS.update(dict.fromkeys(CANDIDATE_CASES,('repository',)))
 FIXTURE_SLOTS.update(dict.fromkeys(MEASUREMENT_CASES,('source','workspace')))
 
 
-def fixture_fixture(case):
-    if case not in FIXTURE_SLOTS:
-        raise Refused('Git exact additional fixture case')
-    value=FIXTURE_MODULES[case.split('::')[0]]
-    if value.family=='activation':
-        from dataclasses import replace
-        value=replace(value,family='evolution' if FIXTURE_SLOTS[case][0].startswith('improve-') else 'workspaces')
-    return value
-
-
 def fixture_root(host,case,repository):
+    if case not in SITE_CASES:
+        raise Refused('Git exact fixture case')
     file=case.split('::')[0]
-    source_unit(Path(host.meta['checkout']),file,FIXTURE_PINS[file])
+    if file in FIXTURE_PINS:
+        source_unit(Path(host.meta['checkout']),file,FIXTURE_PINS[file])
     path=Path(repository)
-    if file==MEASUREMENT_TEST and path.name=='workspace':
-        return measurement_cold_root(host,path)
-    parent,info=acquire(str(path.parent),Path(host.meta['owned']),re.sub(r'[\W]','_',case.split('::')[1])[:30],20000)
-    if path.name not in FIXTURE_SLOTS[case] or path.resolve()!=path:
-        raise Refused('Git exact additional repository slot')
-    generation=(str(parent),info.st_dev,info.st_ino)
+    owned=Path(host.meta['owned'])/'pytest'
+    if str(path.resolve())!=repository or path==owned or not path.is_relative_to(owned):
+        raise Refused('Git case-owned repository')
+    base=owned/path.relative_to(owned).parts[0]
+    root,info=acquire(str(base),owned.parent,re.sub(r'[\W]','_',case.split('::')[1])[:30],20000)
+    generation=(str(root),info.st_dev,info.st_ino)
     if host.fixture_roots.setdefault(('git-fixture',case),generation)!=generation:
-        raise Refused('Git additional pytest generation changed')
+        raise Refused('Git pytest generation changed')
+    identities=[]
+    for directory in (path,*(parent for parent in path.parents if parent.is_relative_to(base))):
+        info=directory.lstat()
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid!=20000 or info.st_mode&0o6022:
+            raise Refused('Git owned directory custody')
+        identities.append((str(directory),info.st_dev,info.st_ino))
+    if host.fixture_roots.setdefault(('git-directory',case,repository),identities)!=identities:
+        raise Refused('Git directory generation changed')
+
 
 FIXTURE_SLOTS[FIXTURE_SERVER_INQUIRY]=('repository',)
 
@@ -721,11 +565,7 @@ SITE_CASES = (
     'tests/test_evolution.py::test_rollback_transaction_recovers_each_git_boundary[post_receipt]',
     'tests/test_evolution.py::test_rollback_validation_failure_preserves_current',
 )
-SITE_WORKSPACE_ONLY=frozenset({'head-tree','stage-advance','commit-advance','stage-child','commit-child'})
-SITE_SHARED_OPERATIONS=tuple(sorted(set(COMMAND_OPERATIONS)-SITE_WORKSPACE_ONLY-set(COMMAND_SETUP)))
-SITE_OPERATIONS={'workspaces':tuple(sorted(COMMAND_OPERATIONS)),
-    'evolution':tuple(sorted(set(COMMAND_OPERATIONS)-SITE_WORKSPACE_ONLY)),
-    'candidate':('init','candidate-command'),'measurement':('init','measurement-command',*MEASUREMENT_COLD)}
+LOCAL_OPERATIONS=tuple(dict.fromkeys({'rollback-add':'integration-add','rollback-update':'update-parent','rollback-reset':'reset-parent'}.get(operation,operation) for operation in (*COMMAND_OPERATIONS,'fixture-extra')))
 
 SITE_OWNED_BODY = 'import time; time.sleep(60)'
 
@@ -777,13 +617,7 @@ class Git:
 
     def repository(self, repository, operation, family):
         root = Path(repository)
-        owned = Path(self.host.meta['owned'])
-        fixture=fixture_fixture(self.host.case) if self.host.case in FIXTURE_SLOTS else None
-        if fixture is not None:
-            fixture_root(self.host,self.host.case,repository)
-        if (((root.name != 'project' or root.parent.parent != owned / 'pytest') if fixture is None else root.name not in FIXTURE_SLOTS[self.host.case])
-                or str(root.resolve(strict=True)) != repository):
-            raise Refused('git original repository location')
+        fixture_root(self.host,self.host.case,repository)
         identities = []
         for directory in (root.parent, root):
             info = directory.lstat()
@@ -821,10 +655,7 @@ class Git:
         host.root_only(actor)
         if host.case not in SITE_CASES:
             raise Refused('Git finite case')
-        family=fixture_fixture(host.case).family if host.case in FIXTURE_SLOTS else 'workspaces' if host.case.startswith('tests/test_workspaces.py::') else 'evolution'
-        if operation not in SITE_OPERATIONS[family]:
-            raise Refused('Git finite operation declaration')
-        root = self.repository(repository, operation, family)
+        root = self.repository(repository, operation, 'workspaces')
         self.location(root, command.cwd)
         if operation in ('lease-add','integration-add','rollback-add','remove-tree'):
             target = Path(command.argv[-1] if operation=='remove-tree' else command.argv[-2])
@@ -891,16 +722,13 @@ class Git:
 
 def workspace_prepare(host,actor,raw):
     case=host.case
-    if case in MEASUREMENT_CASES:
-        return measurement_proposal(host,actor,raw)
+    if case in MEASUREMENT_CASES and actor['role']!='root':
+        from measurement_runtime import nested
+        return nested(host,actor,raw)
     if case in HISTORY_CASES:
         return history_proposal(host,actor,raw)
-    if case in CANDIDATE_CASES:
-        return candidate_proposal(host,actor,raw)
     if case not in SITE_CASES:
         raise Refused('Git proposal undeclared case')
-    fixture=fixture_fixture(case) if case in FIXTURE_SLOTS else None
-    family=fixture.family if fixture is not None else 'workspaces' if case.startswith('tests/test_workspaces.py::') else 'evolution'
     choices=[slot for (current,repo),slot in host.git.repositories.items() if current==case
              and (raw['cwd']==repo or raw['cwd'].startswith(repo+'/.unrest-runtime/'))]
     if len(choices)>1:
@@ -927,22 +755,32 @@ def workspace_prepare(host,actor,raw):
     else:
         if raw['executable']!='/usr/bin/git':
             raise Refused('Git proposal original executable')
-        operations=(*COMMAND_SETUP,*SITE_SHARED_OPERATIONS) if fixture is not None else SITE_OPERATIONS[family]
-        branch='master' if fixture is not None and fixture.init==('init',) and raw['argv'][1:3]==['update-ref','refs/heads/master'] else 'main'
-        operations=tuple(dict.fromkeys({'rollback-add':'integration-add','rollback-update':'update-parent','rollback-reset':'reset-parent'}.get(operation,operation) for operation in operations))
+        branch='master' if raw['argv'][1:3]==['update-ref','refs/heads/master'] else 'main'
         candidates: dict[str,Command] = {}
-        for operation in operations:
+        for operation in LOCAL_OPERATIONS:
             try:
-                command=command_match(operation,repository,raw['cwd'],raw['argv'],raw['stdin'],raw['environment'],family=family,fixture=fixture,branch=branch)
+                command=command_match(operation,repository,raw['cwd'],raw['argv'],raw['stdin'],raw['environment'],family='workspaces',branch=branch)
             except Refused:
                 continue
             candidates[operation]=command
         if len(candidates)!=1:
             raise Refused('Git proposal requires one finite operation')
         operation,command=next(iter(candidates.items()))
-        phase=(fixture.phase if fixture is not None else 'setup') if operation in COMMAND_SETUP else 'call'
-        environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' ('+phase+')',**dict(command.additions)}
+        phase=raw['environment'].get('PYTEST_CURRENT_TEST')
+        if case in CANDIDATE_CASES:
+            environment={'PATH':'/usr/bin:/bin','HOME':repository,'LC_ALL':'C',
+                'GIT_CONFIG_NOSYSTEM':'1','GIT_CONFIG_GLOBAL':'/dev/null','GIT_CONFIG_COUNT':'1',
+                'GIT_CONFIG_KEY_0':'maintenance.auto','GIT_CONFIG_VALUE_0':'false',
+                'GIT_AUTHOR_DATE':'2000-01-01T00:00:00+0000','GIT_COMMITTER_DATE':'2000-01-01T00:00:00+0000'}
+        else:
+            if phase not in (case+' (setup)',case+' (call)'):
+                raise Refused('Git current original case phase')
+            environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':phase,**dict(command.additions)}
+            if case in MEASUREMENT_CASES and 'UNREST_WORKER_ACP_COMMAND' in raw['environment']:
+                acp=native+' '+str(Path(host.meta['checkout'])/'tests/mock_measurement_acp.py')
+                environment.update(UNREST_WORKER_ACP_COMMAND=acp,UNREST_VALIDATOR_ACP_COMMAND=acp)
         return host.git.launch(actor,operation,repository,command,raw,environment)
+
 
 
 # Closed native Git family used by the original controlled custody helper.

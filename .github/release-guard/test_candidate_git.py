@@ -20,52 +20,10 @@ def test_all_fixture_consumers_are_exact_normal_collected_nodes(monkeypatch):
     assert tuple(nodes)==candidate.CANDIDATE_CASES and len(nodes)==113
 
 
-@pytest.mark.parametrize('case',candidate.CANDIDATE_CASES)
-def test_setup_and_extras_have_closed_original_ordinals(case):
-    setup,extras=candidate.candidate_declarations(ROOT,case,REPOSITORY)
-    assert len(setup)==9
-    for index,row in enumerate((*setup,*extras)):
-        args=[part if part is not None else 'a'*40 for part in row]
-        args=[part.replace('OID','b'*40) for part in args]
-        value,environment=candidate.candidate_command(ROOT,case,REPOSITORY,index,['/usr/bin/git',*args])
-        assert value.argv==('/usr/bin/git',*args)
-        assert environment['HOME']==REPOSITORY and environment['GIT_CONFIG_GLOBAL']=='/dev/null'
-        with pytest.raises(Refused):
-            candidate.candidate_command(ROOT,case,REPOSITORY,index,['/usr/bin/git',*args,'--foreign'])
-    with pytest.raises(Refused,match='ordinal'):
-        candidate.candidate_command(ROOT,case,REPOSITORY,len(setup)+len(extras),['/usr/bin/git','status'])
 
 
-@pytest.mark.parametrize('mutation',['consumer','bytes','executable','oid','option'])
-def test_foreign_consumer_source_image_and_dynamic_operands_refuse(tmp_path,mutation):
-    case=candidate.CANDIDATE_TEST+'::test_wrong_ids_types_and_unrelated_history'
-    root=ROOT
-    argv=['/usr/bin/git','commit-tree','a'*40,'-m','unrelated']
-    if mutation=='consumer':
-        case=candidate.CANDIDATE_TEST+'::test_not_an_original_consumer'
-    elif mutation=='bytes':
-        root=tmp_path
-        file=root/candidate.CANDIDATE_TEST
-        file.parent.mkdir()
-        file.write_text('foreign')
-    elif mutation=='executable':
-        argv[0]='/foreign/git'
-    elif mutation=='oid':
-        argv[2]='--exec=foreign'
-    elif mutation=='option':
-        argv[3]='--exec-path=/foreign'
-    with pytest.raises(Refused):
-        candidate.candidate_command(root,case,REPOSITORY,11,argv)
 
 
-def test_canary_authority_ends_at_exact_configuration_write():
-    case=candidate.CANDIDATE_TEST+'::test_config_canaries_never_called[core.hooksPath-CANARY]'
-    vector=['/usr/bin/git','config','core.hooksPath',str(Path(REPOSITORY).parent/'canary')]
-    candidate.candidate_command(ROOT,case,REPOSITORY,9,vector)
-    with pytest.raises(Refused,match='ordinal'):
-        candidate.candidate_command(ROOT,case,REPOSITORY,10,['/usr/bin/git','commit','-m','run hook'])
-    with pytest.raises(Refused,match='complete command'):
-        candidate.candidate_command(ROOT,case,REPOSITORY,9,[*vector[:-1],'/foreign/canary'])
 
 
 def test_candidate_message_option_does_not_borrow_integration_stdin_authority():
@@ -84,3 +42,41 @@ def test_candidate_message_option_does_not_borrow_integration_stdin_authority():
     policy.client=SimpleNamespace(request=request)
     policy.popen(('/usr/bin/git',vector,REPOSITORY,{}))
     assert frames[0][1]['stdin'] is None
+
+
+def test_all_original_candidate_setup_vectors_remain_closed():
+    import ast
+    from launch_policy import source_unit
+    unit=source_unit(ROOT,candidate.CANDIDATE_TEST,candidate.CANDIDATE_PIN,('repo',))
+    rows=[]
+    for node in unit.body:
+        call=node.value if isinstance(node,(ast.Expr,ast.Assign)) else None
+        if isinstance(call,ast.Call) and isinstance(call.func,ast.Name) and call.func.id=='git':
+            rows.append(tuple(ast.literal_eval(arg) for arg in call.args[1:]))
+    assert len(rows)==9
+    for args in rows:
+        operations=[]
+        for operation in (*candidate.COMMAND_OPERATIONS,'fixture-extra'):
+            try:
+                candidate.command_match(operation,REPOSITORY,REPOSITORY,['/usr/bin/git',*args],None,{},family='workspaces')
+            except Refused:
+                continue
+            operations.append(operation)
+        assert len(operations)==1
+
+
+@pytest.mark.parametrize('args',[
+    ['commit-tree','--exec=foreign','-m','unrelated'],
+    ['config','core.hooksPath','/foreign/canary'],
+    ['commit','-m','run hook'],['fetch','https://example.invalid'],
+    ['update-index','--add','--cacheinfo','120000,--exec=foreign,unsupported'],
+])
+def test_union_rejects_foreign_commands_options_and_object_ids(args):
+    for operation in (*candidate.COMMAND_OPERATIONS,'fixture-extra'):
+        with pytest.raises(Refused):
+            candidate.command_match(operation,REPOSITORY,REPOSITORY,['/usr/bin/git',*args],None,{},family='workspaces')
+
+
+def test_closed_canary_write_does_not_add_arbitrary_configuration():
+    args=['/usr/bin/git','config','core.hooksPath',str(Path(REPOSITORY).parent/'canary')]
+    assert candidate.command_match('fixture-extra',REPOSITORY,REPOSITORY,args,None,{},family='workspaces').argv==tuple(args)

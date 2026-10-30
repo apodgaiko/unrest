@@ -114,8 +114,7 @@ class CallbackTrap:
 def test_family_is_primitive_and_rollback_forms_stay_scoped():
     with pytest.raises(Refused):
         build('head', REPO, REPO, {}, family=CallbackTrap())
-    with pytest.raises(Refused, match='rollback family'):
-        build('rollback-add', REPO, REPO, fields('rollback-add'), family='workspaces')
+    assert build('rollback-add', REPO, REPO, fields('rollback-add'), family='workspaces').argv==build('rollback-add', REPO, REPO, fields('rollback-add'), family='evolution').argv
 
 
 @pytest.mark.parametrize('operation',('lease-add','integration-add','rollback-add','remove-tree'))
@@ -146,17 +145,7 @@ def test_commit_input_is_bounded_data_without_a_second_lease_parser():
             command_match('commit-tree',REPO,INTEGRATION,vector,message,environment,family='workspaces')
 
 
-def test_factored_eligibility_preserves_every_original_ordered_operation():
-    import hashlib
-    import json
-    from git_policy import SITE_OPERATIONS as OPERATIONS, SITE_SHARED_OPERATIONS as SHARED_OPERATIONS
-    pins={
-        'shared':'5f417e1f13141ad81c32439cdc6958c90475b2b6efc08b0170c0a63501f4c3c5',
-        'workspaces':'8da98ddc26915917729c0404c320e144347b0122f7cfdee352229296b7868e2a',
-        'evolution':'5d4a2d4fc642e59600be2fa37f4bfd53e09fa389d221239a58a1848d01d0ebf7',
-        'candidate':'c5e3d1b55f4ed0619e7fb061d7bbb3be3d00aec16993e44d193ed399555d5773'}
-    from git_policy import MEASUREMENT_COLD as COLD
-    assert OPERATIONS['measurement']==('init','measurement-command',*COLD)
-    assert not set(COLD)&{'apply','write-tree','commit-tree','update-parent','reset-parent','rollback-add','rollback-update','rollback-reset'}
-    for name,values in [('shared',SHARED_OPERATIONS),*((name,OPERATIONS[name]) for name in ('workspaces','evolution','candidate'))]:
-        assert hashlib.sha256(json.dumps(values,separators=(',',':')).encode()).hexdigest()==pins[name]
+def test_local_operation_union_has_one_canonical_label_for_each_vector():
+    from git_policy import LOCAL_OPERATIONS,COMMAND_OPERATIONS
+    assert set(LOCAL_OPERATIONS)==(set(COMMAND_OPERATIONS)-{'rollback-add','rollback-update','rollback-reset'})|{'fixture-extra'}
+    assert len(LOCAL_OPERATIONS)==len(set(LOCAL_OPERATIONS))

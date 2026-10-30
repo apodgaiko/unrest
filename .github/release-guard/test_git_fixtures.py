@@ -8,20 +8,19 @@ import pytest
 
 from content_manifest import Refused
 from launch_policy import source_unit
-from test_git_vectors import build
 import git_policy as fixtures
 import owned_fixture
 
 ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
 
 
-@pytest.mark.parametrize('file',tuple(file for file,spec in fixtures.FIXTURE_MODULES.items() if spec.family not in ('candidate','measurement')))
+@pytest.mark.parametrize('file',tuple(file for file in fixtures.FIXTURE_PINS if file not in (fixtures.CANDIDATE_TEST,fixtures.MEASUREMENT_TEST)))
 def test_setup_commands_are_original_pinned_fixture_literals(file):
     name=fixtures.FIXTURE_SERVER_INQUIRY.split('::')[1] if file=='tests/test_server.py' else 'repository' if file.endswith(('test_project_adapter.py','test_improve_adapter.py')) else '_repository'
     unit=source_unit(ROOT,file,fixtures.FIXTURE_PINS[file],(name,))
     calls=[node for node in ast.walk(unit) if isinstance(node,ast.Call) and isinstance(node.func,ast.Name) and node.func.id==('git' if file=='tests/test_server.py' else '_git')]
     commands=tuple(tuple(ast.literal_eval(arg) for arg in call.args[0 if file=='tests/test_server.py' else 1:]) for call in calls)
-    assert (commands[:5] if file=='tests/test_server.py' else commands)==fixtures.FIXTURE_MODULES[file].commands
+    assert all(row in set().union(*map(set,fixtures.SETUP_FORMS.values())) for row in (commands[:5] if file=='tests/test_server.py' else commands))
 
 
 def test_selected_fixtures_collect_every_original_parameter_without_bodies(monkeypatch):
@@ -35,18 +34,23 @@ def test_selected_fixtures_collect_every_original_parameter_without_bodies(monke
 
 
 
-@pytest.mark.parametrize('mutation',[None,'case','slot','parent','generation'])
+@pytest.mark.parametrize('mutation',[None,'case','slot','parent','generation','repository-generation','ancestor-generation','alias'])
 def test_additional_repositories_are_bound_to_exact_owned_case_slots(tmp_path,monkeypatch,mutation):
     acquire=owned_fixture.acquire
     monkeypatch.setattr(fixtures,'acquire',lambda path,owned,prefix,owner:acquire(path,owned,prefix,os.getuid()))
-    case=next(case for case in fixtures.FIXTURE_SLOTS if fixtures.fixture_fixture(case).family not in ('candidate','measurement'))
+    original_lstat=Path.lstat
+    def lstat(path,*args,**kwargs):
+        info=original_lstat(path,*args,**kwargs)
+        return SimpleNamespace(st_mode=info.st_mode,st_uid=20000,st_dev=info.st_dev,st_ino=info.st_ino)
+    monkeypatch.setattr(Path,'lstat',lstat)
+    case=next(iter(fixtures.FIXTURE_SLOTS))
     base=tmp_path/'pytest'/(case.split('::')[1][:30]+'0')
     repository=base/'repo'
     repository.mkdir(parents=True)
     host=SimpleNamespace(meta={'checkout':str(ROOT),'owned':str(tmp_path)},fixture_roots={})
     if mutation=='case':
         with pytest.raises(Refused):
-            fixtures.fixture_fixture('undeclared')
+            fixtures.fixture_root(host,'undeclared',str(repository))
         return
     if mutation=='slot':
         repository=base/'foreign'
@@ -56,7 +60,18 @@ def test_additional_repositories_are_bound_to_exact_owned_case_slots(tmp_path,mo
         repository.mkdir(parents=True)
     elif mutation=='generation':
         host.fixture_roots[('git-fixture',case)]=('other',0,0)
-    if mutation is None:
+    if mutation in ('repository-generation','ancestor-generation'):
+        repository=base/'nested/repository'
+        repository.mkdir(parents=True)
+        fixtures.fixture_root(host,case,str(repository))
+        changed=repository if mutation=='repository-generation' else repository.parent
+        changed.rename(changed.with_name('old'))
+        repository.mkdir(parents=True)
+    elif mutation=='alias':
+        alias=base/'alias'
+        alias.symlink_to(repository,target_is_directory=True)
+        repository=alias
+    if mutation in (None,'slot'):
         fixtures.fixture_root(host,case,str(repository))
         assert host.fixture_roots[('git-fixture',case)][0]==str(base)
     else:
@@ -64,20 +79,12 @@ def test_additional_repositories_are_bound_to_exact_owned_case_slots(tmp_path,mo
             fixtures.fixture_root(host,case,str(repository))
 
 
-@pytest.mark.parametrize('case',tuple(case for case in fixtures.FIXTURE_SLOTS if fixtures.fixture_fixture(case).family not in ('candidate','measurement')))
-def test_each_setup_uses_only_its_authored_commands_and_phase(case):
-    spec=fixtures.fixture_fixture(case)
-    repo='/owned/'+fixtures.FIXTURE_SLOTS[case][0]
-    for index,operation in enumerate(('init','config-name','config-email','stage-base','commit-base')):
-        command=build(operation,repo,repo,{},family=spec.family,fixture=spec)
-        assert command.argv==('git',*spec.commands[index])
-    assert spec.phase in ('setup','call')
 
 
 def test_repository_keeps_generation_without_attesting_git_configuration(tmp_path,monkeypatch):
     from git_policy import Git
 
-    case=next(case for case in fixtures.FIXTURE_SLOTS if fixtures.fixture_fixture(case).family not in ('candidate','measurement'))
+    case=next(iter(fixtures.FIXTURE_SLOTS))
     repository=tmp_path/'pytest/case/repo'
     repository.mkdir(parents=True)
     host=SimpleNamespace(case=case,meta={'owned':str(tmp_path)})
