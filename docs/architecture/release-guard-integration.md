@@ -950,3 +950,21 @@ handle is opened; the handle closes before resume or exec. Page-bounded reads
 replace the former eight-byte PEEK loop without changing string/vector limits,
 exact wait-status bytes, exec admission or actual-parent wait evidence. Short
 reads and access failures refuse; observer privilege grants no unattached read.
+
+The source compartment starts in an empty filesystem root. It receives only
+read-only measured source, support, dependencies and interpreter trees; the
+system runtime and selected public system files; private owned scratch; the
+observer's protected profiles/output; four fixed character devices; private
+shared-memory scratch; and fresh read-only procfs in its private PID namespace.
+The observer's original interpreter prefix names the same measured private copy,
+so late standard-library imports cannot reopen the original host installation.
+No containing host directory is bound to expose these children. Directory/file
+handles outside standard I/O are rejected before entering, and the old cwd is
+discarded. Actual root generation and read-only input mount identities are
+recorded after entry and bound again before each source body.
+
+This containment change initially retains every existing launch, Git routing,
+case, snapshot and cleanup check. It does not yet retire application-state
+claims or confer a broader launch capability. Subsequent reductions must name
+each retired claim separately; UV, native-refusal, review and adoption exceptions
+retain their existing exact qualification.

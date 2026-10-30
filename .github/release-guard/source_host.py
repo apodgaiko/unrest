@@ -175,7 +175,7 @@ def prepare(binding, checkout, root, git=False, public=False, native=False, extr
             **({'_native_input':native_input} if native_input is not None else {})}
 
 
-def isolate(metadata, support):
+def isolate(metadata, support, output):
     libc = ctypes.CDLL(None, use_errno=True)
     # Private mount/network/IPC namespaces; no shared-host mount mutation.
     network_before=os.readlink('/proc/self/ns/net')
@@ -216,7 +216,8 @@ def isolate(metadata, support):
             require('ro' in fields[5].split(','), 'private input remained writable')
             mounts[fields[4]] = [int(fields[0]), info.st_dev, info.st_ino]
     require(set(mounts) == set(points), 'private mount inventory incomplete')
-    return {**metadata, 'mounts': mounts}
+    from filesystem_scope import enter
+    return enter({**metadata, 'mounts': mounts}, support, output)
 
 
 def settle(pid, terminate=False, deadline=None):
@@ -242,7 +243,7 @@ def worker(binding, metadata, raw_directory):
     from compartment import credentials
     from linux_trace import OwnedTrace, install_observation_filter
     from source_observer import Observer
-    metadata = isolate(metadata, binding['support'])
+    metadata = isolate(metadata, binding['support'], raw_directory)
     full=type(metadata['cases']) is dict
     timeout=1200 if unexcluded(metadata,binding) else 60 if binding.get('collection_only') else 170 if full else 100
     start_read, start_write = os.pipe()

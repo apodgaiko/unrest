@@ -95,7 +95,7 @@ def test_ps_inventory_is_exact_and_follows_original_server_wait(prepared,monkeyp
         assert value.argv==('ps','-axo','pid=,ppid=,pgid=')
 
 
-@pytest.mark.parametrize('subject',['http','foreign-mcp','http-extra-fd','http-mount'])
+@pytest.mark.parametrize('subject',['http','foreign-mcp','http-extra-fd','http-mount','http-filesystem','http-filesystem-type'])
 def test_http_authority_and_inherited_profile_descriptors_remain_closed(tmp_path,monkeypatch,subject):
     import os
     import source_profile as profiles
@@ -131,6 +131,7 @@ def test_http_authority_and_inherited_profile_descriptors_remain_closed(tmp_path
         dependencies=str(tmp_path/'dependencies'),runtime_root=str(runtime),cwd=str(tmp_path),
         identity=canonical(actual),parent=canonical(parent),observer=canonical(observer),
         generation=1,argv=vector,environment=environment,token='a'*32,
+        filesystem_root=[1,2],
         mount_namespace='synthetic',network_namespace='net:[123]',pid_namespace='pid:[123]',script=None,inherited=[[7,1,2]] if subject in ('http-extra-fd','foreign-mcp') else [],execution=issue('mcp',vector,None,None))
     profile['mounts']={name:[] for name in (profile['checkout'],profile['dependencies'],str(runtime),str(Path(profiles.__file__).parent))}
     monkeypatch.setattr(profiles,'process_identity',lambda pid:actual)
@@ -138,11 +139,15 @@ def test_http_authority_and_inherited_profile_descriptors_remain_closed(tmp_path
     monkeypatch.setattr(profiles,'digest',lambda path:'a'*64)
     monkeypatch.setattr(profiles,'sys',SimpleNamespace(executable=native,orig_argv=vector,
         flags=SimpleNamespace(isolated=1,no_site=1,dont_write_bytecode=0,utf8_mode=1)))
-    monkeypatch.setattr(profiles,'os',SimpleNamespace(getpid=os.getpid,getppid=os.getppid,
+    monkeypatch.setattr(profiles,'os',SimpleNamespace(getpid=os.getpid,getppid=os.getppid,stat=lambda path:SimpleNamespace(st_dev=1,st_ino=2),
         readlink=lambda path:'pid:[123]' if path.endswith('/pid') else 'net:[123]',getcwd=lambda:str(tmp_path),environ=environment,listdir=lambda path:['7'] if subject=='foreign-mcp' else [],fstat=lambda fd:object()))
     monkeypatch.setattr(profiles,'fcntl',SimpleNamespace(F_GETFL=3,fcntl=lambda *args:0))
     monkeypatch.setattr(profiles,'inherited_descriptor',lambda inherited,fd,*args:[fd,1,2])
-    if subject=='http-mount':
+    if subject.startswith('http-filesystem'):
+        profile['filesystem_root']=[1,3] if subject=='http-filesystem' else [True,2]
+        with pytest.raises(Refused,match='private filesystem generation'):
+            profiles.validate(profile,'cpython.run_command',('pass\n',))
+    elif subject=='http-mount':
         profile['mount_namespace']='foreign'
         with pytest.raises(Refused,match='actual profile binding'):
             profiles.validate(profile,'cpython.run_command',('pass\n',))

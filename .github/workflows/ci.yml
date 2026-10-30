@@ -55,6 +55,7 @@ jobs:
         run: |
           sudo -n env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 timeout --signal=TERM --kill-after=5 60 "$PWD/.venv/bin/python" -I -B .github/release-guard/test_mixed_uid_control.py
           sudo -n env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 timeout --signal=TERM --kill-after=5 20 "$PWD/.venv/bin/python" -I -B "$PWD/.github/release-guard/test_network_scope_native.py"
+          sudo -n env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 timeout --signal=TERM --kill-after=5 20 "$PWD/.venv/bin/python" -I -B "$PWD/.github/release-guard/test_filesystem_scope_native.py"
           sudo -n env -i PATH=/usr/bin:/bin timeout --signal=TERM --kill-after=5 120 "$PWD/.venv/bin/python" -I -B "$PWD/.github/release-guard/test_native_entry_control.py" "/tmp/unrest-native-control-${{ github.run_id }}-${{ github.run_attempt }}/guard-native-control/binding.json"
       - name: Full unexcluded Python 3.13 source checkpoint
         run: env -u CODEX_PATH uv run pytest -q

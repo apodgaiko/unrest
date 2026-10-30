@@ -45,6 +45,11 @@ def validate(profile: dict, event: str, arguments: tuple) -> dict:
     if Path(profile['native']) != Path(profile['runtime_root']) / 'bin/python-unrest-guard-control':
         raise Refused('source native runtime root')
     actual = process_identity(os.getpid())
+    filesystem = os.stat('/')
+    root = profile.get('filesystem_root')
+    if (type(root) is not list or any(type(value) is not int for value in root)
+            or root != [filesystem.st_dev, filesystem.st_ino]):
+        raise Refused('source private filesystem generation')
     parent, observer = Birth.read(profile['parent']), Birth.read(profile['observer'])
     if (canonical(profile['identity']) != profile['identity'] or canonical(actual) != profile['identity'] or parent.pid != os.getppid()
             or Birth.read(credential_identity(parent.pid)) != parent or observer.uid != 20001

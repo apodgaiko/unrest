@@ -40,7 +40,7 @@ def test_actual_worker_root_environment_matches_observer_before_fork(monkeypatch
         assert actual==environment(metadata)
         assert child_environment(metadata,actual)==observer.meta_environment()
         raise BeforeFork
-    monkeypatch.setattr(source_host, 'isolate', lambda value, support: value)
+    monkeypatch.setattr(source_host, 'isolate', lambda value, support, output: value)
     monkeypatch.setattr(os, 'pipe', pipe)
     monkeypatch.setattr(os, 'fork', fork)
     try:

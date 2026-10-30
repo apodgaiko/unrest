@@ -45,6 +45,9 @@ jobs:
       - name: Actual isolated loopback and host-service exclusion
         if: github.event_name == 'push' || inputs.source_group == 'none' || inputs.source_group == 'network-only'
         run: sudo -n env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 timeout --signal=TERM --kill-after=5 20 "$PWD/.venv/bin/python" -I -B "$PWD/.github/release-guard/test_network_scope_native.py"
+      - name: Actual empty filesystem root and escape negatives
+        if: github.event_name == 'push' || inputs.source_group == 'none'
+        run: sudo -n env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 timeout --signal=TERM --kill-after=5 20 "$PWD/.venv/bin/python" -I -B "$PWD/.github/release-guard/test_filesystem_scope_native.py"
       - name: Build pinned CPython native control entry
         if: inputs.source_group != 'network-only'
         run: uv run --no-sync python .github/release-guard/native_build.py
