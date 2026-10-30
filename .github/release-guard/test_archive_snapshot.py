@@ -83,3 +83,25 @@ def test_sealed_root_generation_cannot_be_replaced_by_equivalent_bytes(tmp_path,
     shutil.copytree(target.with_name("old"),target)
     with pytest.raises(Refused,match="identity"):
         snapshots.retained(target,record)
+
+
+
+def test_retained_sealed_tree_uses_custody_without_rewalking_bytes(tmp_path,monkeypatch):
+    source,reference,target=setup(tmp_path,monkeypatch,"normal")
+    record=snapshots.acquire(source,reference,target,"normal")
+    def repeated(*args,**kwargs):
+        pytest.fail('sealed tree was recursively acquired again')
+    monkeypatch.setattr(snapshots,'tree',repeated)
+    monkeypatch.setattr(type(target),'rglob',repeated)
+    snapshots.retained(target,record)
+    target.chmod(0o755)
+    with pytest.raises(Refused,match='identity'):
+        snapshots.retained(target,record)
+
+
+def test_retained_snapshot_parent_must_remain_observer_protected(tmp_path,monkeypatch):
+    source,reference,target=setup(tmp_path,monkeypatch,"normal")
+    record=snapshots.acquire(source,reference,target,"normal")
+    target.parent.chmod(0o777)
+    with pytest.raises(Refused,match='ancestry'):
+        snapshots.retained(target,record)

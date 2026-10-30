@@ -23,6 +23,12 @@ def main():
         os.chown(base / 'output', 20001, 20001)
         (base / 'output').chmod(0o700)
         (base / 'output/private').write_text('public observer custody sentinel')
+        sealed=base/'profiles/sealed'
+        sealed.mkdir(mode=0o755)
+        (sealed/'member').write_text('public sealed snapshot sentinel')
+        for path,mode in ((base/'profiles',0o755),(sealed,0o555),(sealed/'member',0o444)):
+            os.chown(path,20001,20001)
+            path.chmod(mode)
         runtime = str(Path(sys.base_prefix).resolve(strict=True))
         native=base/'native-input'
         native.mkdir(mode=0o755)
@@ -49,6 +55,22 @@ def main():
                     assert (base / 'input/member').read_text() == 'public selected input'
                     assert Path('/native/node.data').read_text()=='public native metadata sentinel'
                     assert not native.exists()
+                    assert (sealed/'member').read_text()=='public sealed snapshot sentinel'
+                    operations=(lambda:(sealed/'member').write_text('forbidden'),
+                        lambda:(sealed/'member').chmod(0o644),
+                        lambda:sealed.chmod(0o755),
+                        lambda:(sealed/'new').write_text('forbidden'),
+                        lambda:(sealed/'member').unlink(),
+                        lambda:(sealed/'member').rename(sealed/'renamed'),
+                        lambda:os.link(sealed/'member',base/'owned/alias'))
+                    for operation in operations:
+                        try:
+                            operation()
+                        except OSError as error:
+                            assert error.errno in (errno.EACCES,errno.EPERM,errno.EROFS)
+                        else:
+                            raise AssertionError('source changed an observer-sealed snapshot')
+                    assert (sealed/'member').read_text()=='public sealed snapshot sentinel'
                     (base / 'owned/created').write_text('owned scratch')
                     for path in (base / 'input/member', base / 'input/new-member'):
                         try:

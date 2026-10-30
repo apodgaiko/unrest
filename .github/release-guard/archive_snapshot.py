@@ -66,7 +66,7 @@ def acquire(source,reference,target,kind):
     if ({row['path']:(row['size'],row['sha256']) for row in result['content']['files']}!=expected
             or set(result['directories'])!=directories-{'.'}):
         raise Refused('snapshot copied inventory changed')
-    record={"tree":result,"identity":list(_directory_key(target.lstat()))}
+    record={"identity":list(_directory_key(target.lstat()))}
     retained(target,record)
     return record
 
@@ -76,10 +76,3 @@ def retained(root,record):
         raise Refused('snapshot retained root identity')
     if root.parent.stat().st_uid!=OBSERVER_UID or root.parent.stat().st_mode&0o6022:
         raise Refused('snapshot nonwritable observer ancestry')
-    for path in (root,*sorted(root.rglob('*'))):
-        info=path.lstat()
-        if (info.st_uid!=OBSERVER_UID or stat.S_IMODE(info.st_mode)!=(0o555 if path.is_dir() else 0o444)
-                or path.is_symlink() or not (path.is_dir() or path.is_file()) or path.is_file() and info.st_nlink!=1):
-            raise Refused('snapshot sealed member custody')
-    if tree(root)!=record["tree"]:
-        raise Refused('snapshot retained complete bytes')

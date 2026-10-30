@@ -1055,3 +1055,13 @@ environment, quotas, patch scope, real parent/helper waits and the separately
 exact workspace-owned Python command remain enforced. The sandbox protects
 external files; original workspace and evolution tests own scratch naming and
 application-state correctness.
+
+Observer-created archive and copied-source snapshots are fully verified during
+acquisition, copied without source-owned aliases or retained write handles, then
+sealed under UID20001 with directories 0555 and files 0444. Later consumers check
+the canonical root generation and protected observer parent, rather than hashing
+and walking every member again. UID20000/CAP0 cannot write, chmod, unlink, rename,
+add a member or hardlink the sealed files; real filesystem controls exercise
+these refusals. Detecting post-sealing mutation by the trusted observer/host is
+retired from this claim. Acquisition-race, full byte/inventory comparison and
+root-replacement refusals remain. This custody shortcut grants no launch right.
