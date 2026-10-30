@@ -1,7 +1,6 @@
 """Independent finite Git declarations, owned metadata and actual parent waits."""
 from __future__ import annotations
 
-import configparser
 import os
 from pathlib import Path
 import stat
@@ -74,28 +73,13 @@ class Git:
             if (not stat.S_ISDIR(info.st_mode) or metadata.resolve(strict=True)!=metadata
                     or info.st_uid!=20000 or info.st_mode&0o6022):
                 raise Refused('git declared metadata directory')
-            parser=configparser.RawConfigParser(strict=True)
-            parser.read_string(regular(metadata/'config').decode('utf-8'))
-            if (parser.defaults() or not {'core'}<=set(parser.sections())<={'core','user'}
-                    or dict(parser['core'])!={'repositoryformatversion':'0','filemode':'true','bare':'false','logallrefupdates':'true'}
-                    or 'user' in parser and not set(parser['user'])<={'name','email'}):
-                raise Refused('git repository routing configuration')
-        if regular(owned / 'home/.gitconfig', uid=20001) != HOME_CONFIG:
-            raise Refused('git immutable diagnostic home configuration')
         return root
 
     def location(self, root, location):
         path = Path(location)
-        role = location_role(root, path)
-        if role == 'parent':
-            return
-        common, admin = root / '.git', root / '.git/worktrees' / path.name
-        if (not path.is_dir() or str(path.resolve(strict=True)) != location
-                or not admin.is_dir() or admin.resolve(strict=True) != admin
-                or regular(path / '.git') != ('gitdir: ' + str(admin) + '\n').encode()
-                or regular(admin / 'gitdir') != (str(path / '.git') + '\n').encode()
-                or regular(admin / 'commondir') != b'../..\n' or common.resolve(strict=True) != common):
-            raise Refused('git linked worktree backlinks')
+        location_role(root, path)
+        if not path.is_dir() or str(path.resolve(strict=True)) != location:
+            raise Refused('git original worktree directory')
 
     def launch(self, actor, operation, repository, command, expected, vector):
         host = self.host

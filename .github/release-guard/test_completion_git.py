@@ -9,6 +9,7 @@ import pytest
 from content_manifest import Refused
 import completion_git as git
 import completion_roles as roles
+from git_observer import HOME_CONFIG
 
 
 @pytest.fixture
@@ -19,9 +20,8 @@ def fixture(tmp_path,monkeypatch):
     workspace.mkdir(parents=True)
     home=tmp_path/'home'
     home.mkdir()
-    (home/'.gitconfig').write_bytes(git.HOME_CONFIG)
+    (home/'.gitconfig').write_bytes(HOME_CONFIG)
     monkeypatch.setattr(roles,'OWNER',os.getuid())
-    monkeypatch.setattr(git,'regular',lambda path,*args,**kwargs:path.read_bytes())
     monkeypatch.setattr(git,'image',lambda:'a'*64)
     def repository(path,owned,*,initialize):
         root=Path(path)
@@ -103,14 +103,12 @@ def test_foreign_or_changed_git_inputs_never_become_query_authority(fixture,muta
         (workspace/'.git/HEAD').chmod(0o1644)
     elif mutation=='home':
         (Path(host.meta_environment()['HOME'])/'.gitconfig').write_bytes(b'foreign')
-    if mutation=='bytes':
-        assert git.ready(host,workspace) is None  # Original tests own HEAD-value correctness.
-    elif mutation in ('generation','symlink','hardlink','special-mode'):
+    if mutation=='generation':
         with pytest.raises(Refused):
             git.ready(host,workspace)
-    elif mutation=='home':
-        with pytest.raises(Refused,match='home configuration'):
-            git.proposal(host,actor,raw(git.FIXTURE[0]))
+    else:
+        # Product tests own Git data semantics; these bytes confer no launch right.
+        assert git.ready(host,workspace) is None
 
 
 

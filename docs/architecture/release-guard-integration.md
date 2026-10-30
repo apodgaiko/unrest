@@ -124,10 +124,10 @@ proof. Terminal leaves retain every credential-transform parameter and exact
 program/env/cwd; native optional-null controls admit only `/usr/bin/true`.
 
 Git retains finite authored command forms, repository/worktree custody, exact
-argv/env/cwd and bounded stdin data, hook/remote/helper restrictions, and actual
+argv/env/cwd and bounded stdin data, closed native/helper execution, and actual
 parent/descendant waits. Object IDs are exactly40 lowercase hex characters;
 revision expressions are only fixed authored forms. Paths retain owned slot and
-backlink constraints, and integration-message/date operands retain their bounded
+canonical-directory constraints, and integration-message/date operands retain their bounded
 formats. No generic Git option or executable permission follows.
 
 The guard no longer certifies commit/tree/date semantic dependency graphs or
@@ -289,8 +289,10 @@ Git containment no longer certifies fixture operation ordering, observed branch
 value continuity, the completion repository's whole-content immutability or HEAD
 value correctness. Original Git/product tests retain those assertions. The guard
 keeps exact authored command forms, phase/environment/cwd, native image, acquired
-repository generations, linked-worktree backlinks, closed routing configuration,
-helper identities and original parent/helper waits. Only main/master update refs
+repository generations, helper identities and original parent/helper waits.
+Git configuration and linked-worktree backlink contents are application data
+inside the private filesystem, not independently reconstructed routing proofs.
+Only main/master update refs
 explicitly authored by each fixture remain eligible. Completion queries still
 require their consumed server owner and finite query slot.
 
@@ -358,8 +360,7 @@ only from the byte-pinned `repo` fixture. Additional writes and queries are clos
 case/parameter-selected complete vectors, with full object IDs in the two dynamic
 positions, exact environment and a finite ordinal. Canary cases admit only their
 original final configuration write: no subsequent Git command or helper launch
-is authorized. The repository's closed routing configuration is reacquired before
-each Git launch, and its owned generation and every original parent wait remain
+is authorized. Its owned directory generation and every original parent wait remain
 mandatory. These are controlled fixture tests, not provider acceptance evidence.
 
 
@@ -964,8 +965,18 @@ I/O; a surviving handle refuses entry. The old cwd is discarded. Actual root
 generation and read-only input mount identities are
 recorded after entry and bound again before each source body.
 
-This containment change initially retains every existing launch, Git routing,
-case, snapshot and cleanup check. It does not yet retire application-state
-claims or confer a broader launch capability. Subsequent reductions must name
-each retired claim separately; UV, native-refusal, review and adoption exceptions
-retain their existing exact qualification.
+Git admission no longer parses repository configuration, reconstructs linked
+worktree backlinks, rejects application-created hooks/alternates/grafts, scans
+completion Git member types/modes/links, or predicts the binding fixture's empty
+metadata layout. Repeated reads of the immutable diagnostic home configuration
+are removed; its protected construction and permissions remain. Original product
+tests retain their configuration, object-integrity, refusal and mutation checks.
+
+Filesystem effect containment is jail-wide disposable scratch, not independent
+isolation of each repository's effects. Acquired repository/metadata generations,
+canonical cwd slots, exact executable/argv/environment, finite per-case counts,
+and actual original-parent/helper waits remain enforced. A hook or helper command
+does not gain execution permission from Git data: its actual fork/exec must still
+match the existing closed native-helper allowance, otherwise refusal poisons the
+run. No remote operation or new command form is added. UV, native-refusal, review,
+snapshot and adoption qualifications remain unchanged.

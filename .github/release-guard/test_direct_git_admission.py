@@ -76,3 +76,18 @@ def test_checkout_helper_uses_its_consumed_parent_image_pin(monkeypatch,matching
         with pytest.raises(Refused,match='exact native image'):
             git.reserve_helper(child,parent)
         assert not host.intents and not git.helpers
+
+
+@pytest.mark.parametrize('operation', ('candidate-command','custody-commit','completion-fixture','completion-head'))
+def test_git_data_never_grants_a_hook_or_helper_child(operation):
+    from process_ledger import Birth
+    parent=Birth(20,20,1,100,'boot',20000)
+    child=Birth(21,21,20,101,'boot',20000)
+    intent={'consumed':True,'case':CASES[0],'operation':operation}
+    host=SimpleNamespace(case=CASES[0],intents={},
+        ledger=SimpleNamespace(process=lambda birth:SimpleNamespace(token='parent',exit=None,terminal=None)))
+    git=object.__new__(Git)
+    git.host,git.commands,git.helpers=host,{'parent':intent},{}
+    with pytest.raises(Refused,match='outside original worktree creation'):
+        git.reserve_helper(child,parent)
+    assert not host.intents and not git.helpers

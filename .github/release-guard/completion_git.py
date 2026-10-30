@@ -1,12 +1,11 @@
 """Two root fixture mutations and bounded server-owned read-only HEAD queries."""
 from pathlib import Path
-import stat
 
 from completion_roles import CASES,SOURCE,ROOT_QUERIES,DEFECT,schedule,root,actor_slot
 from content_manifest import Refused
 from custody_git import repository
 from git_commands import Command
-from git_observer import HOME_CONFIG,image,regular
+from git_observer import image
 from launch_policy import admit_expected,build_expected
 from composed_cases import CASES as COMPOSED,queries
 
@@ -34,13 +33,6 @@ def ready(host,workspace):
     identity=repository(str(workspace),Path(host.meta['owned']),initialize=False)
     if host.fixture_roots.get(('completion-git-root',host.case))!=identity:
         raise Refused('completion fixture repository generation changed')
-    metadata=workspace/'.git'
-    members=sorted(metadata.rglob('*'))
-    for path in members:
-        info=path.lstat()
-        if (not (stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode)) or info.st_mode&0o7000
-                or stat.S_ISREG(info.st_mode) and info.st_nlink!=1):
-            raise Refused('completion fixture Git member custody')
 
 
 def proposal(host,actor,raw):
@@ -49,8 +41,6 @@ def proposal(host,actor,raw):
         raise Refused('completion exact Git proposal')
     parent=root(host,raw['cwd'])
     workspace=parent/'workspace'
-    if regular(Path(host.meta['owned'])/'home/.gitconfig',uid=20001)!=HOME_CONFIG:
-        raise Refused('completion sealed Git home configuration')
     records=[row for row in host.intents.values() if row['case']==case and row['role']=='git-command'
              and row['parent']==actor['birth']]
     base={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}

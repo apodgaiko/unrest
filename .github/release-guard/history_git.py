@@ -55,7 +55,7 @@ def commands(checkout,case):
 
 
 def proposal(host,actor,raw):
-    from git_observer import HOME_CONFIG,regular,image
+    from git_observer import image
     checkout=Path(host.meta['checkout'])
     if host.case==CLI:
         if raw['argv'][0]==host.binding['entry']['path']:
@@ -66,17 +66,10 @@ def proposal(host,actor,raw):
             and value['case']==CLI and value['token']==actor['token'] and value.get('birth')==actor['birth'] and value['consumed']]
         if len(records)!=1 or raw['cwd']!=records[0]['binding_repository']:
             raise Refused('history original CLI repository')
-        metadata=Path(raw['cwd'])/'.git'
-        if (metadata.resolve()!=metadata or {path.name for path in metadata.iterdir()}!={'HEAD','objects','refs'}
-                or regular(metadata/'HEAD')!=b'ref: refs/heads/main\n'
-                or any(path.is_symlink() or not path.is_dir() or list(path.iterdir()) for path in (metadata/'objects',metadata/'refs'))):
-            raise Refused('binding CLI exact empty metadata')
     else:
         host.root_only(actor)
     if raw['executable']!='/usr/bin/git' or raw['stdin'] is not None or tuple(raw['argv'][1:]) not in commands(checkout,host.case):
         raise Refused('history exact readonly command')
-    if regular(Path(host.meta['owned'])/'home/.gitconfig',uid=20001)!=HOME_CONFIG:
-        raise Refused('history protected home configuration')
     environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':host.case+' (call)'}
     expected=build_expected(host.case,'/usr/bin/git',image(),tuple(raw['argv']),
         tuple(sorted(environment.items())),raw['cwd'] if host.case==CLI else str(checkout),'native')

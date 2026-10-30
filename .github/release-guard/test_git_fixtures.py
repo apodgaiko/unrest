@@ -74,9 +74,8 @@ def test_each_setup_uses_only_its_authored_commands_and_phase(case):
     assert spec.phase in ('setup','call')
 
 
-def test_repository_keeps_generation_and_closed_routing_configuration(tmp_path,monkeypatch):
-    import git_observer
-    from git_observer import Git,HOME_CONFIG
+def test_repository_keeps_generation_without_attesting_git_configuration(tmp_path,monkeypatch):
+    from git_observer import Git
 
     case=next(case for case in fixtures.SLOTS if fixtures.fixture(case).family not in ('candidate','measurement'))
     repository=tmp_path/'pytest/case/repo'
@@ -89,8 +88,6 @@ def test_repository_keeps_generation_and_closed_routing_configuration(tmp_path,m
         info=original(path,*args,**kwargs)
         return SimpleNamespace(st_mode=info.st_mode,st_uid=20000,st_dev=info.st_dev,st_ino=info.st_ino)
     monkeypatch.setattr(Path,'lstat',lstat)
-    config=[b'[core]\nrepositoryformatversion = 0\nfilemode = true\nbare = false\nlogallrefupdates = true\n']
-    monkeypatch.setattr(git_observer,'regular',lambda path,*args,**kwargs:HOME_CONFIG if path.name=='.gitconfig' else config[0])
     git.repository(str(repository),'init','workspaces')
     (repository/'.git').mkdir()
     git.repository(str(repository),'config-name','workspaces')
@@ -106,9 +103,8 @@ def test_repository_keeps_generation_and_closed_routing_configuration(tmp_path,m
         git.repository(str(repository),'head','workspaces')
     metadata.unlink()
     metadata.mkdir()
-    config[0]+=b'worktree=/outside\n'
-    with pytest.raises(Refused,match='routing configuration'):
-        git.repository(str(repository),'config-email','workspaces')
+    (metadata/'config').write_bytes(b'[core]\nworktree=/outside\n')
+    assert git.repository(str(repository),'config-email','workspaces')==repository
 
 
 def test_factored_parameter_axes_preserve_the_complete_ordered_fixture_map():

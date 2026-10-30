@@ -1,11 +1,11 @@
 """Closed native Git family used by the original controlled custody helper.
 
 Only disposable repositories, fixed templates and the pinned original helper
-are valid. No remote, URL, external diff, hook or user configuration is admitted.
+are valid. Git data stays inside the private filesystem; it never grants remote,
+external-diff, hook or other native execution authority.
 """
 from __future__ import annotations
 
-import configparser
 from pathlib import Path
 import stat
 
@@ -14,7 +14,6 @@ from controlled_cases import CASES
 from controlled_pairs import limits
 from cohort_cases import CASES as COHORT, EXTRA
 from git_commands import Command
-from git_observer import regular
 from git_operands import digest
 
 ENVIRONMENT = {
@@ -74,19 +73,6 @@ def repository(cwd, owned, *, initialize):
             or info.st_uid != 20000 or info.st_mode & 0o6022):
         raise Refused('custody Git metadata generation')
     metadata_identity = info.st_dev,info.st_ino,info.st_uid
-    parser = configparser.RawConfigParser(strict=True)
-    parser.read_string(regular(metadata/'config').decode('utf-8'))
-    if (parser.defaults() or parser.sections() != ['core'] or dict(parser['core']) != {
-            'repositoryformatversion':'0','filemode':'true','bare':'false','logallrefupdates':'true'}):
-        raise Refused('custody Git fixed local configuration')
-    for name in ('objects/info/alternates','objects/info/http-alternates','info/grafts','shallow','commondir'):
-        member = metadata/name
-        if member.exists() or member.is_symlink():
-            raise Refused('custody Git external metadata')
-    for member in (metadata/'hooks').iterdir():
-        if not member.name.endswith('.sample'):
-            raise Refused('custody Git active hook')
-        regular(member,65536)
     return tuple(identities),metadata_identity
 
 
