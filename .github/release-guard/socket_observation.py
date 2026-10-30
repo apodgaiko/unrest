@@ -39,7 +39,18 @@ def descriptor(fd,uid):
     return [before.st_dev,before.st_ino,os.O_RDWR,cookie]
 
 
-def acquire(birth,fd):
+def pipe_info(info,flags,uid):
+    if (type(info) is not os.stat_result or type(flags) is not int or type(uid) is not int
+            or flags & ~os.O_CLOEXEC or not stat.S_ISFIFO(info.st_mode) or info.st_uid!=uid):
+        raise Refused('inherited descriptor must be a blocking read pipe')
+    return [info.st_dev,info.st_ino]
+
+
+def pipe_descriptor(fd,uid):
+    return pipe_info(os.fstat(fd),fcntl.fcntl(fd,fcntl.F_GETFL),uid)
+
+
+def acquire(birth,fd,inspect=descriptor):
     if (sys.platform!='linux' or os.uname().machine!='x86_64'
             or type(birth) is not Birth or type(fd) is not int or not 3<=fd<=1024):
         raise Refused('inherited Unix stream acquisition operands')
@@ -52,7 +63,7 @@ def acquire(birth,fd):
         if copied<0:
             raise OSError(ctypes.get_errno(),'inherited Unix stream acquisition refused')
         try:
-            value=descriptor(copied,birth.uid)
+            value=inspect(copied,birth.uid)
             current=os.stat('/proc/'+str(birth.pid)+'/fd/'+str(fd))
             if [current.st_dev,current.st_ino]!=value[:2]:
                 raise Refused('inherited Unix stream descriptor replaced')

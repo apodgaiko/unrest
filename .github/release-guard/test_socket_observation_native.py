@@ -98,3 +98,26 @@ def test_acquisition_refuses_foreign_birth_and_releases_every_duplicate():
     finally:
         left.close()
         right.close()
+
+
+def test_actual_read_pipe_copy_preserves_flags_data_and_releases_duplicates():
+    from socket_observation import pipe_descriptor
+    read, write = os.pipe()
+    try:
+        flags = fcntl.fcntl(read, fcntl.F_GETFL)
+        saved = [read, *pipe_descriptor(read, os.getuid())]
+        baseline = len(list(Path('/proc/self/fd').iterdir()))
+        for _ in range(32):
+            assert acquire(birth(), read, pipe_descriptor) == saved
+        assert len(list(Path('/proc/self/fd').iterdir())) == baseline
+        assert fcntl.fcntl(read, fcntl.F_GETFL) == flags
+        os.write(write, b'x')
+        assert os.read(read, 1) == b'x'
+        with pytest.raises(Refused, match='blocking read pipe'):
+            acquire(birth(), write, pipe_descriptor)
+        os.set_blocking(read, False)
+        with pytest.raises(Refused, match='blocking read pipe'):
+            acquire(birth(), read, pipe_descriptor)
+    finally:
+        os.close(read)
+        os.close(write)

@@ -205,7 +205,7 @@ def proposal(host, actor, raw):
             raise Refused('cleanup original parent role')
         if role=='mcp':
             from cleanup_launch import read_pipe
-            inherited=[read_pipe(actor['birth'].pid,descriptor)]
+            inherited=[read_pipe(actor['birth'],descriptor)]
         expected = cleanup_expected(case,role,base,native,pin,checkout,root_environment,port=port,descriptor=descriptor)
         script_pin,vector = expected.payload_sha256,list(cleanup_vector(expected,host.directory,role))
     elif (case in BOOTSTRAP or CONTROLLED(case)):

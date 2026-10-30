@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import os
-import stat
 import fcntl
 import hashlib
 import json
@@ -32,12 +31,12 @@ def digest(path: Path) -> str:
 
 
 def inherited_descriptor(expected, descriptor, info, flags, uid):
-    if (type(info) is not os.stat_result or type(flags) is not int or type(uid) is not int
-            or type(descriptor) is not int or not 3 <= descriptor <= 1024
-            or flags & ~os.O_CLOEXEC or not stat.S_ISFIFO(info.st_mode) or info.st_uid != uid
-            or expected != [[descriptor, info.st_dev, info.st_ino]]):
+    from socket_observation import pipe_info
+    value=pipe_info(info,flags,uid)
+    if (type(descriptor) is not int or not 3<=descriptor<=1024
+            or expected!=[[descriptor,*value]]):
         raise Refused('source ambient inherited descriptor')
-    return [descriptor, info.st_dev, info.st_ino]
+    return [descriptor,*value]
 
 
 def validate(profile: dict, event: str, arguments: tuple) -> dict:

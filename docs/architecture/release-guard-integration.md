@@ -1186,3 +1186,14 @@ share the existing closed custody-Git forms and environment inside their owned
 repositories, under the separate finite ceiling; no remote or arbitrary Git
 command is introduced. Retired case associations remain only as test observations
 and are excluded from native enforcement support.
+
+### Shared inherited read-pipe acquisition
+
+Cleanup inventory pipes and unnamed Unix streams use the same birth-bound
+`pidfd_getfd` acquisition. The observer checks the retained process birth before
+and after copying the descriptor, compares the copied device/inode with the
+current remote descriptor, and closes both pidfds and copies on every path.
+The cleanup pipe inspector requires the original UID 20000, FIFO type, and
+blocking read-only flags. The child independently rechecks those properties,
+the exact descriptor number and the complete inherited inventory before its body.
+No bytes are read and no descriptor flags are changed during measurement.

@@ -45,7 +45,7 @@ def proposal(host,actor,raw):
         if len(raw['argv'])!=13 or not raw['argv'][-1].isascii() or not raw['argv'][-1].isdigit():
             raise Refused('inventory finite MCP operands')
         port,fd=port_argument(raw['argv'][-3]),int(raw['argv'][-1])
-        inherited=[read_pipe(actor['birth'].pid,fd)]
+        inherited=[read_pipe(actor['birth'],fd)]
         argv=(native,'-m','unrest_harness','--mode','worker' if worker else 'terminal-reviewer',
               '--transport','streamable-http','--host','127.0.0.1','--port',str(port),'--sensitive-inventory-fd',str(fd))
         image,kind,reference=native,'python-module',CLEANUP_PINS[SERVER]

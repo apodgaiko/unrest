@@ -3,9 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 from pathlib import Path
-import stat
 
 from content_manifest import Refused
 from git_policy import image as system_git
@@ -106,27 +104,12 @@ def environment(base, root_environment, *, agent, case=CASES[0]):
     return result
 
 
-def read_pipe(pid, descriptor):
-    if type(pid) is not int or pid <= 0 or type(descriptor) is not int or not 3 <= descriptor <= 1024:
-        raise Refused('cleanup inventory descriptor primitive')
-    path = Path('/proc') / str(pid) / 'fd' / str(descriptor)
-    before = path.stat()
-    file = path.parent.parent / 'fdinfo' / str(descriptor)
-    with file.open('rb') as stream:
-        raw = stream.read(4097)
-    if len(raw) > 4096:
-        raise Refused('cleanup inventory descriptor information bound')
-    flags = [row[6:].strip() for row in raw.splitlines() if row.startswith(b'flags:')]
-    if (len(flags) != 1 or not flags[0] or len(flags[0]) > 16
-            or any(character not in b'01234567' for character in flags[0])
-            or int(flags[0], 8) & ~os.O_CLOEXEC):
-        raise Refused('cleanup inventory must be a blocking read descriptor')
-    after = path.stat()
-    if (not stat.S_ISFIFO(before.st_mode) or before.st_uid != 20000
-            or (before.st_dev, before.st_ino, before.st_mode, before.st_uid) !=
-               (after.st_dev, after.st_ino, after.st_mode, after.st_uid)):
-        raise Refused('cleanup original inventory pipe')
-    return [descriptor, before.st_dev, before.st_ino]
+def read_pipe(birth,descriptor):
+    from process_ledger import Birth
+    from socket_observation import acquire,pipe_descriptor
+    if type(birth) is not Birth or birth.uid!=20000:
+        raise Refused('cleanup inventory process birth')
+    return acquire(birth,descriptor,pipe_descriptor)
 
 
 
