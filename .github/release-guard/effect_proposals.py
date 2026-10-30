@@ -22,7 +22,8 @@ from bootstrap_cases import BOOTSTRAP
 
 def proposal_operands(raw,case):
     from source_observer import shape
-    shape(raw, ('case','executable','argv','cwd','environment','stdin'))
+    from readiness_launch import STREAM_CASES
+    shape(raw, ('case','executable','argv','cwd','environment','stdin')+(('inventory_fd',) if case in STREAM_CASES else ()))
     if type(raw['case']) is not str or raw['case'] != case or type(raw['executable']) is not str or type(raw['argv']) is not list:
         raise Refused('finite process proposal case or vector')
     argv = raw['argv']
@@ -164,7 +165,7 @@ def proposal(host, actor, raw):
         role,maximum='git-fixed' if query else 'pytest-regression' if case in NESTED_CASES else 'fixed-inline',1 if query else len(SEQUENCES[case])
     elif case in ORDINARY:
         host.root_only(actor)
-        from ordinary_acp import MOCK_CASE,STARTUP_CASES,TEMPLATE_CASES,BATCH_CASES
+        from ordinary_acp import MOCK_CASE,STARTUP_CASES,TEMPLATE_CASES,BATCH_CASES,CRASH_CASES
         base=None
         if case==MOCK_CASE or (case in (*TEMPLATE_CASES,*BATCH_CASES) and argv[0]!='/bin/sleep'):
             from owned_fixture import retain
@@ -172,7 +173,7 @@ def proposal(host, actor, raw):
                        if argv[0]=='sleep' else Path(cwd).parent)
             base=retain(host,candidate,case.split('::')[1][:30],20000)
         role='sleep' if argv[0] in ('/bin/sleep','sleep') else 'session-invalid' if case in STARTUP_CASES else 'mock-acp'
-        maximum=2 if case in BATCH_CASES or (case==ORDINARY[2] and role=='sleep') else 1
+        maximum=2 if case in BATCH_CASES or (case in CRASH_CASES and role=='sleep') else 1
         expected = ordinary_expected(case,role,cwd,checkout,native,pin,root_environment,owned,base=base,observed=raw['environment'])
         script_pin = expected.payload_sha256
         vector = list(expected.argv) if role in ('sleep','session-invalid') else [native,'-I','-S',*expected.argv[1:]]

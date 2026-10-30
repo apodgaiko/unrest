@@ -35,7 +35,7 @@ def test_selected_fixtures_collect_every_original_parameter_without_bodies(monke
 
 
 
-@pytest.mark.parametrize('mutation',[None,'case','slot','parent','generation','repository-generation','ancestor-generation','alias'])
+@pytest.mark.parametrize('mutation',[None,'case','slot','parent','generation','repository-generation','ancestor-generation','pytest-generation','alias'])
 def test_additional_repositories_are_bound_to_exact_owned_case_slots(tmp_path,monkeypatch,mutation):
     acquire=owned_fixture.acquire
     monkeypatch.setattr(fixtures,'acquire',lambda path,owned,prefix,owner:acquire(path,owned,prefix,os.getuid()))
@@ -68,6 +68,12 @@ def test_additional_repositories_are_bound_to_exact_owned_case_slots(tmp_path,mo
         changed=repository if mutation=='repository-generation' else repository.parent
         changed.rename(changed.with_name('old'))
         repository.mkdir(parents=True)
+    elif mutation=='pytest-generation':
+        fixtures.fixture_root(host,case,str(repository))
+        outer=tmp_path/'pytest'
+        outer.rename(tmp_path/'old-pytest')
+        outer.mkdir()
+        (tmp_path/'old-pytest'/base.name).rename(base)
     elif mutation=='alias':
         alias=base/'alias'
         alias.symlink_to(repository,target_is_directory=True)
@@ -99,7 +105,7 @@ def test_repository_keeps_generation_without_attesting_git_configuration(tmp_pat
     git.repository(str(repository),'init','workspaces')
     (repository/'.git').mkdir()
     git.repository(str(repository),'config-name','workspaces')
-    assert set(git.repositories[(case,str(repository))])=={'path','identities'}
+    assert set(git.repositories[(case,str(repository))])=={'path'}
     metadata=repository/'.git'
     metadata.rmdir()
     with pytest.raises(Refused,match='metadata missing'):

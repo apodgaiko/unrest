@@ -23,8 +23,10 @@ CASES = tuple(TEST + '::' + name for name in (
     'test_owned_node_launch_uses_one_identical_plan[work]',
     'test_owned_node_launch_uses_one_identical_plan[validate]',
     'test_dispatch_batch_persists_bounded_redacted_crash_without_harming_sibling[claude]',
-    'test_run_node_with_mock_agent'))
+    'test_run_node_with_mock_agent',
+    'test_dispatch_batch_persists_bounded_redacted_crash_without_harming_sibling[codex]'))
 MOCK_CASE=CASES[3]
+CRASH_CASES=(CASES[2],CASES[4])
 
 
 STARTUP_CASES=tuple(TEST+'::'+name for name in (
@@ -38,7 +40,7 @@ TEMPLATE_CASES=tuple(TEST+'::'+name+'['+role+'-'+provider+']'
 BATCH_CASES=tuple(TEST+'::test_dispatch_batch_serializes_mcp_startup_and_preserves_sibling_success['+provider+']'
                   for provider in ('claude','codex'))
 EXECUTION_CASES=(*CASES,*STARTUP_CASES,*TEMPLATE_CASES,*BATCH_CASES)
-ROLES={CASES[0]:'work',CASES[1]:'validate',CASES[2]:'validate',MOCK_CASE:'work',
+ROLES={CASES[0]:'work',CASES[1]:'validate',**dict.fromkeys(CRASH_CASES,'validate'),MOCK_CASE:'work',
     **dict(zip(STARTUP_CASES,('work','validate','terminal_reviewer'),strict=True)),
     **{case:'work' if '[worker-' in case else 'validate' for case in TEMPLATE_CASES},
     **dict.fromkeys(BATCH_CASES,'validate')}
@@ -48,9 +50,9 @@ def environment(case,base,ambient,observed):
     from node_environment import baseline,scoped
     role=ROLES[case]
     result=baseline(ambient,base/'.unrest','p1')
-    if case in (*TEMPLATE_CASES,*BATCH_CASES) and case.rsplit('[',1)[1][:-1].split('-')[-1]=='codex':
+    if case in (*TEMPLATE_CASES,*BATCH_CASES,*CRASH_CASES) and case.rsplit('[',1)[1][:-1].split('-')[-1]=='codex':
         result.update(INITIAL_AGENT_MODE='agent',CODEX_CONFIG='{"approval_policy":"on-request","model_reasoning_effort":"medium","sandbox_mode":"workspace-write"}')
-    if case==CASES[2]:
+    if case in CRASH_CASES:
         result['ANTHROPIC_API_KEY']='batch-crash-known-value'
     return scoped(observed,result,base/'.unrest','p1',role,module=False)
 
@@ -89,7 +91,7 @@ def expected(case, role, cwd, checkout, native, native_pin, root_environment, ow
         env = {**root_environment, 'PYTEST_VERSION': '9.0.2', 'PYTEST_CURRENT_TEST': case + ' (call)'}
         if case in TEMPLATE_CASES:
             env.update(template_environment(case,checkout))
-        if case == CASES[2]:
+        if case in CRASH_CASES:
             env['ANTHROPIC_API_KEY'] = 'batch-crash-known-value'
         if case==MOCK_CASE:
             if base is None:

@@ -111,9 +111,10 @@ class CallbackTrap:
         pytest.fail('Git builder invoked caller equality')
 
 
-def test_family_is_primitive_and_rollback_forms_stay_scoped():
+def test_raw_callback_operands_refuse_before_matching_and_labels_grant_no_rights():
+    from git_policy import command_match
     with pytest.raises(Refused):
-        build('head', REPO, REPO, {}, family=CallbackTrap())
+        command_match(REPO,REPO,['git',CallbackTrap()],None,{})
     assert build('rollback-add', REPO, REPO, fields('rollback-add'), family='workspaces').argv==build('rollback-add', REPO, REPO, fields('rollback-add'), family='evolution').argv
 
 
@@ -140,13 +141,19 @@ def test_commit_input_is_bounded_data_without_a_second_lease_parser():
     from test_git_vectors import render
     vector,_,environment=render('commit-tree',REPO,fields('commit-tree'),family='workspaces')
     for message in ('ordinary message','unsorted\nrepeated\nrepeated\n','λ'*8192):
-        assert command_match('commit-tree',REPO,INTEGRATION,vector,message,environment,family='workspaces').stdin==message
+        assert command_match(REPO, INTEGRATION, vector, message, environment)[1].stdin==message
     for message in ('λ'*8193,'x'*16385,'x\0y',None,True):
         with pytest.raises(Refused):
-            command_match('commit-tree',REPO,INTEGRATION,vector,message,environment,family='workspaces')
+            command_match(REPO, INTEGRATION, vector, message, environment)[1]
 
 
-def test_local_operation_union_has_one_canonical_label_for_each_vector():
-    from git_policy import LOCAL_OPERATIONS,COMMAND_OPERATIONS
-    assert set(LOCAL_OPERATIONS)==(set(COMMAND_OPERATIONS)-{'rollback-add','rollback-update','rollback-reset'})|{'fixture-extra'}
-    assert len(LOCAL_OPERATIONS)==len(set(LOCAL_OPERATIONS))
+@pytest.mark.parametrize('vector,operation',[
+    (['git','init'],'init'),
+    (['git','worktree','add','--detach','--no-checkout',LEASE,BASE],'lease-add'),
+    (['git','worktree','add','--detach',INTEGRATION,BASE],'integration-add'),
+    (['git','worktree','remove','--force',LEASE],'remove-tree'),
+])
+def test_one_closed_parser_keeps_helper_and_initialization_classes_distinct(vector,operation):
+    from git_policy import command_match
+    parsed,command=command_match(REPO,REPO,vector,None,{})
+    assert parsed==operation and command.argv==tuple(vector)

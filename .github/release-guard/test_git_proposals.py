@@ -107,10 +107,10 @@ def test_complete_vector_matches_exact_template_and_bounded_operands(
 ):
     original = build(operation, REPO, location, fields, family="workspaces")
     raw = {"stdin": original.stdin, "environment": dict(original.additions)}
-    assert match_command(operation,REPO,location,list(original.argv),raw["stdin"],raw["environment"],family="workspaces")==original
+    assert match_command(REPO, location, list(original.argv), raw['stdin'], raw['environment'])[1]==original
     if fields:
         with pytest.raises(Refused):
-            match_command(operation,REPO,location,[*original.argv,"foreign"],raw["stdin"],raw["environment"],family="workspaces")
+            match_command(REPO, location, [*original.argv, 'foreign'], raw['stdin'], raw['environment'])[1]
 
 
 @pytest.mark.parametrize("mutation", ["argv", "cwd", "environment", "stdin", "family"])
@@ -249,12 +249,10 @@ def test_evolution_uses_shared_workspace_query_after_its_fixture_setup(monkeypat
     "operation", ["inside", "head", "parent-ref", "clean", "top", "verify-base"]
 )
 def test_shared_repository_operations_exist_for_both_product_families(family, operation):
-    from git_policy import LOCAL_OPERATIONS
 
     fields = {"revision": REV} if operation == "verify-base" else {}
-    assert operation in LOCAL_OPERATIONS
     value = build(operation, REPO, REPO, fields, family=family)
-    assert match_command(operation,REPO,REPO,list(value.argv),None,{},family=family)==value
+    assert match_command(REPO, REPO, list(value.argv), None, {})[1]==value
 
 
 @pytest.mark.parametrize('branch',['main','master'])

@@ -1263,3 +1263,17 @@ the temporary guard-simplification workflow. This includes every remaining
 non-test `.github` file and the complete distribution checker; test code remains
 separate. The full CI workflow and every original product test remain intact.
 Size is a footprint result, not source, package, desktop or release certification.
+
+The two oversized-stream source cases admit only their byte-pinned inline mock
+program, exact environment and owned workspace. A constructor-scoped descriptor
+selector identifies one inherited read pipe; parent identity acquisition and
+child descriptor recensus establish its actual custody. The fixed-inline role
+has no descendant launch authority. Both crash/sibling provider parameters use
+the same pinned mock ACP program and two fixed sleep fixtures, without native
+provider execution.
+
+Git proposals use one closed argv parser instead of trying each operation in
+turn. Exact vectors, stdin restrictions, scoped paths and fixture budgets remain;
+checked-out worktree creation retains its distinct helper role. Shared retained
+directory generations include the owned pytest ancestor, replacing duplicate
+repository generation records without shortening the checked ancestor chain.

@@ -15,6 +15,7 @@ from typing import NoReturn
 from bootstrap_wire import Client
 from content_manifest import Refused
 from git_policy import local_case
+from readiness_launch import STREAM_CASES
 from source_profile import digest, validate
 
 def direct_native(args, kwargs, case, role):
@@ -77,8 +78,14 @@ class Policy:
                 operand_text(commit_input,16384)
             except Refused:
                 self.refuse('Git finite commit input')
-        answer=self.client.request('launch-proposal',{'case':self.case,'executable':executable,'argv':vector,
-            'cwd':cwd,'environment':environment,'stdin':commit_input})
+        request={'case':self.case,'executable':executable,'argv':vector,
+            'cwd':cwd,'environment':environment,'stdin':commit_input}
+        if self.case in STREAM_CASES:
+            descriptors=getattr(self.local,'passfds',())
+            if type(descriptors) is not tuple or len(descriptors)!=1 or type(descriptors[0]) is not int or not 3<=descriptors[0]<=1024:
+                self.refuse('source exact inventory descriptor')
+            request['inventory_fd']=descriptors[0]
+        answer=self.client.request('launch-proposal',request)
         if getattr(self.local,'launch',None) is not None:
             raise Refused('source nested process constructor')
         self.local.launch=answer
@@ -152,7 +159,12 @@ class Policy:
                         kwargs['env']=normalized
             args,kwargs=direct_native(args,kwargs,policy.case,policy.profile['role'])
             policy.local.launch = None
-            original(process, *args, **kwargs)
+            previous=getattr(policy.local,'passfds',())
+            policy.local.passfds=kwargs.get('pass_fds',())
+            try:
+                original(process, *args, **kwargs)
+            finally:
+                policy.local.passfds=previous
             pending = getattr(policy.local, 'launch', None)
             if pending is None:
                 policy.refuse('source constructor without admitted audit')

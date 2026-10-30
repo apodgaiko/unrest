@@ -1,4 +1,6 @@
 """Four original local-readiness leaves; connect permission never grants payload."""
+from pathlib import Path
+
 from content_manifest import Refused
 from launch_policy import build_expected,admit_expected,pinned_body
 
@@ -23,6 +25,11 @@ PROGRAM_PINS=dict(zip(CASES,(
     'e88dc8567953acc3ea76ea1f5a9b6db3d154a25bde3a4fa9c272e184e4355da2',
     'be4c6dff92704046fbff8c740bea609c045b3e0373a6903e8f1613d29b7043d7'),strict=True))
 
+STREAM_CASES=tuple(TEST+'::test_mcp_role_child_oversized_streams_are_bounded_and_singly_drained['+mode+']'
+    for mode in ('worker','terminal-reviewer'))
+CASES=(*CASES,*STREAM_CASES)
+PROGRAM_PINS.update(dict.fromkeys(STREAM_CASES,'2e72c5f2a12366eb52edf0f0414ddbc2b2b24a539f202bff89417b23589f8ad2'))
+
 
 def proposal(host,actor,raw):
     host.root_only(actor)
@@ -31,6 +38,16 @@ def proposal(host,actor,raw):
     body=pinned_body(raw['argv'],PROGRAM_PINS[host.case])
     native=host.binding['entry']['path']
     env={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':host.case+' (call)'}
+    cwd,inherited=host.meta['checkout'],[]
+    if host.case in STREAM_CASES:
+        from owned_fixture import retain
+        from cleanup_launch import read_pipe
+        base=retain(host,Path(raw['cwd']).parent,host.case.split('::')[1].split('[')[0][:30],20000)
+        cwd=str(base/'workspace')
+        env={'PATH':host.meta_environment()['PATH']}
+        if host.case==STREAM_CASES[0]:
+            env['UNREST_NODE_ASSIGNMENT']='{"targets":["VAL-SEC-014"],"task_type":"work"}'
+        inherited=[read_pipe(actor['birth'],raw['inventory_fd'])]
     value=build_expected(host.case,native,host.binding['entry']['sha256'],
-        (native,'-c',body),tuple(sorted(env.items())),host.meta['checkout'],'python-command')
-    return admit_expected(host,actor,raw,value,'session-inline' if host.case.endswith('::test_sigterm_ignoring_owned_process_is_killed_and_reaped') else 'fixed-inline',[native,'-I','-S','-c',body])
+        (native,'-c',body),tuple(sorted(env.items())),cwd,'python-command')
+    return admit_expected(host,actor,raw,value,'session-inline' if host.case.endswith('::test_sigterm_ignoring_owned_process_is_killed_and_reaped') else 'fixed-inline',[native,'-I','-S','-c',body],inherited=inherited)

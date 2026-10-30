@@ -31,10 +31,10 @@ queued, not executed. See the [release note](../release/lean-core-v0.4.6.md).
 `--transport stdio|streamable-http|sse`. Each mode constructs a separate
 `FastMCP` instance and registers only its role's tools.
 
-Stdio startup suppresses FastMCP's optional banner and its synchronous version
+Server startup suppresses FastMCP's optional banner and its synchronous version
 update check. Configuration and policy validation still precede server
 construction; MCP initialization, lifespan and tool processing are unchanged.
-HTTP transports retain their existing banner behavior.
+This applies to stdio and HTTP transports.
 
 ### Orchestrator mode
 

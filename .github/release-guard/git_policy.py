@@ -130,14 +130,6 @@ COMMAND_FIXED = {
     'check-index': ('diff', '--cached', '--check'),
     'prune': ('worktree', 'prune'),
 }
-COMMAND_OPERATIONS = (*COMMAND_FIXED,
-    'init', 'config-name', 'config-email', 'stage-base',
-    'commit-base', 'stage-advance', 'commit-advance', 'stage-child',
-    'commit-child', 'verify-base', 'lease-add', 'integration-add',
-    'rollback-add', 'checkout', 'diff-return', 'apply',
-    'date', 'commit-tree', 'update-parent', 'reset-parent',
-    'rollback-update', 'rollback-reset', 'remove-tree',
-)
 
 
 SETUP_FORMS={
@@ -165,66 +157,44 @@ def command_location(repo, path, *, target=False):
         raise Refused('git operation location outside runtime')
 
 
-def command_match(operation, repository, location, argv, stdin, environment, *, family, fixture=None, branch="main"):
-    """Match one closed complete vector; dynamic operands grant no extra forms."""
-    if type(family) is not str or family not in ('workspaces','evolution') or type(operation) is not str or operation not in (*COMMAND_OPERATIONS,'fixture-extra'):
-        raise Refused('git closed operation')
+def command_match(repository,location,argv,stdin,environment):
+    """Parse one complete closed vector; labels do not select command rights."""
     if type(argv) is not list or not argv or any(type(value) is not str for value in argv) or argv[0] not in ('git','/usr/bin/git'):
         raise Refused('git literal argument vector')
     repo,cwd=command_path(repository),command_path(location)
     command_location(repo,cwd)
     args=tuple(argv[1:])
+    forms={**{name:(vector,) for name,vector in COMMAND_FIXED.items()},**SETUP_FORMS}
+    operation=next((name for name,vectors in forms.items() if args in vectors),None)
     additions=()
-    if operation in COMMAND_FIXED:
-        if args!=COMMAND_FIXED[operation]:
-            raise Refused('git fixed command')
-    elif operation in SETUP_FORMS:
-        if args not in SETUP_FORMS[operation]:
-            raise Refused('git closed setup vector')
-    elif operation=='fixture-extra':
-        forms={('rev-parse','HEAD:lane_a.txt'),('config','core.filemode','false'),
-            ('add','lane_a.txt'),('rm','--cached','lane_a.txt'),('add','extra.txt'),
-            ('update-index','--assume-unchanged','lane_a.txt'),('update-index','--skip-worktree','lane_a.txt'),
-            ('add','-N','extra.txt'),('ls-files','-z','--stage'),('add','.gitignore','candidate.txt'),
-            ('-c','user.name=Unrest Measurement','-c','user.email=measurement@invalid','commit','-q','-m','frozen baseline')}
-        forms.update(('config',key,value.replace('CANARY',str(repo.parent/'canary')))
-            for key,value in CANDIDATE_CANARIES)
-        if args not in forms:
-            match args:
-                case ('commit-tree',oid,'-m','unrelated'):
-                    operand_digest(oid)
-                case ('update-index','--add','--cacheinfo',entry):
-                    mode,oid,name=entry.split(',') if entry.count(',')==2 else ('','','')
-                    if mode not in ('120000','160000') or name!='unsupported':
-                        raise Refused('Git finite cache entry')
-                    operand_digest(oid)
-                case _:
-                    raise Refused('Git closed fixture vector')
-    else:
-        match operation,args:
-            case ('lease-add',('worktree','add','--detach','--no-checkout',tree,revision)) | (('integration-add'|'rollback-add'),('worktree','add','--detach',tree,revision)):
-                tree=command_path(tree)
-                command_location(repo,tree,target=True)
-                operand_digest(revision)
-            case ('remove-tree',('worktree','remove','--force',tree)):
+    if operation is None:
+        operation='local'
+        match args:
+            case ('worktree','add','--detach','--no-checkout',tree,revision) | ('worktree','add','--detach',tree,revision):
+                operation='lease-add' if len(args)==6 else 'integration-add'
                 command_location(repo,command_path(tree),target=True)
-            case ('verify-base',('rev-parse','--verify',revision)) if revision.endswith('^{commit}'):
+                operand_digest(revision)
+            case ('worktree','remove','--force',tree):
+                operation='remove-tree'
+                command_location(repo,command_path(tree),target=True)
+            case ('rev-parse','--verify',revision) if revision.endswith('^{commit}'):
                 operand_digest(revision[:-9])
-            case ('checkout',('checkout','--detach',revision)) | ('diff-return',('diff','--cached','--binary','--no-ext-diff',revision)) | ('date',('show','-s','--format=%aI',revision)):
+            case ('checkout','--detach',revision) | ('diff','--cached','--binary','--no-ext-diff',revision) | ('show','-s','--format=%aI',revision):
                 operand_digest(revision)
-            case (('reset-parent'|'rollback-reset'),('reset','--hard',revision)):
+            case ('reset','--hard',revision):
                 operand_digest(revision)
-            case ('apply',('apply','--index','--binary',patch)):
+            case ('apply','--index','--binary',patch):
                 patch=command_path(patch)
                 if patch.parent!=repo/'.unrest/workspaces/patches' or patch.suffix!='.patch':
                     raise Refused('git patch scope')
                 operand_digest(patch.stem,64)
-            case (('update-parent'|'rollback-update'),('update-ref',reference,new,old)):
-                if branch not in ('main','master') or reference!='refs/heads/'+branch:
-                    raise Refused('git update reference or rollback family')
+            case ('update-ref',reference,new,old):
+                if reference not in ('refs/heads/main','refs/heads/master'):
+                    raise Refused('git update reference')
                 operand_digest(new)
                 operand_digest(old)
-            case ('commit-tree',('commit-tree',tree,'-p',revision)):
+            case ('commit-tree',tree,'-p',revision):
+                operation='commit-tree'
                 operand_digest(tree)
                 operand_digest(revision)
                 operand_text(stdin,16384)
@@ -232,10 +202,26 @@ def command_match(operation, repository, location, argv, stdin, environment, *, 
                     'GIT_AUTHOR_NAME','GIT_AUTHOR_EMAIL','GIT_AUTHOR_DATE',
                     'GIT_COMMITTER_NAME','GIT_COMMITTER_EMAIL','GIT_COMMITTER_DATE')))
             case _:
-                raise Refused('Git proposal does not match a template')
+                forms={('rev-parse','HEAD:lane_a.txt'),('config','core.filemode','false'),
+                    ('add','lane_a.txt'),('rm','--cached','lane_a.txt'),('add','extra.txt'),
+                    ('update-index','--assume-unchanged','lane_a.txt'),('update-index','--skip-worktree','lane_a.txt'),
+                    ('add','-N','extra.txt'),('ls-files','-z','--stage'),('add','.gitignore','candidate.txt'),
+                    ('-c','user.name=Unrest Measurement','-c','user.email=measurement@invalid','commit','-q','-m','frozen baseline')}
+                forms.update(('config',key,value.replace('CANARY',str(repo.parent/'canary'))) for key,value in CANDIDATE_CANARIES)
+                if args not in forms:
+                    match args:
+                        case ('commit-tree',oid,'-m','unrelated'):
+                            operand_digest(oid)
+                        case ('update-index','--add','--cacheinfo',entry):
+                            mode,oid,name=entry.split(',') if entry.count(',')==2 else ('','','')
+                            if mode not in ('120000','160000') or name!='unsupported':
+                                raise Refused('Git finite cache entry')
+                            operand_digest(oid)
+                        case _:
+                            raise Refused('Git proposal does not match a template')
     if operation!='commit-tree' and stdin is not None:
         raise Refused('git unexpected command input')
-    return Command(tuple(argv),str(cwd),additions,stdin)
+    return operation,Command(tuple(argv),str(cwd),additions,stdin)
 
 
 CANDIDATE_TEST='tests/test_experimental_candidate.py'
@@ -260,7 +246,6 @@ MEASUREMENT_PIN='d850dcaf77c4b4ebd08efa87089cbc7b59762d5eb8d7fd0b673a9e043bc3e97
 MEASUREMENT_WORKERS=tuple(MEASUREMENT_TEST+'::'+name for name in ('test_evolution_cases_use_real_public_state_machine_and_cold_state','test_project_cases_use_real_run_control_and_nested_acp'))
 
 def measurement_worker(host,actor,raw):
-    import os
     from run_worker_launch import admit_worker,MEASUREMENT_EVOLUTION,MEASUREMENT_PROJECT
     if host.case not in (MEASUREMENT_EVOLUTION,MEASUREMENT_PROJECT):
         raise Refused('measurement worker exact case')
@@ -323,7 +308,7 @@ def fixture_root(host,case,repository):
     if host.fixture_roots.setdefault(('git-fixture',case),generation)!=generation:
         raise Refused('Git pytest generation changed')
     identities=[]
-    for directory in (path,*(parent for parent in path.parents if parent.is_relative_to(base))):
+    for directory in (path,*(parent for parent in path.parents if parent.is_relative_to(base)),owned):
         info=directory.lstat()
         if not stat.S_ISDIR(info.st_mode) or info.st_uid!=20000 or info.st_mode&0o6022:
             raise Refused('Git owned directory custody')
@@ -427,7 +412,7 @@ def history_cli_proposal(host,actor,raw):
 
 
 OWNED_CASE='tests/test_workspaces.py::test_owned_process_budget_and_restart_cleanup'
-LOCAL_OPERATIONS=tuple(dict.fromkeys({'rollback-add':'integration-add','rollback-update':'update-parent','rollback-reset':'reset-parent'}.get(operation,operation) for operation in (*COMMAND_OPERATIONS,'fixture-extra')))
+
 
 SITE_OWNED_BODY = 'import time; time.sleep(60)'
 
@@ -457,7 +442,6 @@ def image(file='/usr/bin/git'):
 
 
 def issue(host,actor,raw,command,environment,*,role='git-command',maximum=128,fields=None):
-    from launch_policy import build_expected,admit_expected
     if raw['executable']!='/usr/bin/git' or raw['stdin']!=command.stdin:
         raise Refused('Git exact executable and input')
     expected=build_expected(host.case,'/usr/bin/git',image(),command.argv,
@@ -481,21 +465,13 @@ class Git:
     def repository(self, repository, operation, family):
         root = Path(repository)
         fixture_root(self.host,self.host.case,repository)
-        identities = []
-        for directory in (root.parent, root):
-            info = directory.lstat()
-            if not stat.S_ISDIR(info.st_mode) or info.st_uid != 20000 or stat.S_IMODE(info.st_mode) & 0o6022:
-                raise Refused('git repository custody')
-            identities.append((info.st_dev, info.st_ino, info.st_uid))
         key=(self.host.case,repository)
         slot = self.repositories.get(key)
         if slot is None:
             if operation != 'init' or (root / '.git').exists():
                 raise Refused('git first original fixture operation')
-            slot = {'path': repository, 'identities': identities}
+            slot = {'path': repository}
             self.repositories[key] = slot
-        if slot['path'] != repository or slot['identities'] != identities:
-            raise Refused('git repository generation')
         metadata=root/'.git'
         if not metadata.exists() and not metadata.is_symlink():
             if operation!='init':
@@ -618,17 +594,7 @@ def workspace_prepare(host,actor,raw):
     else:
         if raw['executable']!='/usr/bin/git':
             raise Refused('Git proposal original executable')
-        branch='master' if raw['argv'][1:3]==['update-ref','refs/heads/master'] else 'main'
-        candidates: dict[str,Command] = {}
-        for operation in LOCAL_OPERATIONS:
-            try:
-                command=command_match(operation,repository,raw['cwd'],raw['argv'],raw['stdin'],raw['environment'],family='workspaces',branch=branch)
-            except Refused:
-                continue
-            candidates[operation]=command
-        if len(candidates)!=1:
-            raise Refused('Git proposal requires one finite operation')
-        operation,command=next(iter(candidates.items()))
+        operation,command=command_match(repository,raw['cwd'],raw['argv'],raw['stdin'],raw['environment'])
         phase=raw['environment'].get('PYTEST_CURRENT_TEST')
         if case.split('::')[0]==CANDIDATE_TEST:
             environment={'PATH':'/usr/bin:/bin','HOME':repository,'LC_ALL':'C',
