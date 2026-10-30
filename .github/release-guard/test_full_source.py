@@ -11,6 +11,7 @@ from full_source import FullCases
 def plugin():
     calls = []
     policy = SimpleNamespace(
+        children={},
         profile={"cases": ["tests/test_plain.py::test_one"]},
         poison=False,
         client=SimpleNamespace(request=lambda *args: calls.append(args)),
