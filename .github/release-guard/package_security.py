@@ -3,7 +3,7 @@ import ast
 import os
 from pathlib import Path
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from launch_policy import source_unit,assignment,admit_expected,build_expected,render_string
 from owned_fixture import acquire,retain
 
@@ -44,8 +44,7 @@ def completed(host,row):
 def provenance(host):
     key='<installed-provenance>'
     row=host.fixture_roots.get(key)
-    if row is None or not completed(host,row):
-        raise Refused('installed fixture needs actual provenance exit and parent wait')
+    refuse_if(row is None or not completed(host,row), 'installed fixture needs actual provenance exit and parent wait')
     return row
 
 
@@ -55,20 +54,17 @@ def proposal(host,actor,raw):
     from package_cases import literal
     host.root_only(actor)
     case=host.case
-    if case not in CASES or raw['stdin'] is not None:
-        raise Refused('credential package exact leaf')
+    refuse_if(case not in CASES or raw['stdin'] is not None, 'credential package exact leaf')
     checkout,owned_root=Path(host.meta['checkout']),Path(host.meta['owned'])
     source_unit(checkout,TEST,PIN)
     data=inputs(host)
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
     records=[row for row in host.intents.values() if row['case']==case]
-    if any(not completed(host,row) for row in records):
-        raise Refused('credential matrix previous original parent wait')
+    refuse_if(any(not completed(host,row) for row in records), 'credential matrix previous original parent wait')
     workspace=Path(raw['cwd'])
     fixture=host.fixture_roots.get('<installed-workspace>')
     if fixture is None:
-        if case!=MATRIX or records:
-            raise Refused('credential exact first fixture consumer')
+        refuse_if(case!=MATRIX or records, 'credential exact first fixture consumer')
         owned(workspace,owned_root)
         code=literal(checkout,'tests/contracts/conftest.py',None,'PROVENANCE_BODY')
         env=environment(host,case,'setup')
@@ -87,8 +83,7 @@ def proposal(host,actor,raw):
     owned(Path(fixture[0]),owned_root)
     phase=[row for row in records if row.get('security_operation')!='provenance']
     limit=20 if case==MATRIX else 1
-    if len(phase)>=limit:
-        raise Refused('credential package exact original count')
+    refuse_if(len(phase)>=limit, 'credential package exact original count')
     env=environment(host,case,'call')
     env={key:value for key,value in env.items() if not any(marker in key.upper() for marker in ('API_KEY','TOKEN','PASSWORD','CREDENTIAL'))}
     env.pop('PYTHONPATH',None)
@@ -100,8 +95,7 @@ def proposal(host,actor,raw):
         if copied:
             parent=retain(host,workspace.parent)
             acquire(str(workspace),owned_root)
-            if workspace!=parent/'copied-candidate':
-                raise Refused('credential original copied workspace')
+            refuse_if(workspace!=parent/'copied-candidate', 'credential original copied workspace')
             key=('credential-copy',case)
             if key not in host.fixture_roots:
                 target=host.directory/('credential-copy-'+os.urandom(16).hex())
@@ -126,8 +120,7 @@ def proposal(host,actor,raw):
         provider=case.rsplit('[',1)[1][:-1]
         target=Path(raw['argv'][-1])
         parent,_=acquire(str(target.parent),owned_root, 20000)
-        if target!=parent/provider or target.resolve()!=target:
-            raise Refused('credential supported provider original workspace')
+        refuse_if(target!=parent/provider or target.resolve()!=target, 'credential supported provider original workspace')
         env['UNREST_HOME']=str(parent/(provider+'-home'))
         code=f'import sys; sys.path[:0]=[{str(data["installed_site"])!r}, {str(data["dependency_site"])!r}]; from unrest_harness.cli import cli; cli.main()'
         translated_code=code

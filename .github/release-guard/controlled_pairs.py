@@ -8,13 +8,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from controlled_cases import eligible, STARTUP_FAILURE
 
 
 def limits(case: str) -> int:
-    if type(case) is not str or not eligible(case):
-        raise Refused('controlled pair case')
+    refuse_if(type(case) is not str or not eligible(case), 'controlled pair case')
     from cohort_cases import CAMPAIGNS
     from cohort_controller import CASES as CRASH
     if case in CAMPAIGNS:
@@ -26,8 +25,7 @@ def limits(case: str) -> int:
 
 def scope(case: str, tag: str, value: object, owned: Path) -> str:
     limits(case)
-    if type(value) is not str or tag not in ('broker', 'bridge', 'lifetime'):
-        raise Refused('controlled listener scope primitives')
+    refuse_if(type(value) is not str or tag not in ('broker', 'bridge', 'lifetime'), 'controlled listener scope primitives')
     path = Path(value)
     if (not path.is_absolute() or str(path.resolve()) != value
             or not path.is_relative_to(owned / 'pytest')

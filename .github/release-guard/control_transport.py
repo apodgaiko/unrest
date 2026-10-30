@@ -13,7 +13,7 @@ import struct
 import time
 from typing import Any
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from process_ledger import Birth, Ledger, integer
 
 REQUEST_LIMIT = 8192
@@ -26,8 +26,7 @@ _SEND, _RECV, _CLOSE = socket.socket.send, socket.socket.recv, socket.socket.clo
 def unique(pairs):
     value = {}
     for key, item in pairs:
-        if key in value:
-            raise Refused('control duplicate field')
+        refuse_if(key in value, 'control duplicate field')
         value[key] = item
     return value
 
@@ -45,8 +44,7 @@ def finite(value: Any) -> None:
                 raise Refused('control integer')
             if type(value) is str:
                 characters += len(value)
-            if characters > RESPONSE_LIMIT:
-                raise Refused('control text bound')
+            refuse_if(characters > RESPONSE_LIMIT, 'control text bound')
         elif type(value) is list and len(value) <= 1024:
             pending.extend((item, depth + 1) for item in value)
         elif type(value) is dict and len(value) <= 128 and all(type(key) is str for key in value):
@@ -57,8 +55,7 @@ def finite(value: Any) -> None:
 
 
 def encode(value: dict, limit: int) -> bytes:
-    if type(value) is not dict:
-        raise Refused('control object')
+    refuse_if(type(value) is not dict, 'control object')
     finite(value)
     payload = json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=True).encode()
     if not 0 < len(payload) <= limit:
@@ -125,8 +122,7 @@ class Frame:
             return None
         try:
             value = json.loads(self.buffer[4:], object_pairs_hook=unique)
-            if type(value) is not dict:
-                raise Refused('control object')
+            refuse_if(type(value) is not dict, 'control object')
             finite(value)
         except (ValueError, RecursionError):
             self.refuse('control JSON')
@@ -178,13 +174,11 @@ class Admission:
         self.seen: set[str] = set()
 
     def admit(self, frame: Frame) -> dict:
-        if type(frame) is not Frame or frame.owner is not self.ledger or frame.binding is None:
-            raise Refused('control uncaptured channel')
+        refuse_if(type(frame) is not Frame or frame.owner is not self.ledger or frame.binding is None, 'control uncaptured channel')
         frame.check()
         birth, token, generation, command_class, gid = frame.binding
         request = frame.received
-        if type(request) is not dict or set(request) != {'pid', 'nonce', 'token', 'generation', 'id', 'kind', 'payload'}:
-            raise Refused('control request schema')
+        refuse_if(type(request) is not dict or set(request) != {'pid', 'nonce', 'token', 'generation', 'id', 'kind', 'payload'}, 'control request schema')
         peer(frame.stream, self.ledger.peer_birth(birth), gid)
         process = self.ledger.process(birth)
         identifier = request['id']

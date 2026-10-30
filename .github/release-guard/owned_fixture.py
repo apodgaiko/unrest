@@ -2,12 +2,11 @@
 from pathlib import Path
 import stat
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 
 
 def acquire(path,owned,owner=20000):
-    if type(path) is not str:
-        raise Refused('fixture path primitive')
+    refuse_if(type(path) is not str, 'fixture path primitive')
     root=Path(path)
     boundary=owned/'pytest'
     if (root.resolve()!=root
@@ -23,6 +22,5 @@ def acquire(path,owned,owner=20000):
 def retain(host,path,owner=20000):
     root,_=acquire(str(path),Path(host.meta['owned']),owner)
     selected=(str(root),)
-    if host.fixture_roots.setdefault(host.case,selected)!=selected:
-        raise Refused('fixture changed selected path')
+    refuse_if(host.fixture_roots.setdefault(host.case,selected)!=selected, 'fixture changed selected path')
     return root

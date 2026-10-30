@@ -6,12 +6,11 @@ from pathlib import Path
 import stat
 import sys
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 
 
 def enter(metadata, support, output):
-    if os.getuid() != 0:
-        raise Refused('filesystem setup requires its trusted root')
+    refuse_if(os.getuid() != 0, 'filesystem setup requires its trusted root')
     libc = ctypes.CDLL(None, use_errno=True)
     # This dedicated fork needs no inherited handles beyond stdio. Discard even
     # the interpreter's main-script handle before acquiring any compartment I/O.
@@ -28,8 +27,7 @@ def enter(metadata, support, output):
             result.mkdir(mode=0o755, exist_ok=True)
         else:
             result.touch(mode=0o644, exist_ok=False)
-        if result.resolve() != result:
-            raise Refused('filesystem mount target alias')
+        refuse_if(result.resolve() != result, 'filesystem mount target alias')
         return os.fsencode(result)
 
     def mount(source, destination, flags, kind=None, data=None):
@@ -39,8 +37,7 @@ def enter(metadata, support, output):
     def bind(source, destination=None, *, writable=False, device=False):
         source = Path(source)
         destination = source if destination is None else Path(destination)
-        if source.resolve(strict=True) != source:
-            raise Refused('filesystem selected input alias')
+        refuse_if(source.resolve(strict=True) != source, 'filesystem selected input alias')
         mode = source.stat().st_mode
         if not (stat.S_ISCHR(mode) if device else stat.S_ISDIR(mode) or stat.S_ISREG(mode)):
             raise Refused('filesystem selected input kind')
@@ -99,9 +96,7 @@ def enter(metadata, support, output):
         fields = line.split()
         if fields[4] in metadata['mounts']:
             selected = os.stat(fields[4], follow_symlinks=False)
-            if 'ro' not in fields[5].split(','):
-                raise Refused('filesystem selected input remained writable')
+            refuse_if('ro' not in fields[5].split(','), 'filesystem selected input remained writable')
             mounts[fields[4]] = [int(fields[0]), selected.st_dev, selected.st_ino]
-    if set(mounts) != set(metadata['mounts']):
-        raise Refused('filesystem selected mount inventory incomplete')
+    refuse_if(set(mounts) != set(metadata['mounts']), 'filesystem selected mount inventory incomplete')
     return {**{key:value for key,value in metadata.items() if key!='_native_input'}, 'mounts': mounts, 'filesystem_root': [info.st_dev, info.st_ino]}

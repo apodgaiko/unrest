@@ -1,6 +1,6 @@
 """Exact inherited anonymous Unix file descriptions and actual owner births."""
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from socket_observation import acquire,descriptor
 
 
@@ -23,8 +23,7 @@ def parent_record(host,actor,fd):
 def local_record(saved):
     fd=saved[0]
     value=[fd,*descriptor(fd,20000),*saved[5:]]
-    if value!=saved:
-        raise Refused('spawn inherited Pipe file description changed')
+    refuse_if(value!=saved, 'spawn inherited Pipe file description changed')
     return value
 
 

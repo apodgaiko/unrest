@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 
-from content_manifest import Refused, read_regular, is_sha256
+from content_manifest import Refused, read_regular, is_sha256, refuse_if
 from control_transport import unique
 
 LIMIT=8*1024*1024
@@ -29,15 +29,12 @@ def environment(values,case):
 
 
 def document(value):
-    if (type(value) is not dict or set(value)!={'cases','source','dependency'}
-            or any(not is_sha256(value[name]) for name in ('source','dependency'))):
-        raise Refused('inventory input binding')
+    refuse_if(type(value) is not dict or set(value)!={'cases','source','dependency'}
+            or any(not is_sha256(value[name]) for name in ('source','dependency')), 'inventory input binding')
     rows=value['cases']
-    if (type(rows) is not list or len(rows)>20000 or any(type(row) is not str or not row or len(row)>131071 for row in rows)
-            or len(set(rows))!=len(rows)):
-        raise Refused('inventory finite nodes')
-    if sum(len(json.dumps(row)) for row in rows)>LIMIT:
-        raise Refused('inventory total node bytes')
+    refuse_if(type(rows) is not list or len(rows)>20000 or any(type(row) is not str or not row or len(row)>131071 for row in rows)
+            or len(set(rows))!=len(rows), 'inventory finite nodes')
+    refuse_if(sum(len(json.dumps(row)) for row in rows)>LIMIT, 'inventory total node bytes')
     return value
 
 
@@ -53,8 +50,7 @@ def load(value,directory,source,dependency):
     reference(value,directory)
     path=Path(value['path'])
     body,_,pin=read_regular(path,LIMIT,uid=20001,mode=0o444)
-    if pin!=value['sha256']:
-        raise Refused('inventory current bytes')
+    refuse_if(pin!=value['sha256'], 'inventory current bytes')
     result=document(json.loads(body,object_pairs_hook=unique))
     if len(result['cases'])!=value['count'] or (result['source'],result['dependency'])!=(source,dependency):
         raise Refused('inventory source generation')
@@ -63,8 +59,7 @@ def load(value,directory,source,dependency):
 
 def seal(value,directory):
     body=json.dumps(document(value),sort_keys=True,separators=(',',':')).encode()
-    if len(body)>LIMIT:
-        raise Refused('inventory byte bound')
+    refuse_if(len(body)>LIMIT, 'inventory byte bound')
     digest=hashlib.sha256(body).hexdigest()
     path=directory/('cases-'+digest+'.json')
     with path.open('xb') as stream:

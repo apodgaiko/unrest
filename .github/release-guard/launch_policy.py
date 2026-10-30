@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import hashlib
 from pathlib import Path, PurePosixPath
 
-from content_manifest import Refused, is_sha256
+from content_manifest import Refused, is_sha256, refuse_if
 
 @dataclass(frozen=True)
 class Expected:
@@ -35,24 +35,19 @@ def _payload(argv: tuple[str, ...], kind: str, reference: str | None,
              executable_sha256: str) -> tuple[int | None, str]:
     if kind in {"native", "expected-exec-failure"}:
         return None, executable_sha256
-    if kind not in {"python-command", "python-module", "python-script"}:
-        raise Refused("policy_payload_kind")
+    refuse_if(kind not in {"python-command", "python-module", "python-script"}, "policy_payload_kind")
     index = 1
     flags = {"-I", "-S", "-B", "-E", "-s", "-u", "-q", "-O", "-OO", "-b", "-bb"}
     while index < len(argv) and argv[index] in flags:
         index += 1
-    if index >= len(argv):
-        raise Refused("policy_python_payload_missing")
+    refuse_if(index >= len(argv), "policy_python_payload_missing")
     actual = {"-c": "python-command", "-m": "python-module"}.get(argv[index], "python-script")
-    if actual != kind:
-        raise Refused("policy_payload_mode_mismatch")
+    refuse_if(actual != kind, "policy_payload_mode_mismatch")
     index += int(actual != "python-script")
-    if index >= len(argv):
-        raise Refused("policy_python_payload_missing")
+    refuse_if(index >= len(argv), "policy_python_payload_missing")
     if kind == "python-command":
         return index, hashlib.sha256(argv[index].encode("utf-8")).hexdigest()
-    if reference is None or not is_sha256(reference):
-        raise Refused("policy_external_payload_reference")
+    refuse_if(reference is None or not is_sha256(reference), "policy_external_payload_reference")
     return index, reference
 
 
@@ -68,8 +63,7 @@ def build_expected(case: str, executable: str, executable_sha256: str,
 
 def source_unit(checkout: Path,path: str,pin: str,owners=()):
     body=(checkout/path).read_bytes()
-    if hashlib.sha256(body).hexdigest()!=pin:
-        raise Refused('original source bytes')
+    refuse_if(hashlib.sha256(body).hexdigest()!=pin, 'original source bytes')
     unit=ast.parse(body)
     for name in owners:
         unit=next(node for node in unit.body if isinstance(node,(ast.ClassDef,ast.FunctionDef,ast.AsyncFunctionDef)) and node.name==name)
@@ -105,8 +99,7 @@ def render_string(node,substitutions):
             index+=1
         else:
             raise Refused('closed string template substitution')
-    if index!=len(substitutions):
-        raise Refused('closed string template incomplete')
+    refuse_if(index!=len(substitutions), 'closed string template incomplete')
     return ''.join(result)
 
 

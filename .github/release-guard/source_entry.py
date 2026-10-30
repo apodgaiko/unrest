@@ -13,7 +13,7 @@ import traceback
 from typing import NoReturn
 
 from bootstrap_wire import Client
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from git_policy import local_case
 from inline_leaves import STREAM_CASES
 from source_profile import digest, validate
@@ -59,14 +59,11 @@ class Policy:
         raise Refused(code)
 
     def popen(self, args):
-        if self.profile['role'] not in PROCESS_OWNERS or self.case is None:
-            raise Refused('source undeclared process role')
-        if type(args) is not tuple or len(args)!=4:
-            raise Refused('source process audit schema')
+        refuse_if(self.profile['role'] not in PROCESS_OWNERS or self.case is None, 'source undeclared process role')
+        refuse_if(type(args) is not tuple or len(args)!=4, 'source process audit schema')
         executable,vector,cwd,environment=args
         from ordinary_acp import plain_environment
-        if type(executable) is not str or type(vector) is not list or any(type(arg) is not str for arg in vector):
-            raise Refused('source process audit primitives')
+        refuse_if(type(executable) is not str or type(vector) is not list or any(type(arg) is not str for arg in vector), 'source process audit primitives')
         if cwd is None:
             cwd=os.getcwd()
         elif type(cwd) in (str,PATH_TYPE):
@@ -90,8 +87,7 @@ class Policy:
                 self.refuse('source exact inventory descriptor')
             request['inventory_fd']=descriptors[0]
         answer=self.client.request('launch-proposal',request)
-        if getattr(self.local,'launch',None) is not None:
-            raise Refused('source nested process constructor')
+        refuse_if(getattr(self.local,'launch',None) is not None, 'source nested process constructor')
         self.local.launch=answer
         vector[:]=answer['translated']
 
@@ -109,18 +105,15 @@ class Policy:
                         raise Refused('source declared script bytes changed')
                 return True
             if event in ('socket.bind','socket.connect'):
-                if type(self.case) is not str or not self.case.startswith('tests/test_approval_recovery.py::'):
-                    raise Refused('source unknown private Unix endpoint')
-                if self.client.request('private-unix',{'event':event,'address':args[1]})!={'ok':True}:
-                    raise Refused('source private Unix acknowledgement')
+                refuse_if(type(self.case) is not str or not self.case.startswith('tests/test_approval_recovery.py::'), 'source unknown private Unix endpoint')
+                refuse_if(self.client.request('private-unix',{'event':event,'address':args[1]})!={'ok':True}, 'source private Unix acknowledgement')
                 return True
             if event == 'subprocess.Popen':
                 self.popen(args)
                 return True
             if event in ('os.kill', 'os.killpg'):
                 pending = getattr(self.local, 'signal', None)
-                if pending != (event, args):
-                    raise Refused('source signal outside approved cleanup')
+                refuse_if(pending != (event, args), 'source signal outside approved cleanup')
                 self.local.signal = None
                 return True
             raise Refused('source unknown privileged effect')

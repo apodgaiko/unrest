@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 import os
 from typing import Any
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 
 MAX_PROCESSES = 20000
 MAX_EXEC_EPOCHS = 128
@@ -32,8 +32,7 @@ def integer(value: Any, minimum: int = 0, maximum: int = (1 << 63) - 1) -> int:
 
 
 def text(value: Any) -> str:
-    if type(value) is not str or not 0 < len(value) <= 4096:
-        raise Refused('ledger text')
+    refuse_if(type(value) is not str or not 0 < len(value) <= 4096, 'ledger text')
     return value
 
 
@@ -56,12 +55,10 @@ class Birth:
 
     @classmethod
     def read(cls, identity: Any) -> Birth:
-        if type(identity) is not dict:
-            raise Refused('ledger identity')
+        refuse_if(type(identity) is not dict, 'ledger identity')
         uids = identity.get('uids')
-        if (type(uids) is not list or len(uids) != 4
-                or any(type(uid) is not int or uid != uids[0] for uid in uids)):
-            raise Refused('ledger identity uid')
+        refuse_if(type(uids) is not list or len(uids) != 4
+                or any(type(uid) is not int or uid != uids[0] for uid in uids), 'ledger identity uid')
         return cls(integer(identity.get('pid'), 1), integer(identity.get('tgid'), 1),
                    integer(identity.get('ppid')), integer(identity.get('start_ticks'), 1),
                    text(identity.get('boot_id')), integer(uids[0]))
@@ -104,8 +101,7 @@ class Ledger:
         self.root: Birth | None = None
 
     def process(self, birth: Birth) -> Process:
-        if type(birth) is not Birth or birth not in self.processes:
-            raise Refused('unknown ledger birth')
+        refuse_if(type(birth) is not Birth or birth not in self.processes, 'unknown ledger birth')
         return self.processes[birth]
 
     def register(self, birth: Birth, token: str, pins: tuple[tuple[str, str], ...],
@@ -115,12 +111,10 @@ class Ledger:
         token = text(token)
         if expected_generation is None:
             expected_generation = process.generation
-        if expected_generation not in (process.generation, process.generation + 1):
-            raise Refused('ledger registration generation')
+        refuse_if(expected_generation not in (process.generation, process.generation + 1), 'ledger registration generation')
         if not 0<=expected_generation<MAX_EXEC_EPOCHS:
             raise Refused('ledger unbounded exec epoch')
-        if token in self.by_token or process.stage not in ('born', 'exec-unregistered'):
-            raise Refused('ledger registration')
+        refuse_if(token in self.by_token or process.stage not in ('born', 'exec-unregistered'), 'ledger registration')
         pins = tuple(sorted(pins))
         self.by_token[token] = birth
         process.token, process.pins = token, pins
@@ -133,8 +127,7 @@ class Ledger:
 
     def ready(self, birth: Birth, kind: str, payload: dict) -> None:
         process = self.process(birth)
-        if process.registered_generation != process.generation:
-            raise Refused('stale readiness epoch')
+        refuse_if(process.registered_generation != process.generation, 'stale readiness epoch')
         if (kind!='body-ready' or payload!={} or process.stage!='registered'
                 or process.exit is not None or process.terminal is not None
                 or process.new_session and not process.session_complete):
@@ -148,8 +141,7 @@ class Ledger:
                 or type(requested) is not int):
             raise Refused('ledger waiting caller birth')
         owner = self.process(process.group)
-        if owner.exit is not None or owner.terminal is not None or owner.life_token is None:
-            raise Refused('ledger waiting parent authority')
+        refuse_if(owner.exit is not None or owner.terminal is not None or owner.life_token is None, 'ledger waiting parent authority')
         native = owner.command_class in ('native-git-command', 'native-git-helper', 'native-full-uv','native-stock-uv')
         if requested == -1 and native:
             return
@@ -171,11 +163,9 @@ class Ledger:
             if len(self.processes) >= MAX_PROCESSES or birth in self.processes:
                 raise Refused('ledger duplicate or unbounded birth')
             previous = self.current.get(birth.pid)
-            if previous is not None and self.process(previous).terminal is None:
-                raise Refused('ledger live PID replacement')
+            refuse_if(previous is not None and self.process(previous).terminal is None, 'ledger live PID replacement')
             if kind == 'kernel_root':
-                if self.root is not None:
-                    raise Refused('ledger duplicate root')
+                refuse_if(self.root is not None, 'ledger duplicate root')
                 parent = None
                 self.root = birth
             else:
@@ -186,8 +176,7 @@ class Ledger:
                     raise Refused('ledger child parent binding')
                 parent_process = self.process(parent)
                 leader = self.current.get(parent_process.birth.tgid)
-                if leader is None:
-                    raise Refused('ledger missing parent thread group')
+                refuse_if(leader is None, 'ledger missing parent thread group')
                 parent = leader
                 expected_parent = parent.pid if birth.pid == birth.tgid else self.peer_birth(parent).parent
                 if (birth.uid != parent.uid or birth.parent != expected_parent
@@ -202,21 +191,18 @@ class Ledger:
                 self.children.setdefault(parent, []).append(birth)
         elif kind in ('kernel_exec', 'kernel_exit', 'tracer_terminal_wait', 'failure_cleanup_tracer_wait'):
             observed_birth = self.current.get(integer(row.get('pid'), 1))
-            if observed_birth is None:
-                raise Refused('ledger unknown kernel process')
+            refuse_if(observed_birth is None, 'ledger unknown kernel process')
             process = self.process(observed_birth)
             birth = observed_birth
             if kind == 'kernel_exec':
-                if process.exit is not None or process.terminal is not None:
-                    raise Refused('ledger exec after exit')
+                refuse_if(process.exit is not None or process.terminal is not None, 'ledger exec after exit')
                 process.generation += 1
                 if process.registered_generation != process.generation:
                     process.stage = 'exec-unregistered'
             elif kind == 'kernel_exit':
                 raw = integer(row.get('raw'), maximum=65535)
                 status(raw, os.waitstatus_to_exitcode(raw))
-                if process.exit is not None:
-                    raise Refused('ledger duplicate exit')
+                refuse_if(process.exit is not None, 'ledger duplicate exit')
                 if birth.pid==birth.tgid and any(member.group==birth and member.terminal is not None
                         and member.exit is not None and member.exit[1]!=member.terminal[1]
                         and member.terminal[1]!=raw for member in map(self.process,self.children.get(birth,()))):
@@ -225,8 +211,7 @@ class Ledger:
                 process.stage = 'exited'
             else:
                 raw, code = status(row.get('raw'), row.get('normalized'))
-                if process.terminal is not None:
-                    raise Refused('ledger duplicate terminal')
+                refuse_if(process.terminal is not None, 'ledger duplicate terminal')
                 if kind == 'failure_cleanup_tracer_wait':
                     raise Refused('ledger failure cleanup cannot retire a process')
                 else:
@@ -249,8 +234,7 @@ class Ledger:
             raw, code = status(row.get('raw'), row.get('normalized'))
             key = (child_pid, integer(row.get('parent_tgid'), 1), raw, code)
             candidates = self.pending_waits.get(key, [])
-            if len(candidates) != 1:
-                raise Refused('ledger parent wait join')
+            refuse_if(len(candidates) != 1, 'ledger parent wait join')
             process = self.process(candidates[0])
             caller = self.current.get(integer(row.get('parent'), 1))
             if (caller is None or process.parent is None
@@ -264,8 +248,7 @@ class Ledger:
             del self.pending_waits[key]
             process.parent_wait = (sequence, raw, code, integer(row.get('options')))
         elif kind == 'exec_attempt':
-            if row.get('accepted') is not True:
-                raise Refused('ledger denied exec')
+            refuse_if(row.get('accepted') is not True, 'ledger denied exec')
         elif kind in {'cleanup_incomplete', 'exec_syscall_return', 'denied_syscall_return'}:
             if kind != 'exec_syscall_return' or row.get('denied') is True:
                 raise Refused('ledger cleanup or denied syscall')

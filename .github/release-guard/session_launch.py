@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from launch_policy import build_expected
 
 TEST = 'tests/test_provider_sessions.py'
@@ -37,8 +37,7 @@ PINS = {'tests/test_provider_sessions.py': 'a6f8e62dd6ed4dce983bcc11f4ed5d600e92
 
 
 def expected(case, cwd, checkout, owned, native, pin, root_environment, *, child=False):
-    if type(case) is not str or case not in LIVE or type(cwd) is not str:
-        raise Refused('session closed original launch case')
+    refuse_if(type(case) is not str or case not in LIVE or type(cwd) is not str, 'session closed original launch case')
     workspace = Path(cwd)
     if (not workspace.is_absolute() or workspace.resolve() != workspace or workspace.name != 'workspace'
             or workspace.parent.parent != owned / 'pytest'):

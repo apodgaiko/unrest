@@ -1,6 +1,6 @@
 """Two original inventory-FD regressions; no ACP/provider process authority."""
 from pathlib import Path
-from content_manifest import Refused
+from content_manifest import Refused as Refused, refuse_if
 from launch_policy import source_unit,build_expected,admit_expected
 from ordinary_acp import TEST,PINS
 
@@ -16,15 +16,12 @@ def inventory_proposal(host,actor,raw):
     worker=case==CASES[0]
     records=[row for row in host.intents.values() if row['case']==case]
     sequence=('git-init','git-commit','mcp','git-observe') if worker else ('mcp',)
-    if case not in CASES or len(records)>=len(sequence) or raw['stdin'] is not None:
-        raise Refused('inventory finite original sequence')
+    refuse_if(case not in CASES or len(records)>=len(sequence) or raw['stdin'] is not None, 'inventory finite original sequence')
     role=sequence[len(records)]
-    if (actor['role']=='mcp')!=(role=='git-observe') or actor['role'] not in ('root','mcp'):
-        raise Refused('inventory original parent role')
+    refuse_if((actor['role']=='mcp')!=(role=='git-observe') or actor['role'] not in ('root','mcp'), 'inventory original parent role')
     if any(not row['consumed'] or row['role']!='mcp' and not host.ledger.reaped(row['birth'],row['token']) for row in records):
         return None
-    if role=='git-observe' and (not actor['body_ready'] or records[-1]['birth']!=actor['birth'] or records[-1]['token']!=actor['token']):
-        raise Refused('inventory actual live MCP owner')
+    refuse_if(role=='git-observe' and (not actor['body_ready'] or records[-1]['birth']!=actor['birth'] or records[-1]['token']!=actor['token']), 'inventory actual live MCP owner')
     from owned_fixture import retain
     base=retain(host,Path(raw['cwd']).parent, 20000)
     home=base/'.unrest'
@@ -38,8 +35,7 @@ def inventory_proposal(host,actor,raw):
     port,inherited,reference=None,[],None
     if role=='mcp':
         from network_scope import port_argument
-        if len(raw['argv'])!=13 or not raw['argv'][-1].isascii() or not raw['argv'][-1].isdigit():
-            raise Refused('inventory finite MCP operands')
+        refuse_if(len(raw['argv'])!=13 or not raw['argv'][-1].isascii() or not raw['argv'][-1].isdigit(), 'inventory finite MCP operands')
         port,fd=port_argument(raw['argv'][-3]),int(raw['argv'][-1])
         inherited=[read_pipe(actor['birth'],fd)]
         argv=(native,'-m','unrest_harness','--mode','worker' if worker else 'terminal-reviewer',
@@ -79,15 +75,12 @@ def proposal(host,actor,raw):
     base=retain(host,Path(raw['cwd']).parent, 20000)
     first=case==DIAGNOSTICS[0]
     from node_environment import project_path
-    if case not in DIAGNOSTICS:
-        raise Refused('diagnostic undeclared case')
+    refuse_if(case not in DIAGNOSTICS, 'diagnostic undeclared case')
     project=project_path(base/'.unrest',raw['environment'].get('UNREST_PROJECT_ID')).name
-    if host.fixture_roots.setdefault(('diagnostic-project',case),project)!=project:
-        raise Refused('diagnostic project changed')
+    refuse_if(host.fixture_roots.setdefault(('diagnostic-project',case),project)!=project, 'diagnostic project changed')
     module=raw['argv'][1:2]==['-m']
     if not module:
         records=[row for row in host.intents.values() if row['case']==case and row['role']=='mcp' and row['parent']==actor['birth']]
-        if not first or len(records)!=1 or not host.executed(records[0]) or not host.actors[records[0]['pid']]['body_ready']:
-            raise Refused('diagnostic mock before actual MCP ready')
+        refuse_if(not first or len(records)!=1 or not host.executed(records[0]) or not host.actors[records[0]['pid']]['body_ready'], 'diagnostic mock before actual MCP ready')
     return node(host,actor,raw,base/'workspace',host.meta_environment(),base/'.unrest',project,{'work':1},
         checkout/MOCK,PINS[MOCK],('--missing-handoff-session-error',),1,{},'mock-acp')

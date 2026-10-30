@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 import stat
 
-from content_manifest import Refused, read_regular, _directory_key
+from content_manifest import Refused, read_regular, _directory_key, refuse_if
 from launch_policy import admit_expected,build_expected
 from package_cases import CASES as CASES, POSITIVE, NEGATIVE, MUTATIONS, FIRST, LIFECYCLE, literal, CONTRACT, SECURITY_CASES
 from archive_leaf import CHECKER_COMMAND, LEAF_COMMAND
@@ -16,8 +16,7 @@ PREPARED_UID=0
 
 def owned(path,root):
     _,info=acquire_owned(str(path),root, SOURCE_UID)
-    if stat.S_IMODE(info.st_mode)!=0o700:
-        raise Refused('package exact owned fixture root')
+    refuse_if(stat.S_IMODE(info.st_mode)!=0o700, 'package exact owned fixture root')
 
 
 def snapshot(host,actor,payload):
@@ -26,17 +25,14 @@ def snapshot(host,actor,payload):
     shape(payload,('path',))
     host.launch_owner(actor)
     case=host.case
-    if (not actor['body_ready'] or case in host.fixture_roots
+    refuse_if(not actor['body_ready'] or case in host.fixture_roots
             or (actor['role']=='root' and case not in NEGATIVE)
-            or (actor['role']!='root' and (actor['role']!='archive-checker' or case!=POSITIVE))):
-        raise Refused('archive snapshot original actor and case')
-    if type(payload['path']) is not str:
-        raise Refused('archive snapshot path primitive')
+            or (actor['role']!='root' and (actor['role']!='archive-checker' or case!=POSITIVE)), 'archive snapshot original actor and case')
+    refuse_if(type(payload['path']) is not str, 'archive snapshot path primitive')
     source=Path(payload['path'])
     data=inputs(host)
     expected_name=next(data['dist'].glob('*.tar.gz')).name.removesuffix('.tar.gz')
-    if str(source.resolve())!=str(source) or source.name!=expected_name:
-        raise Refused('archive original extracted root')
+    refuse_if(str(source.resolve())!=str(source) or source.name!=expected_name, 'archive original extracted root')
     if case in NEGATIVE:
         owned(source.parent,Path(host.meta['owned']))
     elif (source.parent.parent!=Path(host.meta['owned'])/'tmp'
@@ -60,14 +56,12 @@ def archive_inputs(path,case):
     uid=PREPARED_UID if case==POSITIVE else SOURCE_UID
     before=path.stat(follow_symlinks=False)
     names=sorted(item.name for item in path.iterdir())
-    if (str(path.resolve())!=str(path) or not stat.S_ISDIR(before.st_mode) or before.st_uid!=uid
+    refuse_if(str(path.resolve())!=str(path) or not stat.S_ISDIR(before.st_mode) or before.st_uid!=uid
             or before.st_mode&0o6022 or case!=POSITIVE and len(names)!=2
-            or len(list(path.glob('*.whl')))!=1 or len(list(path.glob('*.tar.gz')))!=1):
-        raise Refused('archive original two-member directory')
+            or len(list(path.glob('*.whl')))!=1 or len(list(path.glob('*.tar.gz')))!=1, 'archive original two-member directory')
     for name in names:
         read_regular(path/name,4*1024*1024,uid=uid,forbidden=0o6022,retain=False)
-    if list(_directory_key(path.stat(follow_symlinks=False)))!=list(_directory_key(before)):
-        raise Refused('archive input directory race')
+    refuse_if(list(_directory_key(path.stat(follow_symlinks=False)))!=list(_directory_key(before)), 'archive input directory race')
 
 
 
@@ -76,17 +70,15 @@ def proposal(host,actor,raw):
         from package_security import proposal as security_proposal
         return security_proposal(host,actor,raw)
     case=host.case
-    if raw['stdin'] is not None:
-        raise Refused('package undeclared stdin')
+    refuse_if(raw['stdin'] is not None, 'package undeclared stdin')
     data=inputs(host)
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
     checkout,owned_root=Path(host.meta['checkout']),Path(host.meta['owned'])
     leaf=actor['role']=='archive-checker' or case in NEGATIVE
     if leaf:
         state=host.fixture_roots.get(case)
-        if (state is None or state['parent']!=actor['birth'] or state['token']!=actor['token']
-                or actor['role']=='archive-checker' and case!=POSITIVE):
-            raise Refused('archive leaf original parent and snapshot')
+        refuse_if(state is None or state['parent']!=actor['birth'] or state['token']!=actor['token']
+                or actor['role']=='archive-checker' and case!=POSITIVE, 'archive leaf original parent and snapshot')
         cwd=state['document']['root']
         env=environment(host,case,'call') if actor['role']=='root' else dict(actor['profile']['environment'])
         if actor['role']=='archive-checker':
@@ -104,8 +96,7 @@ def proposal(host,actor,raw):
         path=data['dist'] if case==POSITIVE else Path(raw['argv'][-1])
         if case in MUTATIONS:
             owned(path.parent,owned_root)
-            if path.name!=MUTATIONS[case][0]:
-                raise Refused('archive exact original mutation directory')
+            refuse_if(path.name!=MUTATIONS[case][0], 'archive exact original mutation directory')
         archive_inputs(path,case)
         env=environment(host,case,'call')
         if case==POSITIVE:
@@ -119,14 +110,12 @@ def proposal(host,actor,raw):
         workspace=Path(raw['cwd'])
         owned(workspace,owned_root)
         current=[str(workspace)]
-        if host.fixture_roots.setdefault('<installed-workspace>',current)!=current:
-            raise Refused('installed shared fixture generation')
+        refuse_if(host.fixture_roots.setdefault('<installed-workspace>',current)!=current, 'installed shared fixture generation')
         if case==LIFECYCLE:
             code=literal(checkout,CONTRACT,'_run_installed_lifecycle','script')
             probe=workspace/'lifecycle-probe'
             info=probe.stat(follow_symlinks=False)
-            if probe.resolve()!=probe or not stat.S_ISDIR(info.st_mode) or info.st_uid!=SOURCE_UID or info.st_mode&0o6022:
-                raise Refused('installed owned lifecycle state root')
+            refuse_if(probe.resolve()!=probe or not stat.S_ISDIR(info.st_mode) or info.st_uid!=SOURCE_UID or info.st_mode&0o6022, 'installed owned lifecycle state root')
             tail=(str(probe),str(checkout),str(data['installed_site']),str(data['dependency_site']))
             env=environment(host,case,'call')
         else:

@@ -5,7 +5,7 @@ from pathlib import Path
 import subprocess
 
 from case_inventory import LIMIT,document,seal,identity
-from content_manifest import Refused,native_digest,read_regular
+from content_manifest import Refused, native_digest, read_regular, refuse_if
 from control_transport import unique
 from full_source import environment,child_environment
 from source_profile import PYTEST_COMMAND
@@ -15,8 +15,7 @@ def prepare_uv(metadata):
     runtime=Path(metadata['runtime_root'])
     # Warm only stock uv's interpreter metadata before candidate execution.
     # A cache miss during the guarded run never grants a Python helper launch.
-    if subprocess.check_output([str(runtime/'bin/uv'),'--version'],text=True,timeout=5).split()[:2]!=['uv','0.11.8']:
-        raise Refused('full source supported stock uv version')
+    refuse_if(subprocess.check_output([str(runtime/'bin/uv'),'--version'],text=True,timeout=5).split()[:2]!=['uv','0.11.8'], 'full source supported stock uv version')
     subprocess.check_output([str(runtime/'bin/uv'),'run','/usr/bin/env'],
         cwd=metadata['checkout'],env=environment(metadata),timeout=30)
     cache=Path(metadata['owned'])/'uv-cache'
@@ -64,15 +63,13 @@ def collection(host,actor,payload):
     if not host.full or host.cases or payload['path']!=str(path):
         raise Refused('full source collection frontier')
     body,_,pin=read_regular(path,LIMIT,uid=20000,mode=0o444)
-    if pin!=payload['sha256']:
-        raise Refused('full source collection current bytes')
+    refuse_if(pin!=payload['sha256'], 'full source collection current bytes')
     value=document(json.loads(body,object_pairs_hook=unique))
     if (not value['cases'] or value['source']!=host.meta['source_sha256']
             or value['dependency']!=host.meta['dependency_sha256']):
         raise Refused('full source complete discovery binding')
     host.cases=tuple(identity(node) for node in value['cases'])
-    if len(set(host.cases))!=len(host.cases):
-        raise Refused('full source ambiguous case references')
+    refuse_if(len(set(host.cases))!=len(host.cases), 'full source ambiguous case references')
     host.meta['cases']=seal(value,host.directory)
     return {'ok':True,'reference':host.meta['cases']}
 

@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 import stat
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from git_policy import image, regular
 from launch_policy import Expected, build_expected
 
@@ -62,8 +62,7 @@ def shell():
 
 
 def expected(case,cwd,owned,native,native_pin):
-    if type(case) is not str or case not in CASES or type(cwd) is not str:
-        raise Refused('preflight exact case')
+    refuse_if(type(case) is not str or case not in CASES or type(cwd) is not str, 'preflight exact case')
     root=Path(cwd)
     if (str(root.resolve())!=cwd or not root.is_relative_to(owned/'pytest') or root==owned/'pytest'):
         raise Refused('preflight original fixture root')

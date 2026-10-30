@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 import types
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from launch_policy import build_expected
 
 PRODUCT = 'src/unrest_harness/acp_runner.py'
@@ -83,19 +83,16 @@ def template_environment(case,checkout):
 
 
 def expected(case, role, cwd, checkout, native, native_pin, root_environment, owned, *, base=None,observed=None):
-    if case not in EXECUTION_CASES or role not in (('session-invalid','sleep') if case in STARTUP_CASES else ('mock-acp', 'sleep')):
-        raise Refused('ordinary closed launch role')
+    refuse_if(case not in EXECUTION_CASES or role not in (('session-invalid','sleep') if case in STARTUP_CASES else ('mock-acp', 'sleep')), 'ordinary closed launch role')
     if role == 'sleep':
-        if cwd != str(checkout):
-            raise Refused('ordinary inherited fixture cwd')
+        refuse_if(cwd != str(checkout), 'ordinary inherited fixture cwd')
         env = {**root_environment, 'PYTEST_VERSION': '9.0.2', 'PYTEST_CURRENT_TEST': case + ' (call)'}
         if case in TEMPLATE_CASES:
             env.update(template_environment(case,checkout))
         if case in CRASH_CASES:
             env['ANTHROPIC_API_KEY'] = 'batch-crash-known-value'
         if case==MOCK_CASE:
-            if base is None:
-                raise Refused('mock-agent owned fixture absent')
+            refuse_if(base is None, 'mock-agent owned fixture absent')
             from node_environment import baseline
             selected={**baseline(root_environment,base/'.unrest','p1'),
                 **{key:observed.get(key) for key in ('UNREST_HANDOFF_PATH','UNREST_NODE_ID','UNREST_NODE_TYPE')}}
@@ -132,9 +129,7 @@ def expected(case, role, cwd, checkout, native, native_pin, root_environment, ow
 def plain_environment(value):
     if type(value) is types.MappingProxyType:
         referents = gc.get_referents(value)
-        if len(referents) != 1 or type(referents[0]) is not dict:
-            raise Refused('ordinary plan underlying dictionary')
+        refuse_if(len(referents) != 1 or type(referents[0]) is not dict, 'ordinary plan underlying dictionary')
         value = referents[0]
-    if type(value) is not dict or any(type(k) is not str or type(v) is not str for k, v in value.items()):
-        raise Refused('ordinary environment primitives')
+    refuse_if(type(value) is not dict or any(type(k) is not str or type(v) is not str for k, v in value.items()), 'ordinary environment primitives')
     return dict(value)

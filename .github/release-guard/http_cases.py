@@ -1,7 +1,7 @@
 """Finite real-MCP supervision fixtures; provider command strings grant no launch."""
 from pathlib import Path
 
-from content_manifest import Refused
+from content_manifest import Refused as Refused, refuse_if
 from git_policy import image
 from launch_policy import admit_expected,build_expected
 
@@ -16,25 +16,22 @@ CASES = (*SUPERVISION, *ROLE_HTTP)
 def expected(host, actor, raw):
     host.root_only(actor)
     case = host.case
-    if (case not in (*SUPERVISION,*RESTART,*COMPOSED) or case in (*RESTART,*COMPOSED) and raw['argv'][:1]!=['ps']
-            or raw['stdin'] is not None):
-        raise Refused('HTTP original case or input')
+    refuse_if(case not in (*SUPERVISION,*RESTART,*COMPOSED) or case in (*RESTART,*COMPOSED) and raw['argv'][:1]!=['ps']
+            or raw['stdin'] is not None, 'HTTP original case or input')
     native, pin = host.binding['entry']['path'], host.binding['entry']['sha256']
     checkout, owned = Path(host.meta['checkout']), Path(host.meta['owned'])
     environment = {**host.meta_environment(), 'PYTEST_VERSION': '9.0.2', 'PYTEST_CURRENT_TEST': case+' (call)'}
     if raw['argv'][:1] == ['ps']:
         servers = [row for row in host.intents.values() if row['case']==case and row['role']=='mcp']
-        if (not servers or any(not row['consumed'] for row in servers)
-                or case not in (*RESTART,*COMPOSED) and (len(servers)!=1 or not host.ledger.reaped(servers[0]['birth'],servers[0]['token']))):
-            raise Refused('HTTP inventory before original server wait')
+        refuse_if(not servers or any(not row['consumed'] for row in servers)
+                or case not in (*RESTART,*COMPOSED) and (len(servers)!=1 or not host.ledger.reaped(servers[0]['birth'],servers[0]['token'])), 'HTTP inventory before original server wait')
         role, executable, kind = 'ps', '/usr/bin/ps', 'native'
         vector, cwd = ('ps', '-axo', 'pid=,ppid=,pgid='), str(checkout)
         pin = image(executable)
         port = None
     else:
         root = Path(raw['cwd'])
-        if str(root.resolve())!=raw['cwd'] or root.name!='workspace' or not root.parent.is_relative_to(owned/'pytest'):
-            raise Refused('HTTP original owned workspace')
+        refuse_if(str(root.resolve())!=raw['cwd'] or root.name!='workspace' or not root.parent.is_relative_to(owned/'pytest'), 'HTTP original owned workspace')
         base, role, executable, kind = root.parent, 'mcp', native, 'python-command'
         subject = case.rsplit('-',1)[1][:-1]
         mode = subject.replace('_','-')

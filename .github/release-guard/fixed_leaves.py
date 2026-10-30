@@ -3,7 +3,7 @@ import hashlib
 from pathlib import Path
 import stat
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from owned_fixture import retain
 from launch_policy import build_expected,source_unit,literal
 
@@ -44,8 +44,7 @@ def expected(host,operation,argv,cwd,environment,native,pin):
     checkout,owned=Path(host.meta['checkout']),Path(host.meta['owned'])
     kind,reference,expected_cwd='python-command',None,cwd
     if case in STORAGE_CASES:
-        if len(argv)!=4:
-            raise Refused('storage finite read declaration')
+        refuse_if(len(argv)!=4, 'storage finite read declaration')
         target=Path(argv[3])
         actual=Path(cwd)/target
         try:
@@ -62,8 +61,7 @@ def expected(host,operation,argv,cwd,environment,native,pin):
             raise Refused('storage owned regular read input')
         vector=(native,'-c',PROGRAM,str(target))
     elif case in INSPECTION_CASES:
-        if len(argv)!=(6 if case==RECOVERY else 5):
-            raise Refused('inspection finite original arguments')
+        refuse_if(len(argv)!=(6 if case==RECOVERY else 5), 'inspection finite original arguments')
         path=case.split('::')[0]
         if case==SEALED:
             source_unit(checkout,path,INSPECTION_PINS[path],case.split('::')[1:])
@@ -93,34 +91,27 @@ def expected(host,operation,argv,cwd,environment,native,pin):
                 or not project_id or Path(project_id).name!=project_id or project_id in ('.','..')):
             raise Refused('inspection owned original home')
         record=home/'projects'/project_id/'.unrest-runtime/project.json'
-        if record.resolve()!=record:
-            raise Refused('inspection aliased project record')
+        refuse_if(record.resolve()!=record, 'inspection aliased project record')
         kind,reference=('python-script',REPLAY_PIN) if case==SEALED else ('python-command',None)
     elif case in COMPLETION_CASES:
-        if operation not in COMPLETION_SEQUENCES[case]:
-            raise Refused('completion exact primitive sequence')
+        refuse_if(operation not in COMPLETION_SEQUENCES[case], 'completion exact primitive sequence')
         suffix,phase=COMPLETION_CASES[case]
-        if len(argv)!=(5 if operation=='crash' and phase is not None else 4):
-            raise Refused('completion original argument count')
+        refuse_if(len(argv)!=(5 if operation=='crash' and phase is not None else 4), 'completion original argument count')
         path,name=case.split('::')
         name=name.split('[')[0]
         program=literal(source_unit(checkout,path,COMPLETION_PINS[path],(name,)),'retry' if operation=='retry' else 'script')
         root=Path(argv[3]).parents[len(Path(suffix).parts)-1]
         root=retain(host,root, OWNER)
-        if cwd!=str(checkout):
-            raise Refused('completion changed fixture generation or cwd')
+        refuse_if(cwd!=str(checkout), 'completion changed fixture generation or cwd')
         vector=(native,'-c',program,str(root/suffix),*((phase,) if operation=='crash' and phase is not None else ()))
     elif case==MEASUREMENT_CASE:
-        if len(argv)!=8:
-            raise Refused('simulation exact original case')
+        refuse_if(len(argv)!=8, 'simulation exact original case')
         for path,digest in MEASUREMENT_PINS.items():
-            if hashlib.sha256((checkout/path).read_bytes()).hexdigest()!=digest:
-                raise Refused('simulation original input bytes')
+            refuse_if(hashlib.sha256((checkout/path).read_bytes()).hexdigest()!=digest, 'simulation original input bytes')
         root=retain(host,Path(argv[7]).parent, OWNER)
         vector=(native,str(checkout/MEASUREMENT_TOOL),'--case-manifest',str(checkout/MEASUREMENT_FIXTURE),
             '--mode','simulated','--output',str(root/'flow.json'))
-        if cwd!=str(checkout):
-            raise Refused('simulation original working directory')
+        refuse_if(cwd!=str(checkout), 'simulation original working directory')
         kind,reference='python-script',MEASUREMENT_PINS[MEASUREMENT_TOOL]
     else:
         raise Refused('fixed leaf has no declaration')

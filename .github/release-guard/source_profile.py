@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 import sys
 
-from content_manifest import Refused, capture
+from content_manifest import Refused, capture, refuse_if
 from linux_observation import credential_identity, process_identity
 from process_ledger import Birth, canonical
 from postbuild_root import CASES as ARCHIVE_CASES, COMMAND as ARCHIVE_COMMAND
@@ -40,8 +40,7 @@ def inherited_descriptor(expected, descriptor, info, flags, uid):
 
 def validate(profile: dict, event: str, arguments: tuple) -> dict:
     full=type(profile['cases']) is dict
-    if Path(profile['native']) != Path(profile['runtime_root']) / 'bin/python-unrest-guard-control':
-        raise Refused('source native runtime root')
+    refuse_if(Path(profile['native']) != Path(profile['runtime_root']) / 'bin/python-unrest-guard-control', 'source native runtime root')
     actual = process_identity(os.getpid())
     filesystem = os.stat('/')
     root = profile.get('filesystem_root')
@@ -91,8 +90,7 @@ def validate(profile: dict, event: str, arguments: tuple) -> dict:
                     continue
                 seen.append(inherited_descriptor(inherited, descriptor, info,
                                                   fcntl.fcntl(descriptor, fcntl.F_GETFL), actual['uids'][0]))
-        if seen != inherited:
-            raise Refused('source missing inherited inventory')
+        refuse_if(seen != inherited, 'source missing inherited inventory')
     from execution_spec import validate as validate_execution
     validate_execution(profile,event,arguments,Path(__file__).parent.parent/'profiles')
     native = profile['native']

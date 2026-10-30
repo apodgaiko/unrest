@@ -1,5 +1,5 @@
 """One exact non-launching original regression selection, never a release root."""
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from launch_policy import source_unit,assignment,literal
 import ast
 
@@ -26,8 +26,7 @@ def hermetic(checkout, environment):
     overrides=[node for node in ast.walk(function) if isinstance(node,ast.Call)
                and isinstance(node.func,ast.Attribute) and node.func.attr=='update']
     values.update(ast.literal_eval(overrides[0].args[0]))
-    if set(values)!=names:
-        raise Refused('hermetic complete environment inventory')
+    refuse_if(set(values)!=names, 'hermetic complete environment inventory')
     return literal(tree,'_PYTEST_RESTORE_PROBE'), {**environment,**values,
         'UNREST_TEST_ISOLATION_UNRELATED_SENTINEL':'outer-unrelated-value'}
 

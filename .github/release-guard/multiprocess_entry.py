@@ -5,7 +5,7 @@ import stat
 import fcntl
 import ctypes
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from launch_policy import build_expected,check_expected,admit_expected
 MODULES=frozenset('tests/'+name+'.py' for name in (
     'test_multiprocess_resource_ownership','test_attention','test_patch_transaction',
@@ -27,8 +27,7 @@ def fd_record(pid,fd):
     if (len(flags)!=1 or not stat.S_ISFIFO(info.st_mode) or info.st_uid!=20000):
         raise Refused('spawn owned FIFO')
     access=int(flags[0],8)&os.O_ACCMODE
-    if access not in (os.O_RDONLY,os.O_WRONLY):
-        raise Refused('spawn FIFO direction')
+    refuse_if(access not in (os.O_RDONLY,os.O_WRONLY), 'spawn FIFO direction')
     return [fd,info.st_dev,info.st_ino,access]
 
 
@@ -64,8 +63,7 @@ def stderr_record(pid,fd):
         raise Refused('tracker anonymous captured stderr')
     # Linux/x86-64 KCMP_FILE proves the same open file description, not merely
     # another descriptor pointing at the same inode.
-    if ctypes.CDLL(None,use_errno=True).syscall(312,pid,pid,0,fd,2)!=0:
-        raise Refused('tracker stderr open file identity')
+    refuse_if(ctypes.CDLL(None,use_errno=True).syscall(312,pid,pid,0,fd,2)!=0, 'tracker stderr open file identity')
     flags=[line.split()[1] for line in (path.parent.parent/'fdinfo'/str(fd)).read_text().splitlines() if line.startswith('flags:')]
     if len(flags)!=1 or int(flags[0],8)&os.O_ACCMODE!=os.O_RDWR:
         raise Refused('tracker stderr access')
@@ -83,8 +81,7 @@ def expected(case,argv,passfds,native,pin,checkout,environment):
         value=argv[4][len(prefix):-1]
         if not value.isascii() or not value.isdigit() or str(int(value))!=value or not 3<=int(value)<=1024:
             raise Refused('tracker read descriptor')
-        if len(passfds)!=2 or int(value) not in passfds:
-            raise Refused('tracker descriptor inventory')
+        refuse_if(len(passfds)!=2 or int(value) not in passfds, 'tracker descriptor inventory')
         role='mp-tracker'
         descriptors=sorted(fd for fd in passfds if fd>2)
     else:
@@ -93,8 +90,7 @@ def expected(case,argv,passfds,native,pin,checkout,environment):
                 or argv[5]!='--multiprocessing-fork'):
             raise Refused('spawn exact command and target declaration')
         parts=argv[4][len(prefix):-1].split(', pipe_handle=')
-        if (len(parts)!=2 or any(not value.isascii() or not value.isdigit() or str(int(value))!=value or not 3<=int(value)<=1024 for value in parts)):
-            raise Refused('spawn tracker and bootstrap descriptors')
+        refuse_if(len(parts)!=2 or any(not value.isascii() or not value.isdigit() or str(int(value))!=value or not 3<=int(value)<=1024 for value in parts), 'spawn tracker and bootstrap descriptors')
         tracker,reader=map(int,parts)
         if (not 3<=len(passfds)<=7 or tracker==reader
                 or not {tracker,reader}<=set(passfds) or 2 in passfds
@@ -129,23 +125,20 @@ def proposal(host,actor,raw):
     records=[row for row in host.intents.values() if row['case']==host.case]
     tracker=next((row for row in records if row['role']=='mp-tracker'),None)
     if role=='mp-child':
-        if tracker is None:
-            raise Refused('spawn needs owned tracker')
+        refuse_if(tracker is None, 'spawn needs owned tracker')
         if not host.executed(tracker):
             return None
     if role=='mp-tracker':
         reader=int(raw['argv'][4].removeprefix('from multiprocessing.resource_tracker import main;main(')[:-1])
         tracker_read=fd_record(actor['birth'].pid,reader)
         inherited=[tracker_read if fd==reader else stderr_record(actor['birth'].pid,fd) for fd in descriptors]
-        if tracker_read[3]!=os.O_RDONLY:
-            raise Refused('tracker read direction')
+        refuse_if(tracker_read[3]!=os.O_RDONLY, 'tracker read direction')
     else:
         inherited=[]
         for fd in descriptors:
             inherited.append(inherited_record(host,actor,fd))
     if role=='mp-child':
-        if tracker is None:
-            raise Refused('spawn missing owned tracker')
+        refuse_if(tracker is None, 'spawn missing owned tracker')
         tracker_fd=int(raw['argv'][4].split('tracker_fd=',1)[1].split(',',1)[0])
         tracked=next(row for row in inherited if row[0]==tracker_fd)
         retained=fd_record(tracker['pid'],tracker['tracker_read'][0])
@@ -197,5 +190,4 @@ def inherited(profile,actual):
         if (reader is None or fd==reader) and flags&~(os.O_ACCMODE|os.O_CLOEXEC|((0o100000|os.O_NOFOLLOW) if len(row)==5 else 0)):
             raise Refused('spawn descriptor flags')
         seen.append(row)
-    if sorted(seen)!=sorted(records):
-        raise Refused('spawn inherited descriptor generation')
+    refuse_if(sorted(seen)!=sorted(records), 'spawn inherited descriptor generation')

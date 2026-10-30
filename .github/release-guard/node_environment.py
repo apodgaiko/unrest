@@ -1,7 +1,7 @@
 """Exact security settings and scoped application data for owned role processes."""
 from pathlib import Path
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 
 
 def baseline(ambient,home,project):
@@ -23,16 +23,14 @@ def environment(ambient,home,project,node,role,attempt):
 
 
 def component(value):
-    if (type(value) is not str or not 0<len(value)<=4096 or value in ('.','..')
-            or any(char in value for char in ('/','\\','\0'))):
-        raise Refused('node scoped data component')
+    refuse_if(type(value) is not str or not 0<len(value)<=4096 or value in ('.','..')
+            or any(char in value for char in ('/','\\','\0')), 'node scoped data component')
     return value
 
 
 def project_path(home,identity):
     path=home/'projects'/component(identity)
-    if path.resolve()!=path:
-        raise Refused('node canonical private project')
+    refuse_if(path.resolve()!=path, 'node canonical private project')
     return path
 
 
@@ -55,12 +53,10 @@ def scoped(observed,base,home,project,role,*,module):
         data={key:str(path),'UNREST_NODE_ID':node,'UNREST_NODE_TYPE':role}
         if module:
             body=observed.get('UNREST_NODE_ASSIGNMENT','')
-            if type(body) is not str or len(body.encode())>8192:
-                raise Refused('node assignment bound')
+            refuse_if(type(body) is not str or len(body.encode())>8192, 'node assignment bound')
             data['UNREST_NODE_ASSIGNMENT']=body
     if not valid or path.resolve()!=path:
         raise Refused('node output outside acquired project')
     expected={**base,'UNREST_HOME':str(home),'UNREST_PROJECT_ID':project,'UNREST_MISSION_ID':mission,**data}
-    if observed!=expected:
-        raise Refused('node exact security environment')
+    refuse_if(observed!=expected, 'node exact security environment')
     return expected

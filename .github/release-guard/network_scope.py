@@ -4,12 +4,11 @@ import fcntl
 import socket
 import struct
 from pathlib import Path
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 
 
 def port_argument(value):
-    if type(value) is not str or not value.isascii() or not value.isdigit() or not 0<len(value)<=5:
-        raise Refused('source literal loopback port argument')
+    refuse_if(type(value) is not str or not value.isascii() or not value.isdigit() or not 0<len(value)<=5, 'source literal loopback port argument')
     port=int(value)
     if not 1<=port<=65535:
         raise Refused('source literal loopback port argument')
@@ -34,8 +33,7 @@ def isolated(before):
 
 
 def configure(before):
-    if os.getuid()!=0:
-        raise Refused('private network setup requires its trusted root')
+    refuse_if(os.getuid()!=0, 'private network setup requires its trusted root')
     isolated(before)
     with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as control:
         request=struct.pack('16sH14x',b'lo',0)

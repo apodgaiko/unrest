@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 
 TEST = 'tests/test_experimental_bootstrap.py'
 CATALOGUE = 'src/unrest_harness/provider_data/codex-rust-v0.160.1-models.json'
@@ -45,8 +45,7 @@ BY_CASE = {case.nodeid: case for case in DECLARATIONS}
 
 
 def declaration(case):
-    if type(case) is not str or case not in BY_CASE:
-        raise Refused('unknown original bootstrap case')
+    refuse_if(type(case) is not str or case not in BY_CASE, 'unknown original bootstrap case')
     return BY_CASE[case]
 
 

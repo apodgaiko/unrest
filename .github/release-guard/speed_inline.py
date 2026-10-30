@@ -2,7 +2,7 @@
 import ast
 from pathlib import Path
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from launch_policy import render_string
 from owned_fixture import acquire
 
@@ -17,11 +17,9 @@ PRELUDE = 'from product_audit import child;child();'
 
 
 def directory(path, owned, case):
-    if type(path) is not str or case not in (*CASES,CLI_CASE):
-        raise Refused('speed fixture path primitive')
+    refuse_if(type(path) is not str or case not in (*CASES,CLI_CASE), 'speed fixture path primitive')
     acquire(path,owned,OWNER)
-    if not all(c.isascii() and (c.isalnum() or c in '/._-') for c in path):
-        raise Refused('speed source template path')
+    refuse_if(not all(c.isascii() and (c.isalnum() or c in '/._-') for c in path), 'speed source template path')
     return (path,)
 
 
@@ -33,8 +31,7 @@ def fixture(host):
 
 
 def body(tree, operation, root, checkout):
-    if root is None:
-        raise Refused('speed fixture missing')
+    refuse_if(root is None, 'speed fixture missing')
     function=next(node for node in tree.body if isinstance(node,ast.FunctionDef) and node.name==NAMES[CASES.index(operation)])
     calls=[node for node in ast.walk(function) if isinstance(node,ast.Call)
            and isinstance(node.func,ast.Name) and node.func.id=='_isolated_python' and len(node.args)==1]
@@ -51,11 +48,9 @@ def body(tree, operation, root, checkout):
 
 def cli_expected(native,pin,checkout,root,operation):
     from launch_policy import build_expected
-    if root is None or operation not in tuple('run-'+str(i) for i in range(5)):
-        raise Refused('speed CLI finite run')
+    refuse_if(root is None or operation not in tuple('run-'+str(i) for i in range(5)), 'speed CLI finite run')
     run=root/operation
-    if run.resolve()!=run:
-        raise Refused('speed CLI output alias')
+    refuse_if(run.resolve()!=run, 'speed CLI output alias')
     vector=(native,str(checkout/CLI_TOOL),'--fixture',str(checkout/'tests/fixtures/v04_speed_workloads.v2.json'),
             '--schema',str(checkout/'src/unrest_harness/schemas/v04-speed-result.v2.schema.json'),
             '--result-root',str(run/'artifacts'),'--output',str(run/'speed-result.json'),

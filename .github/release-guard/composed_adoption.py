@@ -7,7 +7,7 @@ import re
 import time
 
 from composed_cases import ADOPT
-from content_manifest import Refused,read_regular
+from content_manifest import Refused as Refused, read_regular, refuse_if
 from control_transport import unique
 from cohort_controller import publish
 from linux_observation import process_identity,credential_identity
@@ -36,8 +36,7 @@ def refresh(host):
             continue
         if process.parent is None or host.ledger.process(process.parent).exit is None:
             continue
-        if host.case not in ADOPT or row['composed_worker']!=ADOPT[host.case] or not actor['body_ready']:
-            raise Refused('composed adoption exact authored worker')
+        refuse_if(host.case not in ADOPT or row['composed_worker']!=ADOPT[host.case] or not actor['body_ready'], 'composed adoption exact authored worker')
         try:
             observed=process_identity(actor['birth'].pid)
         except (FileNotFoundError,ProcessLookupError):
@@ -46,8 +45,7 @@ def refresh(host):
             continue
         if canonical(observed)==process.registered_identity:
             continue
-        if observed['namespaces']['pid']!=host.meta['pid_namespace']:
-            raise Refused('composed adoption namespace')
+        refuse_if(observed['namespaces']['pid']!=host.meta['pid_namespace'], 'composed adoption namespace')
         host.ledger.adopt(actor['birth'],observed)
 
 
@@ -64,12 +62,10 @@ def closeout(host,children):
     adopted=[actor for actor in children if host.ledger.process(actor['birth']).adopted_identity is not None]
     if not adopted:
         return host.case not in APPROVAL_CRASH
-    if len(adopted)!=(2 if host.case in APPROVAL_CRASH else 1):
-        raise Refused('composed adoption closeout population')
+    refuse_if(len(adopted)!=(2 if host.case in APPROVAL_CRASH else 1), 'composed adoption closeout population')
     if host.case in APPROVAL_CRASH:
         from approval_adoption import certified_owner
-        if adopted!=certified_owner(host):
-            raise Refused('approval follower closeout exact population')
+        refuse_if(adopted!=certified_owner(host), 'approval follower closeout exact population')
     return all(receipt(host,actor) for actor in adopted)
 
 
@@ -82,15 +78,13 @@ def receipt(host,actor):
     request=json.loads(body,object_pairs_hook=unique)
     receipt=path.with_suffix('.receipt')
     if not receipt.exists():
-        if not 0<=time.monotonic()-request['started']<=20:
-            raise Refused('composed init closeout deadline')
+        refuse_if(not 0<=time.monotonic()-request['started']<=20, 'composed init closeout deadline')
         return False
     body,_,_=read_regular(receipt,4096,uid=0,mode=0o444)
     value=json.loads(body,object_pairs_hook=unique)
-    if (value!={**request,'raw':value.get('raw'),'init_pid':1,'namespace':host.meta['pid_namespace'],'waited':value.get('waited')}
+    refuse_if(value!={**request,'raw':value.get('raw'),'init_pid':1,'namespace':host.meta['pid_namespace'],'waited':value.get('waited')}
             or type(value['waited']) is not float or not 0<=value['waited']-request['started']<=20
-            or value['waited']>time.monotonic()):
-        raise Refused('composed init receipt scope')
+            or value['waited']>time.monotonic(), 'composed init receipt scope')
     if process.init_wait is None:
         host.ledger.retire_adopted(actor['birth'],value['raw'])
         host.adoptions.append({**value,'birth':canonical(process.identity),
@@ -100,27 +94,22 @@ def receipt(host,actor):
 
 
 def host_tick(directory):
-    if os.getpid()!=1:
-        raise Refused('composed actual namespace init')
+    refuse_if(os.getpid()!=1, 'composed actual namespace init')
     for path in sorted(Path(directory).glob('composed-closeout-*.json')):
-        if not re.fullmatch(r'composed-closeout-[a-f0-9]{32}\.json',path.name):
-            raise Refused('composed init request name')
+        refuse_if(not re.fullmatch(r'composed-closeout-[a-f0-9]{32}\.json',path.name), 'composed init request name')
         receipt=path.with_suffix('.receipt')
         if receipt.exists():
             continue
         body,_,_=read_regular(path,4096,uid=20001,mode=0o444)
         value=json.loads(body,object_pairs_hook=unique)
-        if (set(value)!={'case','started','identity','token'} or value['case'] not in CLOSEOUT
+        refuse_if(set(value)!={'case','started','identity','token'} or value['case'] not in CLOSEOUT
                 or type(value['started']) is not float or not 0<=time.monotonic()-value['started']<=20
-                or path.name!='composed-closeout-'+value['token']+'.json'):
-            raise Refused('composed init exact request')
+                or path.name!='composed-closeout-'+value['token']+'.json', 'composed init exact request')
         birth=Birth.read(value['identity'])
-        if birth.parent!=1 or birth.uid!=20000 or canonical(credential_identity(birth.pid))!=value['identity']:
-            raise Refused('composed init actual child identity')
+        refuse_if(birth.parent!=1 or birth.uid!=20000 or canonical(credential_identity(birth.pid))!=value['identity'], 'composed init actual child identity')
         pid,raw=os.waitpid(birth.pid,os.WNOHANG)
         if pid:
-            if pid!=birth.pid:
-                raise Refused('composed init waited wrong child')
+            refuse_if(pid!=birth.pid, 'composed init waited wrong child')
             publish(receipt,{**value,'raw':raw,'init_pid':os.getpid(),'namespace':os.readlink('/proc/self/ns/pid'),'waited':time.monotonic()})
 
 
@@ -131,27 +120,22 @@ def signal(host,actor,payload):
     server=actor_slot(host,actor)
     rows=[row for row in host.intents.values() if row['case']==host.case and row.get('adoptable')
         and row.get('pid')==payload['pid'] and host.executed(row)]
-    if host.case not in ADOPT or server['server_slot']<1 or len(rows)!=1:
-        raise Refused('composed resumed signal owner')
+    refuse_if(host.case not in ADOPT or server['server_slot']<1 or len(rows)!=1, 'composed resumed signal owner')
     row=rows[0]
     child=host.actors[payload['pid']]
     process=host.ledger.process(child['birth'])
-    if process.adopted_identity is None or not row['run_control'] or not row['run_project']:
-        raise Refused('composed resumed signal admission')
-    if not (payload['signal']==0 and payload['group'] is False or
-            payload['signal']==15 and payload['group'] is True and 15 not in child['signals']):
-        raise Refused('composed resumed finite signal')
+    refuse_if(process.adopted_identity is None or not row['run_control'] or not row['run_project'], 'composed resumed signal admission')
+    refuse_if(not (payload['signal']==0 and payload['group'] is False or
+            payload['signal']==15 and payload['group'] is True and 15 not in child['signals']), 'composed resumed finite signal')
     if process.exit is not None or process.terminal is not None:
         return {'ok':True,'live':False}
     home=root(host)/'.unrest'
     cursor=record(home/'.unrest-runtime/runs'/(hashlib.sha256(row['run_id'].encode()).hexdigest()+'.worker.json'))
     expected={'run_id':row['run_id'],'generation':1,'control_identity_digest':row['run_control'],
         'pid':child['birth'].pid,'pgid':child['birth'].pid}
-    if any(cursor.get(key)!=value for key,value in expected.items()):
-        raise Refused('composed resumed signal cursor corroboration')
+    refuse_if(any(cursor.get(key)!=value for key,value in expected.items()), 'composed resumed signal cursor corroboration')
     observed=process_identity(child['birth'].pid)
-    if canonical(observed)!=process.adopted_identity or observed['namespaces']['pid']!=host.meta['pid_namespace']:
-        raise Refused('composed resumed process changed')
+    refuse_if(canonical(observed)!=process.adopted_identity or observed['namespaces']['pid']!=host.meta['pid_namespace'], 'composed resumed process changed')
     if payload['signal']==15:
         record_group(host,child,15)
     return {'ok':True,'live':True}
@@ -169,9 +153,8 @@ def record_group(host,leader,signum):
         if ancestor.birth!=leader['birth'] or current.exit is not None or current.terminal is not None:
             continue
         actual=process_identity(member['birth'].pid)
-        if (Birth.read(actual)!=host.ledger.peer_birth(member['birth'])
-                or actual['namespaces']['pid']!=host.meta['pid_namespace']):
-            raise Refused('source signal group birth changed')
+        refuse_if(Birth.read(actual)!=host.ledger.peer_birth(member['birth'])
+                or actual['namespaces']['pid']!=host.meta['pid_namespace'], 'source signal group birth changed')
         if (actual['pgid'],actual['sid'])==(leader['birth'].pid,leader['birth'].pid):
             members.append(member)
     for member in members:

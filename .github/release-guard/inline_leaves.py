@@ -1,7 +1,7 @@
 """Closed root-owned inline leaves with one constructor and admission path."""
 from pathlib import Path
 
-from content_manifest import Refused
+from content_manifest import Refused as Refused, refuse_if
 from launch_policy import source_unit,build_expected,admit_expected,pinned_body
 from owned_fixture import acquire,retain
 from cleanup_launch import TEST,base_path
@@ -59,8 +59,7 @@ DECLARATIONS = {**STARTUP, **CLIENT, **INFLIGHT}
 
 
 def declaration(case):
-    if type(case) is not str or case not in DECLARATIONS:
-        raise Refused('cleanup inline finite case')
+    refuse_if(type(case) is not str or case not in DECLARATIONS, 'cleanup inline finite case')
     return DECLARATIONS[case]
 
 
@@ -80,8 +79,7 @@ CASES=(*TERMINAL_CASES,*READINESS_CASES,*DECLARATIONS)
 def proposal(host,actor,raw):
     host.root_only(actor)
     case=host.case
-    if case not in CASES or raw['stdin'] is not None:
-        raise Refused('inline finite original leaf')
+    refuse_if(case not in CASES or raw['stdin'] is not None, 'inline finite original leaf')
     checkout=Path(host.meta['checkout'])
     native=host.binding['entry']['path']
     executable,pin,kind=native,host.binding['entry']['sha256'],'python-command'
@@ -90,8 +88,7 @@ def proposal(host,actor,raw):
     if case in DECLARATIONS:
         records=[row for row in host.intents.values() if row['case']==case]
         maximum=child_count(case)
-        if len(records)>=maximum:
-            raise Refused('cleanup inline original child order')
+        refuse_if(len(records)>=maximum, 'cleanup inline original child order')
         if any(not host.executed(row) for row in records):
             return None
         if case in INFLIGHT and len(records)==2:
@@ -101,16 +98,14 @@ def proposal(host,actor,raw):
     elif case in TERMINAL_CASES:
         workspace=Path(raw['cwd'])
         if case in OPTIONAL:
-            if workspace!=checkout:
-                raise Refused('terminal optional-null original checkout cwd')
+            refuse_if(workspace!=checkout, 'terminal optional-null original checkout cwd')
             from ordinary_acp import TEST as ACP_TEST,PINS
             source_unit(checkout,ACP_TEST,PINS[ACP_TEST],('test_terminal_create_optional_nulls_use_omission_defaults',))
             from git_policy import image
             executable,pin,kind,vector,role='/usr/bin/true',image('/usr/bin/true'),'native',('/usr/bin/true',),'terminal-native'
             env={}
         else:
-            if workspace.name!='workspace':
-                raise Refused('terminal original workspace')
+            refuse_if(workspace.name!='workspace', 'terminal original workspace')
             owned=Path(host.meta['owned'])
             acquire(str(workspace),owned,OWNER)
             retain(host,workspace.parent,OWNER)

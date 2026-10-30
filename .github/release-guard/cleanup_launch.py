@@ -5,7 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from git_policy import image as system_git
 from launch_policy import build_expected
 from ordinary_acp import PRODUCT, PINS as ACP_PINS
@@ -37,8 +37,7 @@ CREDENTIAL = {'OPENAI_API_KEY': 'controlled-secret-observer-value'}
 
 
 def selection(case):
-    if type(case) is not str or case not in EXECUTION_CASES:
-        raise Refused('cleanup finite case declaration')
+    refuse_if(type(case) is not str or case not in EXECUTION_CASES, 'cleanup finite case declaration')
     if case in RUNNER:
         return True,case.rsplit('[',1)[1][:-1],'work'
     if case in SAVED:
@@ -48,8 +47,7 @@ def selection(case):
 
 
 def base_path(value, owned):
-    if type(value) is not str:
-        raise Refused('cleanup base path type')
+    refuse_if(type(value) is not str, 'cleanup base path type')
     path = Path(value)
     if (not path.is_absolute() or str(path.resolve(strict=True)) != value
             or path.parent != owned / 'pytest' or path.stat().st_uid != 20000):
@@ -63,8 +61,7 @@ def scenario(case, base):
 
 
 def snapshot_path(directory, case):
-    if case not in EXECUTION_CASES:
-        raise Refused('cleanup snapshot case')
+    refuse_if(case not in EXECUTION_CASES, 'cleanup snapshot case')
     return directory / ('scenario-' + hashlib.sha256(case.encode()).hexdigest() + '.json')
 
 

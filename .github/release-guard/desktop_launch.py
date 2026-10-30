@@ -2,7 +2,7 @@
 from pathlib import Path
 import stat
 
-from content_manifest import Refused
+from content_manifest import Refused as Refused, refuse_if
 from owned_fixture import acquire
 from git_policy import image
 from launch_policy import admit_expected,build_expected
@@ -17,41 +17,34 @@ def directory(path, owned):
     root=Path(path)
     _,info=acquire(path,owned,OWNER)
     outer=root.parent.stat(follow_symlinks=False)
-    if (str(root.resolve())!=path or root.name!='desktop'
+    refuse_if(str(root.resolve())!=path or root.name!='desktop'
             or not stat.S_ISDIR(info.st_mode) or info.st_uid!=OWNER
-            or any(stat.S_IMODE(row.st_mode)!=0o700 for row in (info,outer))):
-        raise Refused('desktop exact owned fixture directory')
+            or any(stat.S_IMODE(row.st_mode)!=0o700 for row in (info,outer)), 'desktop exact owned fixture directory')
     return (path,)
 
 
 def retained(host):
     row=host.fixture_roots.get(CASE)
-    if row is None or directory(row[0],Path(host.meta['owned']))!=row:
-        raise Refused('desktop fixture generation')
+    refuse_if(row is None or directory(row[0],Path(host.meta['owned']))!=row, 'desktop fixture generation')
     return Path(row[0])
 
 
 def proposal(host,actor,raw):
-    if host.case!=CASE or raw['stdin'] is not None:
-        raise Refused('desktop exact case and input')
+    refuse_if(host.case!=CASE or raw['stdin'] is not None, 'desktop exact case and input')
     records=[row for row in host.intents.values() if row['case']==CASE]
     query=actor['role']=='desktop'
     if not query:
         host.root_only(actor)
-        if records:
-            raise Refused('desktop sole server')
+        refuse_if(records, 'desktop sole server')
         row=directory(raw['cwd'],Path(host.meta['owned']))
-        if host.fixture_roots.setdefault(CASE,row)!=row:
-            raise Refused('desktop root replacement')
+        refuse_if(host.fixture_roots.setdefault(CASE,row)!=row, 'desktop root replacement')
     root=retained(host)
     native=host.binding['entry']['path']
     if query:
         servers=[row for row in records if row['role']=='desktop' and row['consumed']
                  and row['pid']==actor['birth'].pid and row['birth']==actor['birth'] and row['token']==actor['token']]
-        if len(records)!=1 or len(servers)!=1 or not actor['body_ready']:
-            raise Refused('desktop sole responding process query')
-        if str(Path('/bin/ps').resolve(strict=True))!='/usr/bin/ps':
-            raise Refused('desktop system ps alias changed')
+        refuse_if(len(records)!=1 or len(servers)!=1 or not actor['body_ready'], 'desktop sole responding process query')
+        refuse_if(str(Path('/bin/ps').resolve(strict=True))!='/usr/bin/ps', 'desktop system ps alias changed')
         role,exe,pin,kind='ps','/bin/ps',image('/usr/bin/ps'),'native'
         argv=('/bin/ps','-p',str(actor['birth'].pid),'-o','lstart=')
         environment={'HOME':str(root/'user'),'PATH':'/usr/bin:/bin','LANG':'C.UTF-8',

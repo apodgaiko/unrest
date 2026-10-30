@@ -3,7 +3,7 @@ import hashlib
 from pathlib import Path
 
 from case_inventory import identity
-from content_manifest import Refused, read_regular
+from content_manifest import Refused, read_regular, refuse_if
 from launch_policy import build_expected,source_unit,admit_expected
 
 TEST='tests/test_provider_review.py'
@@ -55,8 +55,7 @@ RUNNER=tuple(FRAMES+'::test_actual_runner_matching_id_order_and_owned_cleanup['+
 
 
 def runner_scenario(case,base):
-    if case not in RUNNER:
-        raise Refused('review runner exact case')
+    refuse_if(case not in RUNNER, 'review runner exact case')
     return read_regular(base/'scenario.json',131072,uid=20000,mode=0o644)[0]
 
 
@@ -106,8 +105,7 @@ def denial_proposal(host,actor,raw):
     source_unit(checkout,TEST,PINS[TEST])
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
     records=[row for row in host.intents.values() if row['case']==case]
-    if len(records)>1 or raw['stdin'] is not None:
-        raise Refused('denial original two-process sequence')
+    refuse_if(len(records)>1 or raw['stdin'] is not None, 'denial original two-process sequence')
     if any(not host.executed(row) or not host.actors[row['pid']]['body_ready'] for row in records):
         return None
     snapshot=None

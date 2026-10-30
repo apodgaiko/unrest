@@ -2,7 +2,7 @@
 from pathlib import Path
 import stat
 
-from content_manifest import Refused, read_regular, _key, _directory_key
+from content_manifest import Refused, read_regular, _key, _directory_key, refuse_if
 from prepared_distribution import tree
 
 SOURCE_UID = 20000
@@ -24,16 +24,14 @@ def graph(root):
     if len(rows)>20000 or str(root.resolve(strict=True))!=str(root):
         raise Refused('snapshot bounded canonical graph')
     result={str(path.relative_to(root)):path.lstat() for path in rows}
-    if any(info.st_uid!=SOURCE_UID or info.st_mode&0o6022
+    refuse_if(any(info.st_uid!=SOURCE_UID or info.st_mode&0o6022
            or not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode))
-           or stat.S_ISREG(info.st_mode) and info.st_nlink!=1 for info in result.values()):
-        raise Refused('snapshot original member custody')
+           or stat.S_ISREG(info.st_mode) and info.st_nlink!=1 for info in result.values()), 'snapshot original member custody')
     return result
 
 
 def acquire(source,reference,target,kind):
-    if kind not in ('normal','missing-corpus','missing-package'):
-        raise Refused('snapshot finite transformation')
+    refuse_if(kind not in ('normal','missing-corpus','missing-package'), 'snapshot finite transformation')
     before=graph(source)
     baseline=tree(reference)
     expected={project(row['path'],kind):(row['size'],row['sha256']) for row in baseline['content']['files']
@@ -53,8 +51,7 @@ def acquire(source,reference,target,kind):
     if before.keys()!=after.keys() or any(_key(before[name])!=_key(after[name]) for name in before):
         raise Refused('snapshot original acquisition race')
     target.mkdir(mode=0o700)
-    if target.stat().st_uid!=OBSERVER_UID:
-        raise Refused('snapshot observer owner')
+    refuse_if(target.stat().st_uid!=OBSERVER_UID, 'snapshot observer owner')
     for name in sorted(directories-{'.'},key=lambda value:(len(Path(value).parts),value)):
         (target/name).mkdir(mode=0o700)
     for name,body in acquired.items():

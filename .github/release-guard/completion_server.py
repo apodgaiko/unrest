@@ -3,7 +3,7 @@ from pathlib import Path
 
 from completion_roles import CASES,root,schedule,program,environment,mode
 from git_policy import completion_proposal as git_proposal, completion_ready as git_ready
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from launch_policy import admit_expected,build_expected,check_expected
 
 
@@ -33,19 +33,16 @@ def proposal(host,actor,raw):
     if raw['executable']=='/usr/bin/git':
         return git_proposal(host,actor,raw)
     host.root_only(actor)
-    if raw['stdin'] is not None:
-        raise Refused('completion server undeclared constructor input')
+    refuse_if(raw['stdin'] is not None, 'completion server undeclared constructor input')
     case=host.case
     existing=[row for row in host.intents.values() if row['case']==case and 'server_slot' in row]
     family,_,_=CASES[case]
     profiles=schedule(case)
     slot=(int(raw['argv'][3]) if family=='setup' and len(raw['argv'])==6 and raw['argv'][3] in ('0','1')
           else len(existing))
-    if slot>=len(profiles) or any(row['server_slot']==slot for row in existing):
-        raise Refused('completion server quota exhausted')
+    refuse_if(slot>=len(profiles) or any(row['server_slot']==slot for row in existing), 'completion server quota exhausted')
     selected=host.fixture_roots.get(('completion-role',case))
-    if selected is None:
-        raise Refused('completion server before fixture Git')
+    refuse_if(selected is None, 'completion server before fixture Git')
     parent=root(host,str(Path(selected[0])/'workspace'))
     git_ready(host,parent/'workspace')
     if any(not host.executed(row) for row in existing):
@@ -61,8 +58,7 @@ def proposal(host,actor,raw):
             port=None
             if kind=='http':
                 from network_scope import port_argument
-                if len(raw['argv'])!=11:
-                    raise Refused('completion HTTP constructor arity')
+                refuse_if(len(raw['argv'])!=11, 'completion HTTP constructor arity')
                 port=port_argument(raw['argv'][-1])
                 vector=(native,'-c',body,'--mode',mode(case,variant),'--transport','streamable-http','--host','127.0.0.1','--port',str(port))
             else:

@@ -3,7 +3,7 @@ import json
 import os
 from pathlib import Path
 
-from content_manifest import Refused,read_regular
+from content_manifest import Refused as Refused, read_regular, refuse_if
 from control_transport import unique
 from launch_policy import source_unit
 from run_worker_launch import MEASUREMENT_PROJECT as PROJECT
@@ -18,9 +18,8 @@ PINS={'tests/mock_measurement_acp.py': '47d099bd120a96d86d1e052567744be63b3c103a
 def owner(host,actor):
     rows=[row for row in host.intents.values() if row['case']==PROJECT and row['role']=='fixed-inline'
         and row.get('measurement_roles') and row.get('birth')==actor['birth'] and row['token']==actor['token']]
-    if (host.case!=PROJECT or actor['role']!='fixed-inline' or not actor['body_ready']
-            or len(rows)!=1 or not host.executed(rows[0])):
-        raise Refused('measurement nested original worker identity')
+    refuse_if(host.case!=PROJECT or actor['role']!='fixed-inline' or not actor['body_ready']
+            or len(rows)!=1 or not host.executed(rows[0]), 'measurement nested original worker identity')
     return rows[0]
 
 

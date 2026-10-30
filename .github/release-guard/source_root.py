@@ -7,7 +7,7 @@ import pytest
 from pytest_asyncio.plugin import Coroutine
 from _pytest.python import Function
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from case_inventory import identity
 
 
@@ -19,8 +19,7 @@ class OriginalCases:
 
     def pytest_collection_finish(self, session):
         items = tuple(session.items)
-        if tuple(identity(item.nodeid) for item in items) != tuple(identity(node) for node in self.cases) or any(type(item) not in (Coroutine, Function) for item in items):
-            raise Refused('root exact original collection')
+        refuse_if(tuple(identity(item.nodeid) for item in items) != tuple(identity(node) for node in self.cases) or any(type(item) not in (Coroutine, Function) for item in items), 'root exact original collection')
         self.items = items
         from product_audit import CASES,CHILD_CASES,Order
         if any(case in (*CASES,*CHILD_CASES) for case in self.cases) and getattr(self.policy,'audit_order',None) is None:
@@ -66,8 +65,7 @@ class OriginalCases:
         skipped=phases in ({'setup':'skipped','teardown':'passed'},{'setup':'passed','call':'skipped','teardown':'passed'})
         passed=phases=={'setup':'passed','call':'passed','teardown':'passed'}
         if self.normal_outcomes:
-            if self.policy.poison:
-                raise Refused('full source forbidden effect')
+            refuse_if(self.policy.poison, 'full source forbidden effect')
         elif not passed:
             raise Refused('root original assertions or cleanup failed')
         self.leave(case,'skipped' if skipped else 'passed' if passed else 'failed',phases)
@@ -77,11 +75,9 @@ class OriginalCases:
         self.record(report,identity(report.nodeid))
 
     def record(self, report, case):
-        if case not in self.cases or report.when not in ('setup', 'call', 'teardown'):
-            raise Refused('root unknown test report')
+        refuse_if(case not in self.cases or report.when not in ('setup', 'call', 'teardown'), 'root unknown test report')
         phases = self.reports.setdefault(case, {})
-        if report.when in phases:
-            raise Refused('root duplicate test phase')
+        refuse_if(report.when in phases, 'root duplicate test phase')
         phases[report.when] = report.outcome
         if report.failed:
             # Preserve the initiating failure even when protocol finalization

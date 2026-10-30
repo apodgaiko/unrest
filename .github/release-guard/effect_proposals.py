@@ -5,7 +5,7 @@ all observed operands, then applies its existing launch, kernel and wait ledger.
 """
 from pathlib import Path
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from launch_policy import admit_expected
 from plan_launch import CASES as PLANS, expected as plan_expected
 from session_launch import CASES as SESSIONS, expected as session_expected
@@ -35,13 +35,11 @@ def proposal_operands(raw,case,native=None):
     values=[raw['executable'],raw['cwd'],*argv,*raw['environment'],*raw['environment'].values()]
     try:
         for value in values:
-            if '\0' in value:
-                raise Refused('finite process text')
+            refuse_if('\0' in value, 'finite process text')
             value.encode('utf-8')
     except UnicodeError:
         raise Refused('finite process text encoding') from None
-    if any('=' in key for key in raw['environment']):
-        raise Refused('finite process environment key')
+    refuse_if(any('=' in key for key in raw['environment']), 'finite process environment key')
     from launch_policy import _absolute
     _absolute(raw['cwd'])
     return argv
@@ -74,10 +72,8 @@ def proposal(host, actor, raw):
     from review_wire import CASES as REVIEW_CASES,proposal as review_proposal
     if case in REVIEW_CASES:
         return review_proposal(host,actor,raw)
-    if not CONTROLLED(case) and case not in (*BOOTSTRAP,*COHORT_GIT,*ORDINARY,*CLEANUP,*SESSIONS,*FIXED,*PLANS):
-        raise Refused('finite process proposal has no declaration')
-    if raw['stdin'] is not None:
-        raise Refused('process proposal has undeclared commit input')
+    refuse_if(not CONTROLLED(case) and case not in (*BOOTSTRAP,*COHORT_GIT,*ORDINARY,*CLEANUP,*SESSIONS,*FIXED,*PLANS), 'finite process proposal has no declaration')
+    refuse_if(raw['stdin'] is not None, 'process proposal has undeclared commit input')
     checkout, owned = Path(host.meta['checkout']), Path(host.meta['owned'])
     native, pin = host.binding['entry']['path'], host.binding['entry']['sha256']
     cwd, root_environment = raw['cwd'], host.meta_environment()
@@ -112,8 +108,7 @@ def proposal(host, actor, raw):
             return admit_expected(host,actor,raw,expected,'git-fixed',
                 ['/usr/bin/git','-c','safe.directory='+str(checkout),*expected.argv[1:]],expected.payload_sha256)
         records = [row for row in host.intents.values() if row['case']==case and row['role']=='fixed-inline']
-        if len(records)>=len(SEQUENCES[case]) or any(not row['consumed'] or not host.ledger.reaped(row['birth'],row['token']) for row in records):
-            raise Refused('finite fixed proposal exhausted')
+        refuse_if(len(records)>=len(SEQUENCES[case]) or any(not row['consumed'] or not host.ledger.reaped(row['birth'],row['token']) for row in records), 'finite fixed proposal exhausted')
         operation = SEQUENCES[case][len(records)]
         if case==DRAIN_CASE:
             import ast
@@ -125,8 +120,7 @@ def proposal(host, actor, raw):
                    and isinstance(node.func,ast.Attribute) and node.func.attr=='create_subprocess_exec']
             body=ast.literal_eval(calls[0].args[2])
             parent=retain(host,Path(cwd).parent, 20000)
-            if Path(cwd)!=parent/'workspace':
-                raise Refused('pipe drain original workspace generation')
+            refuse_if(Path(cwd)!=parent/'workspace', 'pipe drain original workspace generation')
             expected=build_expected(case,native,pin,(native,'-c',body),
                 (('PATH',root_environment['PATH']),),cwd,'python-command')
         elif case in (*COMPLETION_CASES,MEASUREMENT_CASE,*INSPECTION_CASES,*STORAGE_CASES):
@@ -137,11 +131,9 @@ def proposal(host, actor, raw):
         else:
             from speed_inline import CASES as SPEED_CASES,fixture,CLI_CASE,directory
             if case==CLI_CASE:
-                if len(argv)!=14:
-                    raise Refused('speed CLI original argument count')
+                refuse_if(len(argv)!=14, 'speed CLI original argument count')
                 value=directory(str(Path(argv[7]).parent.parent),owned,case)
-                if host.fixture_roots.setdefault(case,value)!=value:
-                    raise Refused('speed CLI fixture reuse generation')
+                refuse_if(host.fixture_roots.setdefault(case,value)!=value, 'speed CLI fixture reuse generation')
             root=fixture(host) if case in (*SPEED_CASES,CLI_CASE) else None
             expected = fixed_expected(case,operation,native,pin,checkout,environment,root=root)
         script_pin = expected.payload_sha256
@@ -169,11 +161,9 @@ def proposal(host, actor, raw):
             role = 'mcp' if argv[1:2]==['-m'] else 'cleanup-acp'
         base = base_path(str(Path(argv[-1]).parent) if role=='git-init' else str(Path(cwd).parent),owned)
         if role=='mcp':
-            if len(argv)!=13 or not argv[-3].isdigit() or not argv[-1].isdigit():
-                raise Refused('finite module port and descriptor')
+            refuse_if(len(argv)!=13 or not argv[-3].isdigit() or not argv[-1].isdigit(), 'finite module port and descriptor')
             port,descriptor = int(argv[-3]),int(argv[-1])
-        if (actor['role']=='mcp')!=(role=='git-observe'):
-            raise Refused('cleanup original parent role')
+        refuse_if((actor['role']=='mcp')!=(role=='git-observe'), 'cleanup original parent role')
         if role=='mcp':
             from cleanup_launch import read_pipe
             inherited=[read_pipe(actor['birth'],descriptor)]
@@ -196,8 +186,7 @@ def proposal(host, actor, raw):
                 return None
         elif not backend:
             backends=[row for row in records if row['role'] in ('backend','delayed-backend')]
-            if len(backends)!=1:
-                raise Refused('source ACP before owned backend')
+            refuse_if(len(backends)!=1, 'source ACP before owned backend')
             if not host.executed(backends[0]):
                 return None
         relay = None
@@ -205,8 +194,7 @@ def proposal(host, actor, raw):
             import json
             from control_transport import unique
             relay=json.loads(raw['environment'].get('SYNTHETIC_RELAY','null'),object_pairs_hook=unique)
-            if type(relay) is not list or len(relay)!=4:
-                raise Refused('controlled original relay tuple')
+            refuse_if(type(relay) is not list or len(relay)!=4, 'controlled original relay tuple')
         if CONTROLLED(case):
             from controlled_cases import select_entry
             (expected,_,script_pin),variant=select_entry(case,checkout,Path(cwd),native,pin,raw,backend=backend,relay=relay,records=records)

@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 from approval_fixture import TEST
-from content_manifest import Refused, read_regular
+from content_manifest import Refused, read_regular, refuse_if
 from control_transport import unique
 from launch_policy import source_unit, build_expected, admit_expected
 from owned_fixture import retain
@@ -36,10 +36,9 @@ def mode(case):
 def worker_owner(host,actor):
     from source_observer import bound_intent
     row=bound_intent(host,actor)
-    if (host.case not in RUNS or row is None or row.get('approval_worker') is not True
+    refuse_if(host.case not in RUNS or row is None or row.get('approval_worker') is not True
             or row['case']!=host.case or actor['role']!='fixed-inline'
-            or not actor['body_ready'] or not host.executed(row)):
-        raise Refused('approval actual retained worker owner')
+            or not actor['body_ready'] or not host.executed(row), 'approval actual retained worker owner')
     return row
 
 
@@ -50,8 +49,7 @@ def worker(host,actor,raw):
     source_unit(checkout,'tests/fixtures/approval_run_executor.py','f6e24716d1b9103035fe99fe2af9f00bf42544d31086caa94486f3e8259a4d33')
     home=Path(raw['cwd'])
     base=retain(host,home.parent, 20000)
-    if home!=base/'run-home' or raw['stdin'] is not None:
-        raise Refused('approval exact worker private home')
+    refuse_if(home!=base/'run-home' or raw['stdin'] is not None, 'approval exact worker private home')
     root=base/'run-fixture'
     native=host.binding['entry']['path']
     env={'LANG':'C.UTF-8','PATH':os.defpath,'PYTHONPATH':str(checkout)+':'+str(checkout/'src'),
@@ -73,26 +71,22 @@ def relay(host,base,path):
     expected=b'#!'+native.encode()+b'\n'+(checkout/BACKEND).read_bytes()
     source_unit(checkout,BACKEND,PINS[BACKEND])
     body,_,pin=read_regular(backend,32768,uid=20000,mode=0o700)
-    if body!=expected:
-        raise Refused('approval controlled backend exact bytes')
+    refuse_if(body!=expected, 'approval controlled backend exact bytes')
     body,_,relay_pin=read_regular(path,4096,uid=20000,mode=0o700)
     try:
         call=ast.parse(body).body[-1].value
         args=tuple(ast.literal_eval(arg) for arg in call.args)
     except (ValueError,SyntaxError,AttributeError,TypeError):
         raise Refused('approval relay literal transport') from None
-    if (len(args)!=4 or any(type(value) is not str for value in args)
+    refuse_if(len(args)!=4 or any(type(value) is not str for value in args)
             or args[0]!=str(path.parent/'control') or args[2:]!=(str(backend),pin)
-            or re.fullmatch('[a-f0-9]{64}',args[1]) is None):
-        raise Refused('approval relay scoped transport operands')
+            or re.fullmatch('[a-f0-9]{64}',args[1]) is None, 'approval relay scoped transport operands')
     directory=path.parent.lstat()
-    if (path.name!='backend' or path.resolve()!=path
-            or host.fixture_roots.get(('approval-unix',host.case,args[0]))!=(directory.st_dev,directory.st_ino)):
-        raise Refused('approval relay requires acquired socket generation')
+    refuse_if(path.name!='backend' or path.resolve()!=path
+            or host.fixture_roots.get(('approval-unix',host.case,args[0]))!=(directory.st_dev,directory.st_ino), 'approval relay requires acquired socket generation')
     expected=(f'#!{native}\nimport sys\nsys.path.insert(0, {str(checkout/"src")!r})\n'
         'from unrest_harness.approval_relay import main\n'+f'main({args[0]!r}, {args[1]!r}, {args[2]!r}, {args[3]!r})\n').encode()
-    if body!=expected:
-        raise Refused('approval relay exact generated body')
+    refuse_if(body!=expected, 'approval relay exact generated body')
     return relay_pin,pin
 
 
@@ -100,15 +94,13 @@ def proposal(host,actor,raw):
     case=host.case
     checkout=Path(host.meta['checkout'])
     source_unit(checkout,TEST,PINS[TEST])
-    if case not in CASES or raw['stdin'] is not None or raw['executable']!=host.binding['entry']['path']:
-        raise Refused('approval controlled case and input')
+    refuse_if(case not in CASES or raw['stdin'] is not None or raw['executable']!=host.binding['entry']['path'], 'approval controlled case and input')
     if case in RUNS and actor['role']=='root':
         return worker(host,actor,raw)
     directory=Path(raw['cwd']).parent
     base=retain(host,directory.parent if case in RUNS else directory, 20000)
     scope=base/'run-fixture' if case in RUNS else base
-    if raw['cwd']!=str(scope/'workspace'):
-        raise Refused('approval original workspace')
+    refuse_if(raw['cwd']!=str(scope/'workspace'), 'approval original workspace')
     from cleanup_launch import environment,read_pipe
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
     module=raw['argv'][1:2]==['-c']
@@ -123,8 +115,7 @@ def proposal(host,actor,raw):
         ambient=actor['profile']['environment'] if retained is not None else host.meta_environment()
         env=environment(scope,ambient,agent=not module)
         if module:
-            if rows or len(raw['argv'])!=13:
-                raise Refused('approval exact first MCP constructor')
+            refuse_if(rows or len(raw['argv'])!=13, 'approval exact first MCP constructor')
             from network_scope import port_argument
             port=port_argument(raw['argv'][-3])
             fd=int(raw['argv'][-1])
@@ -133,8 +124,7 @@ def proposal(host,actor,raw):
             vector=(native,'-c',body,'--mode','worker','--transport','streamable-http','--host','127.0.0.1','--port',str(port),'--sensitive-inventory-fd',str(fd))
             role,kind,payload='mcp','python-command',None
         else:
-            if len(rows)!=1 or rows[0]['role']!='mcp':
-                raise Refused('approval adapter before actual MCP execution')
+            refuse_if(len(rows)!=1 or rows[0]['role']!='mcp', 'approval adapter before actual MCP execution')
             if not host.executed(rows[0]) or not host.actors[rows[0]['pid']]['body_ready']:
                 return None
             source_unit(checkout,ADAPTER,PINS[ADAPTER])
@@ -143,8 +133,7 @@ def proposal(host,actor,raw):
             value=json.loads(body,object_pairs_hook=unique)
             expected={'mode':mode(case),'trace':str(base/('run-methods.jsonl' if case in RUNS else 'trace.jsonl')),
                 'handoff':str(scope/'home/projects/project/.unrest-runtime/missions/mission-001/attempts/attempt-1__w1.json')}
-            if value!=expected:
-                raise Refused('approval bounded scenario operands')
+            refuse_if(value!=expected, 'approval bounded scenario operands')
             path=Path(raw['environment'].get('CODEX_PATH',''))
             relay(host,base,path)
             env['CODEX_PATH']=str(path)
@@ -155,8 +144,7 @@ def proposal(host,actor,raw):
     else:
         from source_observer import bound_intent
         parent=bound_intent(host,actor)
-        if parent is None or not actor['body_ready'] or not host.executed(parent):
-            raise Refused('approval actual ready chain parent')
+        refuse_if(parent is None or not actor['body_ready'] or not host.executed(parent), 'approval actual ready chain parent')
         env=dict(parent['environment'])
         path=Path(parent.get('approval_relay',''))
         relay_pin,backend_pin=relay(host,base,path)
@@ -194,17 +182,15 @@ def signal(host,actor,payload):
         worker_owner(host,actor)
     child=host.actors.get(payload['pid']) if type(payload['pid']) is int else None
     root_probe=actor['role']=='root' and host.case in RUNS
-    if (host.case not in CASES or not actor['body_ready'] or child is None
+    refuse_if(host.case not in CASES or not actor['body_ready'] or child is None
             or child['case']!=host.case or child['role'] not in (('mcp','approval-adapter','approval-backend') if root_probe else ('approval-relay','approval-backend'))
-            or type(payload['signal']) is not int or payload['signal'] not in ((0,) if root_probe else (0,9)) or payload['group'] is not False):
-        raise Refused('approval exact owned descendant signal')
+            or type(payload['signal']) is not int or payload['signal'] not in ((0,) if root_probe else (0,9)) or payload['group'] is not False, 'approval exact owned descendant signal')
     current=child['birth']
     for _ in range(4 if root_probe else 3):
         current=host.ledger.process(current).parent
         if current==actor['birth']:
             break
-        if current is None:
-            raise Refused('approval descendant actual ancestry')
+        refuse_if(current is None, 'approval descendant actual ancestry')
     else:
         raise Refused('approval descendant chain bound')
     process=host.ledger.process(child['birth'])
@@ -213,12 +199,10 @@ def signal(host,actor,payload):
             actual=Birth.read(credential_identity(child['birth'].pid))
         except (FileNotFoundError,ProcessLookupError):
             return {'ok':True,'live':False}
-        if not child['body_ready'] or actual!=host.ledger.peer_birth(child['birth']):
-            raise Refused('approval probe actual generation')
+        refuse_if(not child['body_ready'] or actual!=host.ledger.peer_birth(child['birth']), 'approval probe actual generation')
         return {'ok':True,'live':True}
     if process.exit is not None or process.terminal is not None:
         return {'ok':True,'live':False}
-    if (not child['body_ready'] or Birth.read(process_identity(child['birth'].pid))!=host.ledger.peer_birth(child['birth'])):
-        raise Refused('approval descendant actual generation')
+    refuse_if(not child['body_ready'] or Birth.read(process_identity(child['birth'].pid))!=host.ledger.peer_birth(child['birth']), 'approval descendant actual generation')
     child['signals'].add(payload['signal'])
     return {'ok':True,'live':True}

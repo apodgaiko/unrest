@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import tempfile
 
-from content_manifest import Refused, capture, read_regular
+from content_manifest import Refused, capture, read_regular, refuse_if
 from control_transport import unique
 
 NAME = '.release-distribution'
@@ -15,8 +15,7 @@ NAME = '.release-distribution'
 
 def files(root):
     rows=sorted(root.rglob('*'))
-    if len(rows)>20000 or any(path.is_symlink() or not (path.is_dir() or path.is_file()) for path in rows):
-        raise Refused('prepared distribution member graph')
+    refuse_if(len(rows)>20000 or any(path.is_symlink() or not (path.is_dir() or path.is_file()) for path in rows), 'prepared distribution member graph')
     return sorted(path.relative_to(root).as_posix() for path in rows if path.is_file())
 
 
@@ -32,8 +31,7 @@ def prepare(binding, source, source_manifest, dependencies):
     target.mkdir(mode=0o755)
     runtime=Path(binding['entry']['path']).parent.parent
     uv=runtime/'bin/uv'
-    if hashlib.sha256(uv.read_bytes()).hexdigest()!=binding['uv']['sha256']:
-        raise Refused('prepared stock uv bytes')
+    refuse_if(hashlib.sha256(uv.read_bytes()).hexdigest()!=binding['uv']['sha256'], 'prepared stock uv bytes')
     with tempfile.TemporaryDirectory(prefix='package-preparation-',dir=source.parent) as raw:
         work=Path(raw)
         build=work/'source'
@@ -43,8 +41,7 @@ def prepare(binding, source, source_manifest, dependencies):
             path.parent.mkdir(parents=True,exist_ok=True)
             shutil.copyfile(source/row['path'],path)
             path.chmod(row['mode'])
-        if capture(build,[row['path'] for row in source_manifest['files']])!=source_manifest:
-            raise Refused('prepared candidate source copy')
+        refuse_if(capture(build,[row['path'] for row in source_manifest['files']])!=source_manifest, 'prepared candidate source copy')
         for path in (work/'home',work/'cache',work/'archives'):
             path.mkdir()
         for path in (work,*sorted(work.rglob('*'))):
@@ -64,14 +61,11 @@ def prepare(binding, source, source_manifest, dependencies):
                 raise Refused('candidate package preparation failed; private log retained')
             return output
         log=run([str(uv),'build','--out-dir',str(work/'archives'),'--verbose'],build)
-        if capture(build,[row['path'] for row in source_manifest['files']])!=source_manifest:
-            raise Refused('build changed frozen candidate source')
+        refuse_if(capture(build,[row['path'] for row in source_manifest['files']])!=source_manifest, 'build changed frozen candidate source')
         wheels=sorted((work/'archives').glob('*.whl'))
-        if len(wheels)!=1 or len(list((work/'archives').glob('*.tar.gz')))!=1:
-            raise Refused('prepared archive cardinality')
+        refuse_if(len(wheels)!=1 or len(list((work/'archives').glob('*.tar.gz')))!=1, 'prepared archive cardinality')
         backend=work/'cache/archive-v0'
-        if not any(backend.glob('*/setuptools-*.dist-info/METADATA')):
-            raise Refused('actual isolated build backend missing')
+        refuse_if(not any(backend.glob('*/setuptools-*.dist-info/METADATA')), 'actual isolated build backend missing')
         capture(backend,files(backend))
         shutil.copytree(backend,target/'backend',symlinks=False)
         log+=run([str(uv),'pip','install','--target',str(work/'installed'),'--no-deps',
@@ -123,8 +117,7 @@ class Provider:
 
     def snapshot(self,path):
         reply=self.policy.client.request('archive-snapshot',{'path':str(path)})
-        if type(reply) is not dict or set(reply)!={'ok','path'} or reply['ok'] is not True or type(reply['path']) is not str:
-            raise Refused('snapshot acquisition acknowledgement')
+        refuse_if(type(reply) is not dict or set(reply)!={'ok','path'} or reply['ok'] is not True or type(reply['path']) is not str, 'snapshot acquisition acknowledgement')
         root=Path(reply['path'])
         if root.parent!=self.policy.directory or root.resolve(strict=True)!=root:
             raise Refused('snapshot observer-selected root')

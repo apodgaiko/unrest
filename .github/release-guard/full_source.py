@@ -8,7 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from source_root import OriginalCases
 from case_inventory import identity
 
@@ -40,8 +40,7 @@ class FullCases(OriginalCases):
             stream.write(body)
         path.chmod(0o444)
         answer=self.policy.client.request('collection',{'path':str(path),'sha256':hashlib.sha256(body).hexdigest()})
-        if type(answer) is not dict or set(answer)!={'ok','reference'} or answer['ok'] is not True:
-            raise Refused('full source inventory acknowledgement')
+        refuse_if(type(answer) is not dict or set(answer)!={'ok','reference'} or answer['ok'] is not True, 'full source inventory acknowledgement')
         ref=answer['reference']
         self.cases=tuple(load(ref,self.policy.directory,profile['source_sha256'],profile['dependency_sha256'])['cases'])
         super().pytest_collection_finish(session)

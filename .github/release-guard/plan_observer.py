@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import time
 
-from content_manifest import Refused, native_digest
+from content_manifest import Refused as Refused, native_digest, refuse_if
 from launch_policy import admit_expected
 from plan_launch import CASES, INVALID, expected
 from process_ledger import Birth
@@ -45,17 +45,14 @@ def resolve(host,trace,pid,path,vector,environment,cwd):
         return False
     value=choices[0]
     model=value['plan']
-    if value['plan_pid'] not in (None,pid) or value['plan_pending'] is not None:
-        raise Refused('preflight attempted-path replay or foreign child')
+    refuse_if(value['plan_pid'] not in (None,pid) or value['plan_pending'] is not None, 'preflight attempted-path replay or foreign child')
     stage=value['plan_stage']
     if stage>=len(model.attempts) or path!=model.attempts[stage]:
         return False
     current=expected(value['case'],cwd,Path(host.meta['owned']),host.binding['entry']['path'],host.binding['entry']['sha256'])
-    if (current!=model or key(Path(model.expected.executable))!=value['plan_script_key']
-            or key(Path(model.expected.executable).parent)!=value['plan_parent_key']):
-        raise Refused('preflight script or native generation changed')
-    if process_identity(pid)['namespaces']['mnt']!=os.readlink('/proc/self/ns/mnt'):
-        raise Refused('preflight private native namespace')
+    refuse_if(current!=model or key(Path(model.expected.executable))!=value['plan_script_key']
+            or key(Path(model.expected.executable).parent)!=value['plan_parent_key'], 'preflight script or native generation changed')
+    refuse_if(process_identity(pid)['namespaces']['mnt']!=os.readlink('/proc/self/ns/mnt'), 'preflight private native namespace')
     value['plan_pid']=pid
     value['plan_path']=path
     value['plan_pending']='blocked' if stage<len(model.attempts)-1 else 'invalid' if value['case']==INVALID else 'run'
@@ -81,43 +78,35 @@ def consume(host,row):
     values=[value for value in host.intents.values() if value['case'] in CASES and value.get('plan_pid')==row['pid']]
     if not values:
         return
-    if len(values)!=1:
-        raise Refused('preflight exec child ambiguity')
+    refuse_if(len(values)!=1, 'preflight exec child ambiguity')
     value=values[0]
     model=value['plan']
     pending=value['plan_pending']
     if row['kind']=='exec_syscall_return':
         if pending=='blocked':
-            if row.get('return')!=-errno.EACCES or row.get('denied') or key(Path(model.attempts[0]))!=value['plan_blocked_key']:
-                raise Refused('preflight exact blocked directory errno or generation')
+            refuse_if(row.get('return')!=-errno.EACCES or row.get('denied') or key(Path(model.attempts[0]))!=value['plan_blocked_key'], 'preflight exact blocked directory errno or generation')
             value['plan_stage']+=1
             value['plan_pending']=None
         elif pending=='invalid':
-            if row.get('return')!=-errno.ENOEXEC or row.get('denied'):
-                raise Refused('preflight original invalid-format errno')
+            refuse_if(row.get('return')!=-errno.ENOEXEC or row.get('denied'), 'preflight original invalid-format errno')
             value['plan_failed']=True
             value['plan_pending']=None
         elif pending=='run':
-            if row.get('return')!=0 or row.get('denied'):
-                raise Refused('preflight expected successful exec return')
+            refuse_if(row.get('return')!=0 or row.get('denied'), 'preflight expected successful exec return')
         return
-    if pending!='run':
-        raise Refused('preflight unexpected successful candidate')
+    refuse_if(pending!='run', 'preflight unexpected successful candidate')
     executable=Path('/proc')/str(row['pid'])/'exe'
     actual=executable.resolve(strict=True)
     target=Path(model.image[0])
-    if (actual!=target or executable.stat().st_dev!=target.stat().st_dev or executable.stat().st_ino!=target.stat().st_ino
+    refuse_if(actual!=target or executable.stat().st_dev!=target.stat().st_dev or executable.stat().st_ino!=target.stat().st_ino
             or native_digest(target)!=model.image[1] or key(Path(model.expected.executable))!=value['plan_script_key']
-            or key(Path(model.expected.executable).parent)!=value['plan_parent_key']):
-        raise Refused('preflight post-binfmt executable or script generation')
+            or key(Path(model.expected.executable).parent)!=value['plan_parent_key'], 'preflight post-binfmt executable or script generation')
     raw=(Path('/proc')/str(row['pid'])/'cmdline').read_bytes()
-    if not raw or len(raw)>65536 or not raw.endswith(b'\0'):
-        raise Refused('preflight post-binfmt argument vector')
+    refuse_if(not raw or len(raw)>65536 or not raw.endswith(b'\0'), 'preflight post-binfmt argument vector')
     vector=[os.fsdecode(part) for part in raw[:-1].split(b'\0')]
     expected_vector=(['/bin/sh',value['plan_path'],*model.vector[1:]]
                      if model.image[0]=='/usr/bin/dash' else list(model.vector))
-    if vector!=expected_vector:
-        raise Refused('preflight post-binfmt script arguments')
+    refuse_if(vector!=expected_vector, 'preflight post-binfmt script arguments')
     value['plan_exec_verified']=True
     host.plan_records.append({'case':value['case'],'pid':row['pid'],'image':str(actual),'image_sha256':model.image[1],
         'script_key':value['plan_script_key'],'argv_sha256':hashlib.sha256(json.dumps(vector,separators=(',',':')).encode()).hexdigest(),'observed_monotonic_ns':time.monotonic_ns(),

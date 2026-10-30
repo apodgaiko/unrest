@@ -1490,3 +1490,13 @@ The only alternate host invocation is `archive15` for the extracted persistence
 oracle. Full-source input preparation always includes native metadata and the
 prepared distribution; no selector can remove a source test or preparation gate.
 The original nested regression child remains a separate bounded test domain.
+
+Repeated literal-code refusal branches share `content_manifest.refuse_if`.
+Predicates, short-circuit order, error codes and check locations remain visible
+at their original sites. Compound conversions are limited to proven Boolean
+expressions or the authenticated observer domain: finite JSON operands, kernel
+records and fixed guard-owned types cannot carry source-defined truth callbacks.
+Unproved complex ingress/core conditions and callback-extensible loaders retain
+explicit branches. The primitive remains active under `-O`; it neither catches
+exceptions nor replaces the audit's poison/reporting path. The frozen candidate must validate the extra stack frame and successful-path
+call overhead through focused and native controls.

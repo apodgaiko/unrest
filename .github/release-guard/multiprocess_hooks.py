@@ -1,7 +1,7 @@
 """Spawn transport metadata; the observer owns all execution authority."""
 import os
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from multiprocess_entry import eligible
 
 
@@ -22,9 +22,8 @@ def install(policy):
              'cwd':os.getcwd(),'environment':dict(os.environ)}
         try:
             answer=policy.client.request('multiprocess-proposal',raw)
-            if (type(answer) is not dict or type(answer.get('ticket')) is not int or type(answer.get('token')) is not str
-                    or type(answer.get('translated')) is not list or any(type(arg) is not str for arg in answer['translated'])):
-                raise Refused('spawn response schema')
+            refuse_if(type(answer) is not dict or type(answer.get('ticket')) is not int or type(answer.get('token')) is not str
+                    or type(answer.get('translated')) is not list or any(type(arg) is not str for arg in answer['translated']), 'spawn response schema')
             pid=original(executable,answer['translated'],passfds)
             policy.children[pid]={'token':answer['token'],'case':policy.case,'process':None}
             return pid

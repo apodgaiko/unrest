@@ -6,7 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from git_policy import image
 from launch_policy import build_expected,source_unit,literal,render_string
 from speed_inline import CASES as SPEED_CASES, PRELUDE, CLI_CASE, cli_expected
@@ -83,8 +83,7 @@ def translated(value):
 
 
 def startup_expected(case,native,pin,cwd,owned):
-    if type(case) is not str or case not in STDIO or type(cwd) is not str:
-        raise Refused('fixed startup declaration')
+    refuse_if(type(case) is not str or case not in STDIO or type(cwd) is not str, 'fixed startup declaration')
     root=Path(cwd)
     if str(root.resolve())!=cwd or root==owned/'pytest' or not root.is_relative_to(owned/'pytest'):
         raise Refused('fixed startup original fixture root')
@@ -116,8 +115,7 @@ def script(checkout, operation, root=None):
 
 
 def expected(case, operation, native, pin, checkout, environment, *, root=None):
-    if type(case) is not str or case not in (*IMPORT_CASES,OBSERVATION_CASE,CLI_CASE,JOURNAL_CASE,*NESTED_CASES,*ISOLATED) or type(operation) is not str or operation not in SEQUENCES[case]:
-        raise Refused('fixed inline closed operation')
+    refuse_if(type(case) is not str or case not in (*IMPORT_CASES,OBSERVATION_CASE,CLI_CASE,JOURNAL_CASE,*NESTED_CASES,*ISOLATED) or type(operation) is not str or operation not in SEQUENCES[case], 'fixed inline closed operation')
     if case==JOURNAL_CASE:
         owner=source_unit(checkout,JOURNAL_TEST,PINS[JOURNAL_TEST],(JOURNAL_CASE.split('::')[-1],))
         calls=[node for node in ast.walk(owner) if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr=='Popen']
@@ -130,8 +128,7 @@ def expected(case, operation, native, pin, checkout, environment, *, root=None):
         return build_expected(case,native,pin,vector,tuple(sorted(environment.items())),str(checkout),'python-command')
     if case==NESTED_CASE:
         for path in ('tests/test_task_adapter.py',RELOAD_TEST):
-            if hashlib.sha256((checkout/path).read_bytes()).hexdigest()!=PINS[path]:
-                raise Refused('preselected original source bytes')
+            refuse_if(hashlib.sha256((checkout/path).read_bytes()).hexdigest()!=PINS[path], 'preselected original source bytes')
         return build_expected(case,native,pin,(native,'-m','pytest','-q',*NODES),
             tuple(sorted({**environment,'PYTHONDONTWRITEBYTECODE':'1'}.items())),str(checkout),'python-module',PYTEST_PIN)
     if case==CLI_CASE:

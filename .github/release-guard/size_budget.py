@@ -13,7 +13,7 @@ from pathlib import Path
 import subprocess
 from typing import Sequence, TypedDict
 
-from content_manifest import Refused, capture, encode, measure_lines
+from content_manifest import Refused as Refused, capture, encode, measure_lines, refuse_if
 
 LIMIT = 10_000
 
@@ -27,11 +27,9 @@ class Row(TypedDict):
 
 def measure(root: Path, inventory: Sequence[str], extra_support: Sequence[str] = ()) -> dict:
     """Measure all supplied .github files plus explicitly audited external support."""
-    if (len(set(inventory)) != len(inventory) or len(set(extra_support)) != len(extra_support)):
-        raise Refused("duplicate_budget_path")
+    refuse_if(len(set(inventory)) != len(inventory) or len(set(extra_support)) != len(extra_support), "duplicate_budget_path")
     selected = sorted(set(name for name in inventory if name.startswith('.github/')) | set(extra_support))
-    if not set(extra_support)<=set(inventory):
-        raise Refused('support_outside_inventory')
+    refuse_if(not set(extra_support)<=set(inventory), 'support_outside_inventory')
     manifest, counts = measure_lines(root, selected)
     rows: list[Row] = []
     for member in manifest["files"]:
@@ -41,8 +39,7 @@ def measure(root: Path, inventory: Sequence[str], extra_support: Sequence[str] =
         category = "test" if is_test and member["path"] not in extra_support else "enforcement"
         rows.append({"path": member["path"], "category": category,
                      "lines": counts[member["path"]], "sha256": member["sha256"]})
-    if capture(root, selected) != manifest:
-        raise Refused("budget_snapshot_drift")
+    refuse_if(capture(root, selected) != manifest, "budget_snapshot_drift")
     implementation = sum(row["lines"] for row in rows if row["category"] == "enforcement")
     return {"schema": "unrest.guard-size.v2", "limit": LIMIT,
             "enforcement_lines": implementation,

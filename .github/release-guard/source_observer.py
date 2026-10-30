@@ -12,7 +12,7 @@ import socket
 import struct
 import time
 
-from content_manifest import Refused, native_digest
+from content_manifest import Refused, native_digest, refuse_if
 from http_cases import CASES as HTTP_CASES
 from plan_launch import CASES as PLAN_CASES, INVALID as PLAN_INVALID, PYTHON as PLAN_PYTHON
 from control_transport import Admission, Frame, REQUEST_LIMIT, cancelled_empty, reply
@@ -41,8 +41,7 @@ import uv_cli
 
 
 def shape(value, keys):
-    if type(value) is not dict or set(value) != set(keys):
-        raise Refused('source observer operation schema')
+    refuse_if(type(value) is not dict or set(value) != set(keys), 'source observer operation schema')
 
 
 def number(value, minimum=0):
@@ -146,14 +145,12 @@ class Observer:
                         if not value['consumed'] and value.get('parent', self.root_birth) == parent]
                     if self.full and parent is not None and parent.pid==self.launcher and not self.full_started:
                         continue
-                    if actor is None or actor['role'] not in ('root', 'mcp', 'git-command', 'session-adapter', 'fixed-inline','desktop','archive-checker','uv-cli','approval-adapter','approval-relay') or len(candidates) != 1:
-                        raise Refused('source fork without a unique original launch intent')
+                    refuse_if(actor is None or actor['role'] not in ('root', 'mcp', 'git-command', 'session-adapter', 'fixed-inline','desktop','archive-checker','uv-cli','approval-adapter','approval-relay') or len(candidates) != 1, 'source fork without a unique original launch intent')
             if row['kind']=='original_parent_wait4':
                 for value in self.intents.values():
                     if self.case in cohort_controller.WAIVED and value.get('cohort_controller') and value.get('pid')==row['child']:
                         value.setdefault('closeout_started',time.monotonic())
-            if row['kind'] == 'kernel_exit' and row.get('raw') == 86 << 8:
-                raise Refused('native guard refusal')
+            refuse_if(row['kind'] == 'kernel_exit' and row.get('raw') == 86 << 8, 'native guard refusal')
             if row['kind'] == 'kernel_root' and not self.full:
                 from postbuild_root import COMMAND as ARCHIVE_COMMAND
                 vector=[self.binding['entry']['path'],'-I','-S','-c',ARCHIVE_COMMAND,self.binding['checkout']]
@@ -212,8 +209,7 @@ class Observer:
             archive_snapshot.retained(Path(state['root']),state['snapshot'])
         if intent['case']==desktop_launch.CASE:
             desktop_launch.retained(self)
-            if intent['role']=='ps' and str(Path(path).resolve(strict=True))!='/usr/bin/ps':
-                raise Refused('desktop retained system ps alias')
+            refuse_if(intent['role']=='ps' and str(Path(path).resolve(strict=True))!='/usr/bin/ps', 'desktop retained system ps alias')
         intent['consumed'], intent['pid'], intent['birth'] = True, pid, birth
         if intent['role'] in ('sleep', 'session-invalid','ps','uv-cli','terminal-native') or intent['role'].startswith('git-'):
             actual = process_identity(pid)
@@ -232,15 +228,13 @@ class Observer:
         return True
 
     def root_only(self, actor):
-        if actor['birth'] != self.root_birth or actor['role'] != 'root' or self.finished:
-            raise Refused('source root-only operation')
+        refuse_if(actor['birth'] != self.root_birth or actor['role'] != 'root' or self.finished, 'source root-only operation')
 
     def launch_owner(self, actor):
         if actor['role']=='root':
             self.root_only(actor)
             return
-        if self.finished or actor['case']!=self.case:
-            raise Refused('source original launch owner')
+        refuse_if(self.finished or actor['case']!=self.case, 'source original launch owner')
         role=actor['role']
         if role in ('approval-adapter','approval-relay') and self.case in approval_launch.CASES and actor['body_ready']:
             return
@@ -260,21 +254,18 @@ class Observer:
                     return
             if self.case in run_worker_launch.DESCENDANTS and any(value.get('run_worker') and value.get('birth')==actor['birth'] and value['token']==actor['token'] for value in self.intents.values()):
                 return
-            if sum(value.get('fixed_operation')=='check' and value['token']==actor['token'] for value in self.intents.values())!=1:
-                raise Refused('fixed inline has no query authority')
+            refuse_if(sum(value.get('fixed_operation')=='check' and value['token']==actor['token'] for value in self.intents.values())!=1, 'fixed inline has no query authority')
             return
         if role=='session-adapter' and self.case==SESSION_TIMEOUT:
             return
-        if role!='mcp':
-            raise Refused('source original launch owner')
+        refuse_if(role!='mcp', 'source original launch owner')
 
 
     def admit_launch(self, actor, expected, role, vector, script_pin,
                      *, maximum=1, environment=None, inherited=(), port=None):
-        if (expected.case != self.case or sum(value['case'] == self.case and value['role'] == role
+        refuse_if(expected.case != self.case or sum(value['case'] == self.case and value['role'] == role
                        and (role not in ('backend','acp') or not CONTROLLED(self.case) or value['cwd'] == expected.cwd)
-                       for value in self.intents.values()) >= maximum):
-            raise Refused('source independent launch reconstruction')
+                       for value in self.intents.values()) >= maximum, 'source independent launch reconstruction')
         # Hold the next constructor until the prior child passes exact exec
         # admission. The fork boundary keeps its unique-intent requirement.
         if any(not value['consumed'] and value.get('parent', self.root_birth) == actor['birth']
@@ -349,10 +340,9 @@ class Observer:
         elif kind == 'self-probe':
             self.root_only(actor)
             shape(payload,('pid',))
-            if (type(self.case) is not str or not self.case.startswith('tests/test_approval_recovery.py::')
+            refuse_if(type(self.case) is not str or not self.case.startswith('tests/test_approval_recovery.py::')
                     or not actor['body_ready'] or type(payload['pid']) is not int
-                    or payload['pid']!=actor['birth'].pid or Birth.read(process_identity(payload['pid']))!=actor['birth']):
-                raise Refused('approval exact self liveness probe')
+                    or payload['pid']!=actor['birth'].pid or Birth.read(process_identity(payload['pid']))!=actor['birth'], 'approval exact self liveness probe')
         elif kind == 'private-unix':
             shape(payload,('event','address'))
             from approval_fixture import unix
@@ -365,18 +355,15 @@ class Observer:
             shape(payload, ('case','outcome','phases') if self.full and kind=='case-finish' else ('case',))
             outcome=payload.get('outcome','passed')
             skipped=outcome=='skipped'
-            if outcome not in ('passed','skipped','failed'):
-                raise Refused('full source outcome primitive')
+            refuse_if(outcome not in ('passed','skipped','failed'), 'full source outcome primitive')
             if self.full and kind=='case-finish':
                 phases=payload['phases']
-                if (type(phases) is not dict or not set(phases)<= {'setup','call','teardown'}
+                refuse_if(type(phases) is not dict or not set(phases)<= {'setup','call','teardown'}
                         or any(type(value) is not str or value not in ('passed','skipped','failed') for value in phases.values())
                         or outcome=='passed' and phases!={'setup':'passed','call':'passed','teardown':'passed'}
-                        or outcome=='skipped' and phases not in ({'setup':'skipped','teardown':'passed'},{'setup':'passed','call':'skipped','teardown':'passed'})):
-                    raise Refused('full source outcome phases')
+                        or outcome=='skipped' and phases not in ({'setup':'skipped','teardown':'passed'},{'setup':'passed','call':'skipped','teardown':'passed'}), 'full source outcome phases')
             if kind == 'case-start':
-                if self.case is not None or len(self.completed) >= len(self.cases) or payload['case'] != self.cases[len(self.completed)]:
-                    raise Refused('source exact external case frontier')
+                refuse_if(self.case is not None or len(self.completed) >= len(self.cases) or payload['case'] != self.cases[len(self.completed)], 'source exact external case frontier')
                 self.case = actor['case'] = payload['case']
                 self.ledger.process(self.root_birth).case = self.case
             else:
@@ -384,20 +371,18 @@ class Observer:
                 if self.case in package_security.CASES:
                     package_security.provenance(self)
                 if skipped:
-                    if children:
-                        raise Refused('skipped source case launched children')
+                    refuse_if(children, 'skipped source case launched children')
                 waived=cohort_controller.closeout(self,children) if self.case in cohort_controller.CASES else set()
                 if waived is None:
                     return None
                 if not composed_adoption.closeout(self,children):
                     return None
                 ordinary=children if not waived else [value for value in children if value['birth'] not in waived]
-                if (payload['case'] != self.case
+                refuse_if(payload['case'] != self.case
                         or any(not self.completed_child(value) for value in ordinary)
                         or any(not value['consumed'] for value in self.intents.values() if value['case'] == self.case)
                         or any(not (self.git.reaped(value) if value['role']=='git-helper' else
-                            self.ledger.reaped(value['birth'], value['token']) or self.case in composed_adoption.CLOSEOUT and self.ledger.process(value['birth']).init_wait is not None) for value in ordinary)):
-                    raise Refused('source original case actual cleanup incomplete')
+                            self.ledger.reaped(value['birth'], value['token']) or self.case in composed_adoption.CLOSEOUT and self.ledger.process(value['birth']).init_wait is not None) for value in ordinary), 'source original case actual cleanup incomplete')
                 if self.full:
                     self.outcomes.append(dict(payload))
                 self.completed.append(self.case)
@@ -405,9 +390,8 @@ class Observer:
         elif kind == 'root-finish':
             self.root_only(actor)
             shape(payload, ('count', 'cases_sha256'))
-            if (self.case is not None or any(row['outcome']=='failed' for row in self.outcomes) or type(payload['count']) is not int or type(payload['cases_sha256']) is not str
-                    or payload != source_profile.case_seal(self.cases) or tuple(self.completed) != self.cases):
-                raise Refused('source original source completion incomplete')
+            refuse_if(self.case is not None or any(row['outcome']=='failed' for row in self.outcomes) or type(payload['count']) is not int or type(payload['cases_sha256']) is not str
+                    or payload != source_profile.case_seal(self.cases) or tuple(self.completed) != self.cases, 'source original source completion incomplete')
             self.finished = True
         elif kind == 'multiprocess-proposal':
             from multiprocess_entry import proposal
@@ -416,29 +400,24 @@ class Observer:
             from package_proposals import snapshot
             return snapshot(self,actor,payload)
         elif kind=='archive-result':
-            if (actor['role']!='archive-leaf' or actor['case']!=self.case or self.case not in (*package_cases.NEGATIVE,package_cases.POSITIVE)
-                    or not actor['body_ready'] or 'archive_result' in actor):
-                raise Refused('archive result scope')
-            if bound_intent(self,actor) is None:
-                raise Refused('archive result original consumed intent')
+            refuse_if(actor['role']!='archive-leaf' or actor['case']!=self.case or self.case not in (*package_cases.NEGATIVE,package_cases.POSITIVE)
+                    or not actor['body_ready'] or 'archive_result' in actor, 'archive result scope')
+            refuse_if(bound_intent(self,actor) is None, 'archive result original consumed intent')
             expected={'kind':package_cases.NEGATIVE.get(self.case,'normal'),'count':0 if package_cases.NEGATIVE.get(self.case)=='missing-package' else 15,
                 'failed':15 if package_cases.NEGATIVE.get(self.case)=='missing-corpus' else 0,'exit':1 if self.case in package_cases.NEGATIVE else 0}
             shape(payload,('kind','count','failed','exit'))
-            if (type(payload['kind']) is not str or any(type(payload[key]) is not int for key in ('count','failed','exit'))
-                    or payload!=expected):
-                raise Refused('archive actual original result')
+            refuse_if(type(payload['kind']) is not str or any(type(payload[key]) is not int for key in ('count','failed','exit'))
+                    or payload!=expected, 'archive actual original result')
             actor['archive_result']=dict(payload)
         elif kind == 'preselected-finish':
             from nested_pytest import CASES
-            if (actor['role']!='pytest-regression' or actor['case']!=self.case or self.case not in CASES
-                    or not actor['body_ready'] or actor.get('preselected_complete') or payload!=source_profile.case_seal(CASES[self.case]) or bound_intent(self,actor) is None):
-                raise Refused('preselected child completion scope')
+            refuse_if(actor['role']!='pytest-regression' or actor['case']!=self.case or self.case not in CASES
+                    or not actor['body_ready'] or actor.get('preselected_complete') or payload!=source_profile.case_seal(CASES[self.case]) or bound_intent(self,actor) is None, 'preselected child completion scope')
             actor['preselected_complete']=True
         elif kind == 'fixture-root':
             self.root_only(actor)
             shape(payload,('path',))
-            if self.case not in speed_inline.CASES or self.case in self.fixture_roots:
-                raise Refused('speed fixture once per active case')
+            refuse_if(self.case not in speed_inline.CASES or self.case in self.fixture_roots, 'speed fixture once per active case')
             self.fixture_roots[self.case]=speed_inline.directory(payload['path'],Path(self.meta['owned']),self.case)
         elif kind == 'launch-proposal':
             from effect_proposals import proposal
@@ -449,43 +428,37 @@ class Observer:
         elif kind == 'self-stop':
             shape(payload, ('signal',))
             children = [value for value in self.actors.values() if self.ledger.process(value['birth']).parent == actor['birth']]
-            if (actor['role'] != 'session-adapter' or actor['case'] != self.case or self.case != SESSION_TIMEOUT
+            refuse_if(actor['role'] != 'session-adapter' or actor['case'] != self.case or self.case != SESSION_TIMEOUT
                     or type(payload['signal']) is not int or payload['signal'] != 15 or 15 not in actor['signals']
-                    or len(children) != 1 or not all(self.ledger.reaped(value['birth'], value['token']) for value in children)):
-                raise Refused('session self stop before original child wait')
+                    or len(children) != 1 or not all(self.ledger.reaped(value['birth'], value['token']) for value in children), 'session self stop before original child wait')
         elif kind=='approval-signal':
             shape(payload,('pid','signal','group'))
             return approval_launch.signal(self,actor,payload)
         elif kind=='resumed-signal':
             shape(payload,('pid','signal','group'))
-            if type(payload['pid']) is not int or type(payload['signal']) is not int or type(payload['group']) is not bool:
-                raise Refused('composed resumed signal schema')
+            refuse_if(type(payload['pid']) is not int or type(payload['signal']) is not int or type(payload['group']) is not bool, 'composed resumed signal schema')
             return composed_adoption.signal(self,actor,payload)
         elif kind == 'custody_signal':
             self.launch_owner(actor)
             shape(payload, ('pid', 'child_token', 'signal', 'group'))
             child = self.actors.get(number(payload['pid'], 1))
-            if (child is None or child['role'] == 'root' or child['case'] != self.case or payload['child_token'] != child['token']
+            refuse_if(child is None or child['role'] == 'root' or child['case'] != self.case or payload['child_token'] != child['token']
                     or self.ledger.process(child['birth']).parent != actor['birth']
                     or type(payload['signal']) is not int or type(payload['group']) is not bool
                     or payload['signal'] not in (0,9,15) and not (payload['signal'] == 10 and payload['group'] is False
-                        and child['role'] == 'backend' and self.case in (*WARNING_REFUSALS,*NOTIFICATION_SIGNALS,'tests/test_experimental_bridge_shutdown.py::test_owned_teardown_completes_after_native_drain_failure'))):
-                raise Refused('source exact owned signal')
-            if payload['signal'] == 10 and self.case in (*WARNING_REFUSALS,*NOTIFICATION_SIGNALS) and 10 in child['signals']:
-                raise Refused('controlled warning signal replay')
+                        and child['role'] == 'backend' and self.case in (*WARNING_REFUSALS,*NOTIFICATION_SIGNALS,'tests/test_experimental_bridge_shutdown.py::test_owned_teardown_completes_after_native_drain_failure')), 'source exact owned signal')
+            refuse_if(payload['signal'] == 10 and self.case in (*WARNING_REFUSALS,*NOTIFICATION_SIGNALS) and 10 in child['signals'], 'controlled warning signal replay')
             process = self.ledger.process(child['birth'])
             if payload['signal'] == 0:
                 intent=bound_intent(self,child)
                 worker=child['role']=='fixed-inline' and intent is not None and intent.get('run_worker') is True
                 journal=self.case==JOURNAL_CASE and child['role']=='fixed-inline'
-                if (payload['group'] or child['role']!='workspace-owned' and not journal and not worker
-                        or journal and child.get('liveness_probes',0)!=0):
-                    raise Refused('source exact owned liveness probe')
+                refuse_if(payload['group'] or child['role']!='workspace-owned' and not journal and not worker
+                        or journal and child.get('liveness_probes',0)!=0, 'source exact owned liveness probe')
                 if journal:
                     child['liveness_probes']=1
                 try:
-                    if Birth.read(process_identity(child['birth'].pid)) != self.ledger.peer_birth(child['birth']):
-                        raise Refused('source reused probe PID')
+                    refuse_if(Birth.read(process_identity(child['birth'].pid)) != self.ledger.peer_birth(child['birth']), 'source reused probe PID')
                 except (FileNotFoundError, ProcessLookupError):
                     pass
                 return {'ok': True, 'live': True}
@@ -501,9 +474,8 @@ class Observer:
             return {'ok': True, 'live': True}
         elif kind == 'guard-refusal':
             shape(payload, ('code',))
-            if (type(payload['code']) is not str or not 0 < len(payload['code']) <= 128
-                    or any(not char.isascii() or not (char.isalnum() or char in ' -_') for char in payload['code'])):
-                raise Refused('source refusal code schema')
+            refuse_if(type(payload['code']) is not str or not 0 < len(payload['code']) <= 128
+                    or any(not char.isascii() or not (char.isalnum() or char in ' -_') for char in payload['code']), 'source refusal code schema')
             raise Refused('source guard refusal')
         else:
             raise Refused('source undeclared observer method')
@@ -561,8 +533,7 @@ class Observer:
             if not block:
                 break
             self.output.extend(block)
-            if len(self.output) > 8 * 1024 * 1024:
-                raise Refused('source bounded private output')
+            refuse_if(len(self.output) > 8 * 1024 * 1024, 'source bounded private output')
 
     def close(self):
         self.server.close()

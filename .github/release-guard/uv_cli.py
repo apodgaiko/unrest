@@ -3,7 +3,7 @@ from pathlib import Path
 import json
 import os
 
-from content_manifest import Refused,read_regular,native_digest,_capture
+from content_manifest import Refused as Refused, read_regular, native_digest, _capture, refuse_if
 from control_transport import unique
 from console_entries import normalized,script
 from launch_policy import admit_expected,build_expected,source_unit
@@ -25,8 +25,7 @@ def uv_digest(path):
 
 def child_environment(metadata,parent):
     depth=parent.get('UV_RUN_RECURSION_DEPTH','0')
-    if type(depth) is not str or depth not in ('0','1'):
-        raise Refused('stock uv exact bounded recursion')
+    refuse_if(type(depth) is not str or depth not in ('0','1'), 'stock uv exact bounded recursion')
     runtime=Path(metadata['runtime_root'])
     return {**parent,'PATH':str(runtime/'bin')+':'+parent['PATH'],
         'UV':str(runtime/'bin/uv'),'UV_RUN_RECURSION_DEPTH':str(int(depth)+1)}
@@ -37,14 +36,12 @@ def proposal(host,actor,raw):
     case=host.case
     rows=[row for row in host.intents.values() if row['case']==case]
     launches=[row for row in rows if row['role']=='uv-cli']
-    if (case not in CASES or len(launches)>=len(COMMANDS[case]) or raw['stdin'] is not None
-            or any(not row['consumed'] or not host.ledger.reaped(row['birth'],row['token']) for row in rows)):
-        raise Refused('stock uv original sequential refusal frontier')
+    refuse_if(case not in CASES or len(launches)>=len(COMMANDS[case]) or raw['stdin'] is not None
+            or any(not row['consumed'] or not host.ledger.reaped(row['birth'],row['token']) for row in rows), 'stock uv original sequential refusal frontier')
     source_unit(Path(host.meta['checkout']),TEST,PIN)
     command=COMMANDS[case][len(launches)]
     args=raw['argv']
-    if len(args)!=6 or args[:5]!=['uv','run','unrest',command,'--request']:
-        raise Refused('stock uv exact original command')
+    refuse_if(len(args)!=6 or args[:5]!=['uv','run','unrest',command,'--request'], 'stock uv exact original command')
     path=Path(args[5])
     parent=retain(host,path.parent, 20000)
     if case==INVALID:
@@ -63,27 +60,21 @@ def proposal(host,actor,raw):
         file=parent/('project-subprocess.json' if case==PROJECT else 'improvement-subprocess.json')
         home=parent/('home-subprocess' if case==PROJECT else 'unused-improvement-home')
         document=None
-    if path!=file or path.resolve()!=path:
-        raise Refused('stock uv exact original request path')
+    refuse_if(path!=file or path.resolve()!=path, 'stock uv exact original request path')
     body,_,_=read_regular(file,65536,uid=20000)
-    if (document is not None and json.loads(body,object_pairs_hook=unique)!=document) or (case!=PROJECT and home.exists()):
-        raise Refused('stock uv original request bytes and unused home')
+    refuse_if((document is not None and json.loads(body,object_pairs_hook=unique)!=document) or (case!=PROJECT and home.exists()), 'stock uv original request bytes and unused home')
     if case in (PROJECT,IMPROVEMENT):
         # Requests remain application inputs: the original product test owns their
         # semantic assertions. Admit only the exact owned path and bounded JSON.
-        if type(json.loads(body,object_pairs_hook=unique)) is not dict:
-            raise Refused('stock uv bounded original request object')
-        if case==PROJECT and (not home.is_dir() or home.resolve()!=home):
-            raise Refused('stock uv original project home')
+        refuse_if(type(json.loads(body,object_pairs_hook=unique)) is not dict, 'stock uv bounded original request object')
+        refuse_if(case==PROJECT and (not home.is_dir() or home.resolve()!=home), 'stock uv original project home')
     env={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)',
         'UNREST_HOME':str(home),'UNREST_PROJECTS_DIR':str(home/'projects')}
-    if raw['executable']!='uv':
-        raise Refused('stock uv original command')
+    refuse_if(raw['executable']!='uv', 'stock uv original command')
     runtime=Path(host.meta['runtime_root'])
     executable=runtime/'bin/uv'
     pin=uv_digest(executable)
-    if {'path':str(executable),'sha256':pin}!=host.binding['uv']:
-        raise Refused('stock uv current native bytes')
+    refuse_if({'path':str(executable),'sha256':pin}!=host.binding['uv'], 'stock uv current native bytes')
     file,file_pin=script(host,'unrest')
     value=build_expected(case,str(executable),pin,tuple(args),tuple(sorted(env.items())),host.meta['checkout'],'native')
     return admit_expected(host,actor,raw,value,'uv-cli',args,maximum=len(COMMANDS[case]),
@@ -91,18 +82,14 @@ def proposal(host,actor,raw):
 
 
 def reserve_child(host,intent,birth):
-    if intent['case'] not in CASES or intent['role']!='uv-cli' or not intent['consumed'] or intent['birth']!=birth:
-        raise Refused('stock uv actual admitted parent')
-    if any(row.get('parent')==birth for row in host.intents.values()):
-        raise Refused('stock uv single console child')
+    refuse_if(intent['case'] not in CASES or intent['role']!='uv-cli' or not intent['consumed'] or intent['birth']!=birth, 'stock uv actual admitted parent')
+    refuse_if(any(row.get('parent')==birth for row in host.intents.values()), 'stock uv single console child')
     declaration=intent['uv_console']
     runtime=Path(host.meta['runtime_root'])
     executable=runtime/'bin/unrest'
-    if native_digest(executable)!=host.binding['entry']['sha256']:
-        raise Refused('stock uv exact native console guard')
+    refuse_if(native_digest(executable)!=host.binding['entry']['sha256'], 'stock uv exact native console guard')
     file,pin=script(host,'unrest')
-    if str(file)!=declaration['script'] or pin!=declaration['pin']:
-        raise Refused('stock uv retained console script')
+    refuse_if(str(file)!=declaration['script'] or pin!=declaration['pin'], 'stock uv retained console script')
     host.serial+=1
     host.intents[host.serial]={'ticket':host.serial,'case':intent['case'],'role':'fixed-inline','parent':birth,
         'environment':child_environment(host.meta,intent['environment']),'cwd':intent['cwd'],

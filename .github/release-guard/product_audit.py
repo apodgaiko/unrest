@@ -2,7 +2,7 @@
 import sys
 import threading
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from speed_inline import CASES as CHILD_CASES
 
 CASES=tuple('tests/test_v04_speed_runner.py::test_'+name for name in (
@@ -39,8 +39,7 @@ class Order:
             return
         sys.addaudithook(self.tail)
         sys.audit('unrest.guard.audit-tail',self.probe)
-        if not self.ack:
-            raise Refused('product audit tail was not installed')
+        refuse_if(not self.ack, 'product audit tail was not installed')
         self.enabled=True
 
 

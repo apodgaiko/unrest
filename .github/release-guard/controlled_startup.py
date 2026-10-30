@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 
 from bootstrap_cases import configuration, wrapper, declaration
-from content_manifest import Refused, is_sha256
+from content_manifest import Refused, is_sha256, refuse_if
 from controlled_cases import eligible as CONTROLLED, backend_path, BACKENDS, SERVERS
 from launch_policy import build_expected
 
@@ -18,8 +18,7 @@ ACP = 'tests/fixtures/controlled_python_acp.py'
 BACKEND_PIN = 'be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53'
 ACP_PIN = 'f5134a2d79b348b70b05a66566ff65d0049f102665200a22f3a6fcbd1c4f58be'
 def expected_entry(case,checkout,home,native,native_pin,*,backend,relay=None,variant=0,backend_pin=None):
-    if type(variant) is not int or variant not in range(4):
-        raise Refused('controlled finite configuration variant')
+    refuse_if(type(variant) is not int or variant not in range(4), 'controlled finite configuration variant')
     configured=variant!=0 if CONTROLLED(case) else declaration(case).configured
     servers=SERVERS if variant>=2 else ()
     skills=(str(home.parent.parent.parent/'subscription/skills/example/SKILL.md'),) if variant==3 else ()
@@ -37,10 +36,9 @@ def expected_entry(case,checkout,home,native,native_pin,*,backend,relay=None,var
         vector = (native,'-c',delay,*source[1:]) if delay is not None else source
         kind,reference = ('python-command',None) if delay is not None else ('python-script',pin)
     else:
-        if (type(relay) is not list or len(relay) != 4
+        refuse_if(type(relay) is not list or len(relay) != 4
                 or any(type(relay[i]) is not int or not 0 < relay[i] <= 65535 for i in (0,2))
-                or any(not is_sha256(relay[i]) for i in (1,3))):
-            raise Refused('controlled entry acquired relay')
+                or any(not is_sha256(relay[i]) for i in (1,3)), 'controlled entry acquired relay')
         pin = ACP_PIN
         source = vector = (native,str(checkout/ACP),'--controlled-local-acp-v1')
         kind,reference = 'python-script',pin

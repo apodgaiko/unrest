@@ -4,7 +4,7 @@ import json
 import os
 import re
 
-from content_manifest import Refused,read_regular,native_digest
+from content_manifest import Refused, read_regular, native_digest, refuse_if
 from control_transport import unique
 from git_policy import fixture_root as repository_root, WORKER_REPOSITORIES as SLOTS, FIXTURE_SERVER_INQUIRY as SERVER_INQUIRY
 from launch_policy import build_expected,admit_expected,source_unit,literal
@@ -55,8 +55,7 @@ def fixture(host,home):
         body="import pathlib,time\nwhile not pathlib.Path(__file__).with_name('allow-start').exists(): time.sleep(0.01)\n"+body
     file=home/'executor_fixture.py'
     actual,info,pin=read_regular(file,16384,uid=20000,forbidden=0o6022)
-    if actual!=body.encode():
-        raise Refused('worker original executor bytes')
+    refuse_if(actual!=body.encode(), 'worker original executor bytes')
     return {'path':str(file),'sha256':pin,'identity':list(_key(info))}
 
 
@@ -103,8 +102,7 @@ def install_fixture(policy):
 def descendant(host,actor,raw):
     rows=[row for row in host.intents.values() if row.get('run_worker') and row.get('birth')==actor['birth']
           and row['token']==actor['token'] and row['consumed']]
-    if host.case not in DESCENDANTS or len(rows)!=1:
-        raise Refused('worker finite descendant owner')
+    refuse_if(host.case not in DESCENDANTS or len(rows)!=1, 'worker finite descendant owner')
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
     script='tests/fixtures/cancel_registered_child.py'
     child_pin='5be8b3003dc4eb36acedce41822e3128cf288ed12b21cf1a5787e39386ae5b7e'
@@ -133,14 +131,12 @@ def proposal(host,actor,raw):
     custom=case in WORKERS
     ordinal=sum(row['case']==case and row.get('run_worker',False) for row in host.intents.values())
     maximum=MAXIMUM.get(case,1)
-    if case not in ALL_CASES or ordinal>=maximum:
-        raise Refused('async error worker exact case and count')
+    refuse_if(case not in ALL_CASES or ordinal>=maximum, 'async error worker exact case and count')
     home=Path(raw['cwd'])
     binding=fixture(host,home) if custom else None
     if not custom:
         repository_root(host,case,str(home.parent/SLOTS[case][0]))
-        if home.name!='.unrest' or home.resolve()!=home:
-            raise Refused('async error worker original home')
+        refuse_if(home.name!='.unrest' or home.resolve()!=home, 'async error worker original home')
     env={'LANG':'C.UTF-8','PATH':os.defpath,'PYTHONPATH':str(Path(host.meta['checkout'])/'src'),
          'UNREST_APPROVAL_RECOVERY':'0','UNREST_HOME':str(home),'UNREST_PROJECTS_DIR':str(home/'projects')}
     if custom:
@@ -151,16 +147,13 @@ def proposal(host,actor,raw):
 def admit_worker(host,actor,raw,home,operation,env,maximum,binding=None,custom=False,executor=None):
     case=host.case
     argv=raw['argv']
-    if len(argv)!=13 or not re.fullmatch('run:[a-f0-9]{64}',argv[6]):
-        raise Refused('async error worker bounded run identity')
+    refuse_if(len(argv)!=13 or not re.fullmatch('run:[a-f0-9]{64}',argv[6]), 'async error worker bounded run identity')
     run=argv[6]
     record,_,_=read_regular(home/'.unrest/runs'/run[4:]/'request.json',65536,uid=20000,mode=0o600)
     document=json.loads(record,object_pairs_hook=unique)
-    if document.get('run_id')!=run or document.get('operation')!=operation or document.get('generation')!=1:
-        raise Refused('async error worker exact retained request')
+    refuse_if(document.get('run_id')!=run or document.get('operation')!=operation or document.get('generation')!=1, 'async error worker exact retained request')
     arguments=document.get('arguments',{})
-    if type(arguments) is not dict:
-        raise Refused('worker retained request arguments')
+    refuse_if(type(arguments) is not dict, 'worker retained request arguments')
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
     vector=[native,'-m','unrest_harness.run_worker','--project-root',str(home),'--run-id',run,
             '--executor',executor or ('executor_fixture:execute' if custom else 'unrest_harness.runtime_executor:execute'),'--custody-root-id','local:unrest-run-control','--generation','1']
@@ -180,15 +173,13 @@ def self_group(host,actor,payload):
     process=host.ledger.process(actor['birth'])
     children=[child for child in host.actors.values() if child['case']==host.case
         and host.ledger.process(child['birth']).parent==actor['birth']]
-    if (host.case!=REGISTERED or actor['case']!=host.case or actor['role']!='fixed-inline' or not actor['body_ready']
+    refuse_if(host.case!=REGISTERED or actor['case']!=host.case or actor['role']!='fixed-inline' or not actor['body_ready']
             or row is None or not row.get('run_worker') or not host.executed(row)
             or payload!={'signal':15} or type(payload['signal']) is not int or 15 not in actor['signals'] or not process.new_session
             or not process.session_complete or len(children)!=1 or children[0]['role']!='session-child'
-            or not children[0]['body_ready']):
-        raise Refused('registered worker exact cancellation group')
+            or not children[0]['body_ready'], 'registered worker exact cancellation group')
     actual=process_identity(actor['birth'].pid)
-    if Birth.read(actual)!=actor['birth'] or (actual['pgid'],actual['sid'])!=(actor['birth'].pid,actor['birth'].pid):
-        raise Refused('registered worker actual session')
+    refuse_if(Birth.read(actual)!=actor['birth'] or (actual['pgid'],actual['sid'])!=(actor['birth'].pid,actor['birth'].pid), 'registered worker actual session')
     from composed_adoption import record_group
     record_group(host,actor,15)
     return {'ok':True}

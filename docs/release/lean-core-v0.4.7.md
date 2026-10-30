@@ -125,9 +125,10 @@ kernel exit/original-parent wait evidence. Its ceiling is 10,000 physical
 enforcement lines, counting every non-test file under `.github` and the complete
 `tools/check_distribution.py` oracle; guard tests are reported separately. The earlier
 9,999-line snapshot lacked launch families exposed by the unexcluded checkpoint.
-The current replacement fits at 9,998 enforcement lines after retiring its
-temporary diagnostic workflow. Certification still requires the frozen candidate
-to satisfy the same counter and dependency-closure review.
+The replacement measures 9,925 enforcement lines after retiring its temporary
+diagnostic workflow and consolidating unchanged refusal preconditions. The count
+includes the complete external distribution oracle. Certification still requires
+the frozen candidate to satisfy the same counter and dependency-closure review.
 The counter does not itself prove dependency closure or release eligibility.
 See [guard integration](../architecture/release-guard-integration.md) for the
 retained boundaries and explicitly retired duplicate enforcement claims.
@@ -136,5 +137,5 @@ Bounded native controls and selected original source families have execution
 evidence. The shared extracted-sdist path completed all 15 original persistence
 cases in CI run 40933142225 on 2026-10-29. Selected diagnostics are not the frozen
 unexcluded checkpoint. The canonical CI workflow now owns the full source,
-archive, installed lifecycle and native controls; certification and publication
-remain pending until that frozen run and independent review pass.
+archive, installed lifecycle and native controls. Publication requires that
+frozen run and independent review to pass.

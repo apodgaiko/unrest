@@ -3,7 +3,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from package_cases import literal, PINS, NEGATIVE
 
 CHECKER_COMMAND='from archive_leaf import checker_main;checker_main()'
@@ -13,8 +13,7 @@ LEAF_COMMAND='from archive_leaf import main;raise SystemExit(main())'
 def oracle(checkout):
     path=checkout/'tools/check_distribution.py'
     from source_profile import digest
-    if digest(path)!=PINS['tools/check_distribution.py']:
-        raise Refused('archive original checker bytes')
+    refuse_if(digest(path)!=PINS['tools/check_distribution.py'], 'archive original checker bytes')
     specification=importlib.util.spec_from_file_location('original_archive_checker',path)
     result=importlib.util.module_from_spec(specification)
     specification.loader.exec_module(result)
@@ -40,15 +39,13 @@ def main():
     from source_root import local_cases,OriginalCases
     from postbuild_root import CASES
     import pytest
-    if ACTIVE is None or ACTIVE.profile['role'] not in ('root','archive-leaf'):
-        raise Refused('archive leaf native role')
+    refuse_if(ACTIVE is None or ACTIVE.profile['role'] not in ('root','archive-leaf'), 'archive leaf native role')
     policy=ACTIVE
     root=policy.profile['role']=='root'
     if root and tuple(policy.profile['cases'])!=CASES:
         raise Refused('archive exact native activation absent')
     kind='normal' if root else NEGATIVE.get(policy.case,'normal')
-    if any(name=='unrest_harness' or name.startswith('unrest_harness.') for name in sys.modules):
-        raise Refused('archive package preloaded before probe')
+    refuse_if(any(name=='unrest_harness' or name.startswith('unrest_harness.') for name in sys.modules), 'archive package preloaded before probe')
     leaf=OriginalCases(policy) if root else local_cases(policy,CASES,normal_outcomes=kind=='missing-corpus')
     original=pytest.main
     called=False

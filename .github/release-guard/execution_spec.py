@@ -1,7 +1,7 @@
 """Exact observer-issued execution domain; no candidate-derived authority."""
 from pathlib import Path
 
-from content_manifest import Refused, capture
+from content_manifest import Refused, capture, refuse_if
 
 def issue(role, vector, script, script_pin, fixture=None):
     if vector[3] in ('-c','-m'):
@@ -41,8 +41,7 @@ def admitted(intents,role,case,pid,token,vector,environment,cwd,script):
             and value['case']==case and value['role']==role and value['consumed']
             and value['pid']==pid and value.get('python_vector',value['translated'])==vector
             and value['environment']==environment and value['cwd']==cwd]
-    if len(values)!=1:
-        raise Refused('execution specification unique admitted intent')
+    refuse_if(len(values)!=1, 'execution specification unique admitted intent')
     value=values[0]
     return issue(role,vector,script,value['script_sha256'] if script is not None else None,value.get('execution_fixture')),value
 

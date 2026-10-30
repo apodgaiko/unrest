@@ -7,7 +7,7 @@ import stat
 import struct
 import sys
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from linux_observation import pidfd_open,process_identity
 from process_ledger import Birth
 
@@ -54,8 +54,7 @@ def acquire(birth,fd,inspect=descriptor):
     if (sys.platform!='linux' or os.uname().machine!='x86_64'
             or type(birth) is not Birth or type(fd) is not int or not 3<=fd<=1024):
         raise Refused('inherited Unix stream acquisition operands')
-    if Birth.read(process_identity(birth.pid))!=birth:
-        raise Refused('inherited Unix stream birth changed')
+    refuse_if(Birth.read(process_identity(birth.pid))!=birth, 'inherited Unix stream birth changed')
     process=pidfd_open(birth.pid)
     try:
         libc=ctypes.CDLL(None,use_errno=True)
@@ -65,12 +64,10 @@ def acquire(birth,fd,inspect=descriptor):
         try:
             value=inspect(copied,birth.uid)
             current=os.stat('/proc/'+str(birth.pid)+'/fd/'+str(fd))
-            if [current.st_dev,current.st_ino]!=value[:2]:
-                raise Refused('inherited Unix stream descriptor replaced')
+            refuse_if([current.st_dev,current.st_ino]!=value[:2], 'inherited Unix stream descriptor replaced')
         finally:
             os.close(copied)
     finally:
         os.close(process)
-    if Birth.read(process_identity(birth.pid))!=birth:
-        raise Refused('inherited Unix stream birth changed')
+    refuse_if(Birth.read(process_identity(birth.pid))!=birth, 'inherited Unix stream birth changed')
     return [fd,*value]

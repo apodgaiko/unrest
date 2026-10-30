@@ -1,5 +1,5 @@
 """Closed controlled Python images and configuration variants, never native selection."""
-from content_manifest import Refused,read_regular
+from content_manifest import Refused, read_regular, refuse_if
 from cohort_cases import CAMPAIGNS
 from cohort_controller import CASES as CRASH
 
@@ -78,14 +78,12 @@ def acquire_backend(case,home):
 def select_entry(case,checkout,home,native,native_pin,raw,*,backend,relay,records):
     from controlled_startup import expected_entry
     from launch_policy import check_expected
-    if not eligible(case):
-        raise Refused('controlled source module')
+    refuse_if(not eligible(case), 'controlled source module')
     pin=acquire_backend(case,home) if backend else None
     variants=(0,) if case in (*CAMPAIGNS,*CRASH) else range(4)
     if not backend:
         pairs=[row for row in records if row['cwd']==str(home) and row['role']=='backend']
-        if len(pairs)!=1 or type(pairs[0].get('controlled_variant')) is not int or pairs[0]['controlled_variant'] not in variants:
-            raise Refused('controlled ACP configuration pair')
+        refuse_if(len(pairs)!=1 or type(pairs[0].get('controlled_variant')) is not int or pairs[0]['controlled_variant'] not in variants, 'controlled ACP configuration pair')
         variants=(pairs[0]['controlled_variant'],)
     for variant in variants:
         result=expected_entry(case,checkout,home,native,native_pin,backend=backend,relay=relay,variant=variant,backend_pin=pin)

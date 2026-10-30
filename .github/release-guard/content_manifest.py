@@ -26,6 +26,12 @@ class Refused(ValueError):
     """A closed refusal code; never includes source bytes or exception bodies."""
 
 
+def refuse_if(invalid: object, code: str) -> None:
+    """Refuse a failed guard condition, including under optimized execution."""
+    if invalid:
+        raise Refused(code)
+
+
 class Member(TypedDict):
     path: str
     mode: int
@@ -44,22 +50,19 @@ def _path(value: object) -> str:
             or any(part in {"", ".", ".."} for part in value.split("/"))):
         raise Refused("noncanonical_path")
     try:
-        if len(value.encode("utf-8")) > MAX_PATH_BYTES:
-            raise Refused("path_bound")
+        refuse_if(len(value.encode("utf-8")) > MAX_PATH_BYTES, "path_bound")
     except UnicodeError:
         raise Refused("path_encoding") from None
     return value
 
 
 def _inventory(paths: Sequence[str]) -> list[str]:
-    if type(paths) not in (list, tuple):
-        raise Refused("inventory_type")
+    refuse_if(type(paths) not in (list, tuple), "inventory_type")
     values = list(paths)
     if not values or len(values) > MAX_FILES:
         raise Refused("inventory_bound")
     values = [_path(value) for value in values]
-    if len(set(values)) != len(values):
-        raise Refused("duplicate_path")
+    refuse_if(len(set(values)) != len(values), "duplicate_path")
     return sorted(values)
 
 
@@ -80,8 +83,7 @@ def _descend(stack, parent, parts, identity):
             raise Refused('noncanonical_root' if identity is _directory_key else 'non_directory_component')
         child=os.open(part,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=parent)
         stack.callback(os.close,child)
-        if identity(before)!=identity(os.fstat(child)):
-            raise Refused('directory_acquisition_race')
+        refuse_if(identity(before)!=identity(os.fstat(child)), 'directory_acquisition_race')
         chain.append((parent,part,child,identity(before)))
         parent=child
     return parent,chain
@@ -96,8 +98,7 @@ def _verify(chain,identity,code):
 
 def _root(stack: ExitStack, path: Path):
     path=path.absolute()
-    if '..' in path.parts:
-        raise Refused('noncanonical_root')
+    refuse_if('..' in path.parts, 'noncanonical_root')
     parent=os.open('/',os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
     stack.callback(os.close,parent)
     return _descend(stack,parent,path.parts[1:],_directory_key)
@@ -115,18 +116,15 @@ def _member(root: int, name: str, line_counts: dict[str, int] | None,
                 or mode is not None and stat.S_IMODE(before.st_mode)!=mode
                 or before.st_size<minimum):
             raise Refused("nonregular_or_aliased_file")
-        if before.st_size > file_bound:
-            raise Refused("file_bound")
+        refuse_if(before.st_size > file_bound, "file_bound")
         fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
                      dir_fd=parent)
         stack.callback(os.close, fd)
-        if _key(before) != _key(os.fstat(fd)):
-            raise Refused("file_acquisition_race")
+        refuse_if(_key(before) != _key(os.fstat(fd)), "file_acquisition_race")
         with os.fdopen(fd,'rb',closefd=False) as stream:
             body=stream.read(before.st_size+1)
         size=len(body)
-        if size>before.st_size:
-            raise Refused('file_read_bound')
+        refuse_if(size>before.st_size, 'file_read_bound')
         if (size != before.st_size or _key(before) != _key(os.fstat(fd))
                 or _key(before) != _key(os.stat(parts[-1], dir_fd=parent,
                                                  follow_symlinks=False))):
@@ -156,11 +154,9 @@ def _capture(root: Path, paths: Sequence[str], line_counts: dict[str, int] | Non
             for name in names:
                 member = _member(fd, name, line_counts, file_bound, forbidden=forbidden)
                 total += member["size"]
-                if total > MAX_TOTAL_BYTES:
-                    raise Refused("total_byte_bound")
+                refuse_if(total > MAX_TOTAL_BYTES, "total_byte_bound")
                 files.append(member)
-            if before != _key(os.fstat(fd)):
-                raise Refused("root_read_race")
+            refuse_if(before != _key(os.fstat(fd)), "root_read_race")
             _verify(chain,_directory_key,'root_read_race')
     except OSError:
         raise Refused("filesystem_acquisition_refused") from None
@@ -205,7 +201,6 @@ def encode(manifest: Manifest) -> bytes:
     encoder = json.JSONEncoder(sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     for chunk in encoder.iterencode(manifest):
         block = chunk.encode("ascii")
-        if len(result) + len(block) + 1 > MAX_MANIFEST_BYTES:
-            raise Refused("manifest_byte_bound")
+        refuse_if(len(result) + len(block) + 1 > MAX_MANIFEST_BYTES, "manifest_byte_bound")
         result.extend(block)
     return bytes(result) + b"\n"

@@ -7,7 +7,7 @@ import socket
 import threading
 import time
 
-from content_manifest import Refused
+from content_manifest import Refused as Refused, refuse_if
 from control_transport import Frame, RESPONSE_LIMIT, peer, verify_reply
 from process_ledger import Birth
 
@@ -47,8 +47,7 @@ class Client:
                     self.sleep(.0001)
                 peer(stream, self.observer, 20001)
                 answer = verify_reply(response, request)
-                if answer.get('ok') is not True:
-                    raise Refused('bootstrap observer refused operation')
+                refuse_if(answer.get('ok') is not True, 'bootstrap observer refused operation')
                 return answer
             finally:
                 self.close(stream)

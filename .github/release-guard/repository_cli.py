@@ -1,7 +1,7 @@
 """Exact copied-repository CLI checks; imports normalize to equal sealed bytes."""
 from pathlib import Path
 
-from content_manifest import Refused
+from content_manifest import Refused as Refused, refuse_if
 from git_policy import image
 from launch_policy import source_unit,build_expected,admit_expected
 from owned_fixture import retain
@@ -25,12 +25,10 @@ def proposal(host,actor,raw):
     case=host.case
     checkout=Path(host.meta['checkout'])
     source_unit(checkout,TEST,PINS[TEST])
-    if not eligible(case) or raw['stdin'] is not None:
-        raise Refused('repository CLI closed case and input')
+    refuse_if(not eligible(case) or raw['stdin'] is not None, 'repository CLI closed case and input')
     cwd=Path(raw['cwd'])
     base=retain(host,cwd.parent, 20000)
-    if cwd!=base/'repository' or cwd.resolve()!=cwd:
-        raise Refused('repository CLI original owned directory')
+    refuse_if(cwd!=base/'repository' or cwd.resolve()!=cwd, 'repository CLI original owned directory')
     records=[row for row in host.intents.values() if row['case']==case]
     env={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}
     runtime=Path(host.meta['runtime_root'])
@@ -38,11 +36,9 @@ def proposal(host,actor,raw):
     if actor['role']=='root':
         host.root_only(actor)
         console=bool(records)
-        if len(records)!=(1 if console else 0) or console and not host.ledger.reaped(records[0]['birth'],records[0]['token']):
-            raise Refused('repository CLI init and original parent wait')
+        refuse_if(len(records)!=(1 if console else 0) or console and not host.ledger.reaped(records[0]['birth'],records[0]['token']), 'repository CLI init and original parent wait')
         if console:
-            if tree(cwd/'src')!=tree(checkout/'src'):
-                raise Refused('repository CLI copied source differs')
+            refuse_if(tree(cwd/'src')!=tree(checkout/'src'), 'repository CLI copied source differs')
             executable=str(runtime/'bin/unrest')
             vector=(executable,'check-repository')
             env['PYTHONPATH']=str(cwd/'src')
@@ -55,11 +51,9 @@ def proposal(host,actor,raw):
     else:
         parent=[row for row in records if row['role']=='fixed-inline' and row['consumed']
                 and row.get('birth')==actor['birth'] and row['token']==actor['token'] and row.get('repository_cli')==str(cwd)]
-        if actor['role']!='fixed-inline' or not actor['body_ready'] or len(parent)!=1 or len(records)!=2:
-            raise Refused('repository CLI exact console query owner')
+        refuse_if(actor['role']!='fixed-inline' or not actor['body_ready'] or len(parent)!=1 or len(records)!=2, 'repository CLI exact console query owner')
         executable,vector,role,pin,payload='/usr/bin/git',('git','-C',str(cwd),'rev-parse','--show-toplevel'),'git-fixed',image(),None
         env['PYTHONPATH']=str(cwd/'src')
     expected=build_expected(case,executable,pin,vector,tuple(sorted(env.items())),str(cwd),'native')
-    if raw['executable']!=executable:
-        raise Refused('repository CLI exact executable')
+    refuse_if(raw['executable']!=executable, 'repository CLI exact executable')
     return admit_expected(host,actor,raw,expected,role,[executable,*vector[1:]],payload,maximum=2 if role=='git-fixed' else 1,fields=fields)

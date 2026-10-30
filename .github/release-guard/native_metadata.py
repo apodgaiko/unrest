@@ -6,7 +6,7 @@ import io
 import tarfile
 import urllib.request
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from git_policy import regular
 
 INPUTS = (
@@ -32,8 +32,7 @@ def descriptor():
 
 
 def prepare(root):
-    if root.resolve()!=root:
-        raise Refused('native metadata canonical root')
+    refuse_if(root.resolve()!=root, 'native metadata canonical root')
     root.mkdir(mode=0o755)
     for name, url, archive_pin, member, member_pin in INPUTS:
         with urllib.request.urlopen(url, timeout=60) as response:
@@ -45,11 +44,9 @@ def prepare(root):
             if not entry.isfile() or entry.size > 150*1024*1024:
                 raise Refused('public native metadata member')
             stream = archive.extractfile(entry)
-            if stream is None:
-                raise Refused('public native metadata missing body')
+            refuse_if(stream is None, 'public native metadata missing body')
             body = stream.read()
-        if hashlib.sha256(body).hexdigest() != member_pin:
-            raise Refused('original native metadata member pin')
+        refuse_if(hashlib.sha256(body).hexdigest() != member_pin, 'original native metadata member pin')
         relative, mode, _, _ = MEMBERS[0 if name == 'node.data' else 1]
         target = root/relative
         target.parent.mkdir(parents=True,exist_ok=True)

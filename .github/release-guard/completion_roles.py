@@ -1,7 +1,7 @@
 """Closed original role-server schedules, environments and literal templates."""
 from pathlib import Path
 
-from content_manifest import Refused
+from content_manifest import Refused, refuse_if
 from owned_fixture import acquire
 from node_environment import scoped,project_path
 from launch_policy import source_unit,assignment,render_string
@@ -49,8 +49,7 @@ OWNER=20000
 
 
 def schedule(case):
-    if type(case) is not str or case not in CASES:
-        raise Refused('completion closed role case')
+    refuse_if(type(case) is not str or case not in CASES, 'completion closed role case')
     family,role,scenario=CASES[case]
     mode='validator' if role=='validate' else 'worker'
     if family=='composed':
@@ -76,17 +75,14 @@ def schedule(case):
 
 def root(host,cwd):
     case=host.case
-    if case not in CASES:
-        raise Refused('completion undeclared role')
+    refuse_if(case not in CASES, 'completion undeclared role')
     if case.split('::')[0]==SERVER_TEST:
         source_unit(Path(host.meta['checkout']),SERVER_TEST,PINS[SERVER_TEST])
     workspace,_=acquire(cwd,Path(host.meta['owned']),OWNER)
-    if workspace.name!='workspace':
-        raise Refused('completion original workspace')
+    refuse_if(workspace.name!='workspace', 'completion original workspace')
     parent=workspace.parent
     selected=(str(parent),)
-    if host.fixture_roots.setdefault(('completion-role',case),selected)!=selected:
-        raise Refused('completion changed selected fixture path')
+    refuse_if(host.fixture_roots.setdefault(('completion-role',case),selected)!=selected, 'completion changed selected fixture path')
     return parent
 
 
@@ -130,8 +126,7 @@ def environment(checkout,parent,case,ordinal,ambient,*,native=None,observed=None
             result['UNREST_'+name+'_PROVIDER']='claude'
             result['UNREST_'+name+'_ACP_COMMAND']=str(parent/'workspace/.forbidden-child-trap') if family=='restart' and mode(case,ordinal)!='orchestrator' else '/bin/true'
     if family=='composed':
-        if native is None:
-            raise Refused('composed original native command binding')
+        refuse_if(native is None, 'composed original native command binding')
         command=native+' '+str(parent/'workspace/.hermetic-acp-adapter.py')+' '+str(parent/'workspace/.hermetic-acp-trace.jsonl')
         for name in (('WORKER',) if case in DIRECT else ('WORKER','VALIDATOR','TERMINAL_REVIEWER')):
             result['UNREST_'+name+'_ACP_COMMAND']=command

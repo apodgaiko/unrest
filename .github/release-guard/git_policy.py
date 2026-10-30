@@ -14,7 +14,7 @@ from pathlib import Path, PurePosixPath
 import stat
 from launch_policy import source_unit, build_expected, admit_expected
 from owned_fixture import acquire, retain
-from content_manifest import Refused, native_digest, read_regular
+from content_manifest import Refused, native_digest, read_regular, refuse_if
 from controlled_cases import eligible as CONTROLLED_CASES
 from cohort_cases import CASES as COHORT_CASES, EXTRA as COHORT_EXTRA
 from completion_roles import CASES as ROLE_CASES, SOURCE as ROLE_SOURCE, ROOT_QUERIES, DEFECT as ROLE_DEFECT, schedule as role_schedule, root as role_root, actor_slot
@@ -86,8 +86,7 @@ def operand_text(value, maximum=4096):
     if type(value) is not str or not value or len(value) > maximum or '\0' in value:
         raise Refused('git value primitive')
     try:
-        if len(value.encode('utf-8')) > maximum:
-            raise Refused('git value text bound')
+        refuse_if(len(value.encode('utf-8')) > maximum, 'git value text bound')
     except UnicodeError:
         raise Refused('git value text encoding') from None
     return value
@@ -160,8 +159,7 @@ def command_location(repo, path, *, target=False):
 
 def command_match(repository,location,argv,stdin,environment):
     """Parse one complete closed vector; labels do not select command rights."""
-    if type(argv) is not list or not argv or any(type(value) is not str for value in argv) or argv[0] not in ('git','/usr/bin/git'):
-        raise Refused('git literal argument vector')
+    refuse_if(type(argv) is not list or not argv or any(type(value) is not str for value in argv) or argv[0] not in ('git','/usr/bin/git'), 'git literal argument vector')
     repo,cwd=command_path(repository),command_path(location)
     command_location(repo,cwd)
     args=tuple(argv[1:])
@@ -190,8 +188,7 @@ def command_match(repository,location,argv,stdin,environment):
                     raise Refused('git patch scope')
                 operand_digest(patch.stem,64)
             case ('update-ref',reference,new,old):
-                if reference not in ('refs/heads/main','refs/heads/master'):
-                    raise Refused('git update reference')
+                refuse_if(reference not in ('refs/heads/main','refs/heads/master'), 'git update reference')
                 operand_digest(new)
                 operand_digest(old)
             case ('commit-tree',tree,'-p',revision):
@@ -248,14 +245,12 @@ MEASUREMENT_WORKERS=tuple(MEASUREMENT_TEST+'::'+name for name in ('test_evolutio
 
 def measurement_worker(host,actor,raw):
     from run_worker_launch import admit_worker,MEASUREMENT_EVOLUTION,MEASUREMENT_PROJECT
-    if host.case not in (MEASUREMENT_EVOLUTION,MEASUREMENT_PROJECT):
-        raise Refused('measurement worker exact case')
+    refuse_if(host.case not in (MEASUREMENT_EVOLUTION,MEASUREMENT_PROJECT), 'measurement worker exact case')
     source_unit(Path(host.meta['checkout']),MEASUREMENT_TEST,MEASUREMENT_PIN)
     records=[row for row in host.intents.values() if row['case']==host.case and row.get('run_worker')]
     from measurement_runtime import PROJECT_STEPS
     steps=((11,'start_project',()),(16,'start_project',())) if host.case==MEASUREMENT_EVOLUTION else PROJECT_STEPS
-    if len(records)>=len(steps) or any(not row['consumed'] or not host.ledger.reaped(row['birth'],row['token']) for row in records):
-        raise Refused('measurement worker original sequence and waits')
+    refuse_if(len(records)>=len(steps) or any(not row['consumed'] or not host.ledger.reaped(row['birth'],row['token']) for row in records), 'measurement worker original sequence and waits')
     repetition,operation,nodes=steps[len(records)]
     home=Path(raw['cwd'])
     fixture_root(host,host.case,str(home.parent/'workspace'))
@@ -295,8 +290,7 @@ def local_case(case):
 
 
 def fixture_root(host,case,repository):
-    if not local_case(case):
-        raise Refused('Git exact fixture case')
+    refuse_if(not local_case(case), 'Git exact fixture case')
     file=case.split('::')[0]
     source_unit(Path(host.meta['checkout']),file,FIXTURE_PINS[file])
     acquire(repository,Path(host.meta['owned']))
@@ -388,16 +382,14 @@ def history_cli_proposal(host,actor,raw):
     source_unit(checkout,HISTORY_V045,HISTORY_PINS[HISTORY_V045],(HISTORY_CLI.split('::')[1],))
     source_unit(checkout,HISTORY_TOOL,HISTORY_TOOL_PIN)
     argv=raw['argv']
-    if len(argv)!=7 or raw['stdin'] is not None:
-        raise Refused('binding CLI original argument count')
+    refuse_if(len(argv)!=7 or raw['stdin'] is not None, 'binding CLI original argument count')
     root=retain(host,Path(argv[4]).parent, 20000)
     repository=root/'repository'
     if repository.resolve()!=repository or (repository/'.git').resolve()!=repository/'.git':
         raise Refused('binding CLI repository alias')
     previous=[value for value in host.intents.values() if value['case']==HISTORY_CLI]
     ordinal=sum(value['role']=='fixed-inline' for value in previous)
-    if ordinal>=2:
-        raise Refused('binding CLI original two invocations')
+    refuse_if(ordinal>=2, 'binding CLI original two invocations')
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
     vector=(native,'-B',str(checkout/HISTORY_TOOL),'--repository',str(repository),'--check-manifest',str(root/('active-manifest.json' if ordinal==0 else 'wrong-manifest.json')))
     environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':HISTORY_CLI+' (call)'}
@@ -422,15 +414,13 @@ def regular(file, maximum=4096, uid=20000):
 
 def image(file='/usr/bin/git'):
     target = Path(file)
-    if str(target.resolve(strict=True)) != file:
-        raise Refused('git native image alias')
+    refuse_if(str(target.resolve(strict=True)) != file, 'git native image alias')
     for member in (target, *target.parents):
         info = member.lstat()
         if info.st_uid != 0 or stat.S_IMODE(info.st_mode) & 0o6022:
             raise Refused('git native image custody')
         if member == target:
-            if not stat.S_ISREG(info.st_mode) or not info.st_mode & 0o111:
-                raise Refused('git native executable')
+            refuse_if(not stat.S_ISREG(info.st_mode) or not info.st_mode & 0o111, 'git native executable')
         elif not stat.S_ISDIR(info.st_mode):
             raise Refused('git native ancestor')
     return native_digest(target)
@@ -472,15 +462,13 @@ class Git:
     def launch(self, actor, operation, repository, command, raw, environment):
         host = self.host
         host.root_only(actor)
-        if not local_case(host.case):
-            raise Refused('Git finite case')
+        refuse_if(not local_case(host.case), 'Git finite case')
         root = self.repository(repository, operation, 'workspaces')
         self.location(root, command.cwd)
         if operation in ('lease-add','integration-add','rollback-add','remove-tree'):
             target = Path(command.argv[-1] if operation=='remove-tree' else command.argv[-2])
             command_location(root,target,target=True)
-            if target.resolve(strict=False) != target:
-                raise Refused('git worktree target alias')
+            refuse_if(target.resolve(strict=False) != target, 'git worktree target alias')
         return issue(host,actor,raw,command,environment,
             fields={'command':command,'repository':str(root),'operation':operation})
 
@@ -493,15 +481,13 @@ class Git:
                 or process.exit is not None or process.terminal is not None):
             raise Refused('git child outside original worktree creation')
         siblings = host.ledger.children.get(parent, ())
-        if list(siblings) != [birth]:
-            raise Refused('git single current checkout helper')
+        refuse_if(list(siblings) != [birth], 'git single current checkout helper')
         tree = intent['command'].argv[-2]
         root, worktree = Path(intent['repository']), Path(tree)
         self.location(root, tree)
         executable = '/usr/lib/git-core/git'
         pin=intent['executable_sha256']
-        if image(executable) != pin:
-            raise Refused('git helper exact native image')
+        refuse_if(image(executable) != pin, 'git helper exact native image')
         environment = {**intent['environment'], 'GIT_DIR': str(worktree / '.git'), 'GIT_WORK_TREE': tree,
             'GIT_EXEC_PATH': '/usr/lib/git-core', 'GIT_PREFIX': '',
             'PATH': '/usr/lib/git-core:' + intent['environment']['PATH']}
@@ -546,12 +532,10 @@ def workspace_prepare(host,actor,raw):
         return nested(host,actor,raw)
     if case in HISTORY_CASES:
         return history_proposal(host,actor,raw)
-    if not local_case(case):
-        raise Refused('Git proposal undeclared case')
+    refuse_if(not local_case(case), 'Git proposal undeclared case')
     choices=[slot for (current,repo),slot in host.git.repositories.items() if current==case
              and (raw['cwd']==repo or raw['cwd'].startswith(repo+'/.unrest-runtime/'))]
-    if len(choices)>1:
-        raise Refused('Git unique repository slot')
+    refuse_if(len(choices)>1, 'Git unique repository slot')
     slot=choices[0] if choices else None
     repository=slot['path'] if slot is not None else raw['cwd']
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
@@ -570,8 +554,7 @@ def workspace_prepare(host,actor,raw):
         host.root_only(actor)
         return host.git.owned_launch(actor,raw,repository,expected,vector)
 
-    if raw['executable']!='/usr/bin/git':
-        raise Refused('Git proposal original executable')
+    refuse_if(raw['executable']!='/usr/bin/git', 'Git proposal original executable')
     operation,command=command_match(repository,raw['cwd'],raw['argv'],raw['stdin'],raw['environment'])
     phase=raw['environment'].get('PYTEST_CURRENT_TEST')
     if case.split('::')[0]==CANDIDATE_TEST:
@@ -580,8 +563,7 @@ def workspace_prepare(host,actor,raw):
             'GIT_CONFIG_KEY_0':'maintenance.auto','GIT_CONFIG_VALUE_0':'false',
             'GIT_AUTHOR_DATE':'2000-01-01T00:00:00+0000','GIT_COMMITTER_DATE':'2000-01-01T00:00:00+0000'}
     else:
-        if phase not in (case+' (setup)',case+' (call)'):
-            raise Refused('Git current original case phase')
+        refuse_if(phase not in (case+' (setup)',case+' (call)'), 'Git current original case phase')
         environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':phase,**dict(command.additions)}
         if case.split('::')[0]==MEASUREMENT_TEST and 'UNREST_WORKER_ACP_COMMAND' in raw['environment']:
             acp=native+' '+str(Path(host.meta['checkout'])/'tests/mock_measurement_acp.py')
@@ -618,13 +600,11 @@ def custody_command(case, argv, cwd, owned):
         raise Refused('custody Git finite command primitives')
     if type(cwd) is not str or str(Path(cwd).resolve()) != cwd or not Path(cwd).is_relative_to(owned/'pytest'):
         raise Refused('custody Git owned repository')
-    if argv[:len(CUSTODY_PREFIX)] != CUSTODY_PREFIX:
-        raise Refused('custody Git literal executable and prefix')
+    refuse_if(argv[:len(CUSTODY_PREFIX)] != CUSTODY_PREFIX, 'custody Git literal executable and prefix')
     args = argv[len(CUSTODY_PREFIX):]
     if args not in (*CUSTODY_FIXED,*COHORT_EXTRA.get(case,())):
         if args[:2] == ('add','--'):
-            if args[2:] not in (('a',),('b',),('lane_a.txt',),('lane_b.txt',)):
-                raise Refused('custody Git exact authored scope')
+            refuse_if(args[2:] not in (('a',),('b',),('lane_a.txt',),('lane_b.txt',)), 'custody Git exact authored scope')
         elif len(args) == 4 and args[:3] == ('diff','--cached','--name-only'):
             operand_digest(args[3])
         else:
@@ -643,8 +623,7 @@ def custody_launch(host,actor,result,kind,raw):
     prior = [v for v in host.intents.values() if v['case'] == host.case and v['role'] == 'git-custody']
     from cohort_controller import CASES as CRASH
     maximum=4 if host.case in CRASH else COHORT_CASES[host.case][1] if host.case in COHORT_CASES else 128
-    if len(prior) >= maximum:
-        raise Refused('custody Git finite case command bound')
+    refuse_if(len(prior) >= maximum, 'custody Git finite case command bound')
     custody_repository(result.cwd,Path(host.meta['owned']))
     return issue(host,actor,raw,result,CUSTODY_ENVIRONMENT,role='git-custody',maximum=maximum,
         fields={'command':result,'repository':result.cwd,'operation':'custody-'+kind})
@@ -665,8 +644,7 @@ COMPLETION_APP_KEYS=frozenset(('UNREST_HOME','UNREST_PROJECTS_DIR','UNREST_PROJE
 
 def completion_application_environment(baseline,observed):
     expected={**baseline,**{key:value for key,value in observed.items() if key in COMPLETION_APP_KEYS}}
-    if observed!=expected:
-        raise Refused('Git environment outside closed application metadata')
+    refuse_if(observed!=expected, 'Git environment outside closed application metadata')
     return expected
 
 
@@ -706,8 +684,7 @@ def completion_proposal(host,actor,raw):
         else:
             actor_slot(host,actor)
             quota=max(row[2] for row in role_schedule(case)) if actor['profile']['environment'].get('UNREST_NODE_TYPE')=='work' else 0
-        if len(records)>=quota:
-            raise Refused('completion server-owned Git query quota')
+        refuse_if(len(records)>=quota, 'completion server-owned Git query quota')
         completion_ready(host,workspace)
         is_fixture=False
         vector=('git','rev-parse','HEAD')
