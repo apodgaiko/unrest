@@ -295,6 +295,8 @@ class OwnedTrace:
                 self.admit_exec(pid, value)
             elif number in (322,425,426,427) or operation==3 and number in (41,53):
                 self.poison.append("unsupported_execveat" if number==322 else "forbidden_socket_or_ring")
+                self.records.append({"kind":"denied_syscall_operands","pid":pid,"syscall":number,
+                    "arguments":[value.rdi,value.rsi,value.rdx]})
                 self.denied.add(pid)
                 value.orig_rax = (1 << 64) - 1
                 ptrace(13, pid, data=ctypes.byref(value))
