@@ -7,7 +7,15 @@ from types import SimpleNamespace
 import pytest
 
 from content_manifest import Refused
-from multiprocess_entry import CASES, TARGET, expected, proposal
+from multiprocess_entry import expected, proposal
+CASES=tuple('tests/test_multiprocess_resource_ownership.py::test_original_child_status_is_preserved['+str(status)+']' for status in (0,17))
+TARGET=['tests.test_multiprocess_resource_ownership','_exit_with_status']
+IPC_CASES=tuple('tests/test_multiprocess_resource_ownership.py::'+name for name in (
+    'test_joined_spawn_queue_event_and_value_close_before_summary',
+    'test_live_child_refusal_preserves_original_error_and_does_not_kill'))
+TRACKER_CASES=tuple('tests/test_multiprocess_resource_ownership.py::'+name for name in (
+    'test_parent_feeder_and_both_pipe_endpoints_are_settled',
+    'test_altered_stdlib_stop_is_refused_before_launch'))
 
 NATIVE = "/native/python"
 TRACK = "from multiprocessing.resource_tracker import main;main(5)"
@@ -22,7 +30,7 @@ def test_exact_entry_and_payload_are_closed(case, kind):
         argv.append("--multiprocessing-fork")
     passfds = [2, 5] if kind == "tracker" else [6, 8, 10]
     value, role, fds = expected(
-        case, argv, passfds, None if kind == "tracker" else TARGET, NATIVE, "a" * 64, "/source", {}
+        case, argv, passfds, NATIVE, "a" * 64, "/source", {}
     )
     assert (
         value.argv == tuple(argv)
@@ -39,7 +47,6 @@ def test_exact_entry_and_payload_are_closed(case, kind):
         "code",
         "flags",
         "tail",
-        "target",
         "duplicate",
         "missing",
         "boolean",
@@ -51,7 +58,6 @@ def test_unknown_or_mutated_spawn_entry_refuses(mutation):
     case = CASES[0]
     argv = [NATIVE, "-S", "-I", "-c", SPAWN, "--multiprocessing-fork"]
     fds = [6, 8, 10]
-    target = list(TARGET)
     if mutation == "case":
         case = "foreign"
     elif mutation == "code":
@@ -60,8 +66,6 @@ def test_unknown_or_mutated_spawn_entry_refuses(mutation):
         argv[1] = "-E"
     elif mutation == "tail":
         argv[-1] = "foreign"
-    elif mutation == "target":
-        target[-1] = "foreign"
     elif mutation == "duplicate":
         fds[-1] = 6
     elif mutation == "missing":
@@ -73,7 +77,7 @@ def test_unknown_or_mutated_spawn_entry_refuses(mutation):
     else:
         fds[-1] = 1025
     with pytest.raises(Refused):
-        expected(case, argv, fds, target, NATIVE, "a" * 64, "/source", {})
+        expected(case, argv, fds, NATIVE, "a" * 64, "/source", {})
 
 
 @pytest.fixture
@@ -92,7 +96,6 @@ def tracker(monkeypatch):
         "executable": NATIVE,
         "argv": [NATIVE, "-S", "-I", "-c", TRACK],
         "passfds": [2, 5],
-        "target": None,
         "cwd": "/source",
         "environment": environment,
     }
@@ -125,10 +128,7 @@ def test_tracker_requires_original_pipe_and_mints_only_guarded_entry(tracker):
     answer = proposal(host, actor, raw)
     assert answer["translated"] == [NATIVE, "-I", "-S", "-c", TRACK]
     assert calls[0][1]["inherited"] == [[5, 10, 20, 0]]
-    host.intents[1] = {"case": CASES[0], "role": "mp-tracker"}
-    with pytest.raises(Refused, match="quota"):
-        proposal(host, actor, raw)
-    assert len(calls) == 1
+    assert calls[0][1]["maximum"] == 1
 
 
 @pytest.mark.parametrize(
@@ -138,7 +138,6 @@ def test_tracker_requires_original_pipe_and_mints_only_guarded_entry(tracker):
         ("executable", "/foreign"),
         ("cwd", "/foreign"),
         ("environment", {}),
-        ("target", TARGET),
         ("passfds", [5]),
     ],
 )
@@ -171,7 +170,6 @@ def test_unknown_callback_operands_are_refused_without_comparison():
             CASES[0],
             [NATIVE, "-S", "-I", "-c", Trap()],
             [2, 5],
-            None,
             NATIVE,
             "a" * 64,
             "/source",
@@ -208,6 +206,9 @@ def test_spawn_requires_distinct_bootstrap_reader_sentinel_writer_and_live_track
     }
     birth = Birth.read(identity)
     calls = []
+    from pathlib import Path
+    import stat
+    monkeypatch.setattr(Path, "stat", lambda path: SimpleNamespace(st_mode=stat.S_IFIFO))
     actor = {"birth": SimpleNamespace(pid=100)}
     rows = {
         (100, 6): [6, 10, 20, 1],
@@ -261,7 +262,6 @@ def test_spawn_requires_distinct_bootstrap_reader_sentinel_writer_and_live_track
         "executable": NATIVE,
         "argv": [NATIVE, "-S", "-I", "-c", SPAWN, "--multiprocessing-fork"],
         "passfds": [6, 8, 10],
-        "target": list(TARGET),
         "cwd": "/source",
         "environment": {
             "PATH": "/bin:/usr/bin",
@@ -276,6 +276,7 @@ def test_spawn_requires_distinct_bootstrap_reader_sentinel_writer_and_live_track
     elif mutation is None:
         assert proposal(host, actor, raw)["token"] == "child"
         assert calls[0][1]["inherited"] == [rows[100, fd] for fd in (6, 8, 10)]
+        assert calls[0][1]["maximum"] == 5
     else:
         with pytest.raises(Refused):
             proposal(host, actor, raw)
@@ -339,9 +340,9 @@ def test_tracker_capture_stderr_is_only_a_kernel_proven_anonymous_alias(monkeypa
             entry.stderr_record(100, 8)
 
 
-@pytest.mark.parametrize("case", __import__("multiprocess_entry").TRACKER_CASES)
+@pytest.mark.parametrize("case", TRACKER_CASES)
 def test_tracker_only_cases_do_not_inherit_any_spawn_target_permission(case):
-    from multiprocess_entry import expected, TARGET
+    from multiprocess_entry import expected
 
     import multiprocess_entry
 
@@ -357,7 +358,6 @@ def test_tracker_only_cases_do_not_inherit_any_spawn_target_permission(case):
                     "from multiprocessing.resource_tracker import main;main(6)",
                 ],
                 [2, 6],
-                None,
                 "/fixed/python",
                 "a" * 64,
                 "/checkout",
@@ -374,48 +374,26 @@ def test_tracker_only_cases_do_not_inherit_any_spawn_target_permission(case):
                 "from multiprocessing.resource_tracker import main;main(6)",
             ],
             [2, 6],
-            None,
             "/fixed/python",
             "a" * 64,
             "/checkout",
             {},
         )
         assert value.case == case and role == "mp-tracker" and inherited == [6]
-    with pytest.raises(Refused):
-        expected(
-            case,
-            [
-                "/fixed/python",
-                "-S",
-                "-I",
-                "-c",
-                "from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=6, pipe_handle=8)",
-                "--multiprocessing-fork",
-            ],
-            [6, 8, 10],
-            TARGET,
-            "/fixed/python",
-            "a" * 64,
-            "/checkout",
-            {},
-        )
-
-
-@pytest.mark.parametrize("case_index,count", [(0, 6), (1, 3)])
-def test_ipc_cases_have_only_their_exact_spawn_inventory(case_index, count):
-    from multiprocess_entry import IPC_CASES, TARGETS
-
-    case = IPC_CASES[case_index]
-    fds = [6, 11, 12, 13, 8, 10] if count == 6 else [6, 8, 10]
-    argv = [NATIVE, "-S", "-I", "-c", SPAWN, "--multiprocessing-fork"]
-    assert (
-        expected(case, argv, fds, TARGETS[case], NATIVE, "a" * 64, "/source", {})[1] == "mp-child"
-    )
-    for changed in (fds[:-1], fds + [14], [*fds[:-1], fds[0]], list(reversed(fds))):
+    if case == multiprocess_entry.ZERO:
         with pytest.raises(Refused):
-            expected(case, argv, changed, TARGETS[case], NATIVE, "a" * 64, "/source", {})
-    with pytest.raises(Refused):
-        expected(case, argv, fds, TARGET, NATIVE, "a" * 64, "/source", {})
+            expected(case, [NATIVE, '-S', '-I', '-c', SPAWN, '--multiprocessing-fork'],
+                     [6, 8, 10], NATIVE, 'a'*64, '/source', {})
+
+
+@pytest.mark.parametrize('count', range(3,8))
+def test_closed_spawn_inventory_size_and_core_order(count):
+    fds=[6,*range(11,11+count-3),8,10]
+    argv=[NATIVE,'-S','-I','-c',SPAWN,'--multiprocessing-fork']
+    assert expected(IPC_CASES[0],argv,fds,NATIVE,'a'*64,'/source',{})[1]=='mp-child'
+    for changed in ([6,8], [6,11,12,13,14,15,8,10], [*fds[:-1],6], list(reversed(fds))):
+        with pytest.raises(Refused):
+            expected(IPC_CASES[0],argv,changed,NATIVE,'a'*64,'/source',{})
 
 
 @pytest.mark.parametrize(
@@ -488,13 +466,13 @@ def test_child_rechecks_arena_inode_instead_of_trusting_descriptor_number(monkey
             [10, 1, 40, 1],
         ],
         "role": "mp-child",
-        "case": entry.IPC_CASES[0],
+        "case": IPC_CASES[0],
     }
     monkeypatch.setattr(
         entry.os, "listdir", lambda path: [str(row[0]) for row in profile["inherited"]]
     )
 
-    def record(pid, fd, case):
+    def record(pid, fd):
         row = next(row[:] for row in profile["inherited"] if row[0] == fd)
         if fd == 13:
             row[2] = 99
@@ -506,13 +484,11 @@ def test_child_rechecks_arena_inode_instead_of_trusting_descriptor_number(monkey
         entry.inherited(profile, {"pid": 200})
 
 
-@pytest.mark.parametrize("case", __import__("multiprocess_routes").ROUTES)
+@pytest.mark.parametrize("case", __import__("test_multiprocess_catalogue").ROUTES)
 def test_queue_family_targets_have_exact_counts_order_and_no_extra_permission(case):
-    from multiprocess_routes import ROUTES
-    from multiprocess_entry import plan, count
+    from test_multiprocess_catalogue import ROUTES
 
     entries = ROUTES[case]
-    assert count(case) == 1 + sum(spec.maximum for spec in entries.values())
     for target, spec in entries.items():
         fds = [6]
         rows = [[6, 1, 20, 1]]
@@ -530,39 +506,25 @@ def test_queue_family_targets_have_exact_counts_order_and_no_extra_permission(ca
         fds.extend([8, 10])
         rows.extend([[8, 1, 30, 0], [10, 1, 40, 1]])
         argv = [NATIVE, "-S", "-I", "-c", SPAWN, "--multiprocessing-fork"]
-        assert plan(case, list(target)) == spec
         assert (
-            expected(case, argv, fds, list(target), NATIVE, "a" * 64, "/source", {})[1]
+            expected(case, argv, fds, NATIVE, "a" * 64, "/source", {})[1]
             == "mp-child"
         )
         with pytest.raises(Refused):
-            expected(case, argv, fds + [99], list(target), NATIVE, "a" * 64, "/source", {})
-        with pytest.raises(Refused):
-            expected(case, argv, fds, [target[0], "_unknown"], NATIVE, "a" * 64, "/source", {})
+            expected(case, argv, [6,11,12,13,14,15,8,10], NATIVE, 'a'*64, '/source', {})
         if spec.resources:
             changed = [*fds]
             changed[1], changed[-2] = changed[-2], changed[1]
             with pytest.raises(Refused):
-                expected(case, argv, changed, list(target), NATIVE, "a" * 64, "/source", {})
+                expected(case, argv, changed, NATIVE, "a" * 64, "/source", {})
 
 
 
-@pytest.mark.parametrize("case", [*CASES, *__import__("multiprocess_entry").IPC_CASES])
-def test_null_target_never_admits_an_original_child(case):
-    import multiprocess_entry as entry
-
-    fds = [6, 11, 12, 13, 8, 10] if case == entry.IPC_CASES[0] else [6, 8, 10]
-    with pytest.raises(Refused):
-        expected(
-            case,
-            [NATIVE, "-S", "-I", "-c", SPAWN, "--multiprocessing-fork"],
-            fds,
-            None,
-            NATIVE,
-            "a" * 64,
-            "/source",
-            {},
-        )
+@pytest.mark.parametrize('case', [*CASES,*IPC_CASES])
+def test_module_scope_uses_no_unattested_target_label(case):
+    from multiprocess_entry import eligible
+    assert eligible(case)
+    assert not eligible('tests/test_unknown.py::test_case')
 
 
 @pytest.mark.parametrize("status,signal", [(73, None), (-15, 15), (-15, None), (0, None)])
@@ -615,22 +577,18 @@ def test_spawn_completion_uses_exact_birth_token_case_and_actual_signal(status, 
     assert not Observer.completed_child(host, actor)
 
 
-def test_per_target_exhaustion_is_separate_from_total_case_capacity():
-    from multiprocess_entry import quota
-
-    mutator = ["tests.test_patch_transaction", "_mutator_process"]
-    inspector = ["tests.test_patch_transaction", "_inspector_process"]
-
-    def row(target):
-        return {"role": "mp-child", "mp_target": target}
-
-    quota([row(inspector), row(inspector), row(mutator)], "mp-child", mutator, 2)
-    with pytest.raises(Refused, match="quota"):
-        quota([row(mutator), row(mutator)], "mp-child", mutator, 2)
-    with pytest.raises(Refused, match="quota"):
-        quota([row(inspector), row(inspector)], "mp-child", inspector, 2)
-    with pytest.raises(Refused, match="quota"):
-        quota([{"role": "mp-tracker"}], "mp-tracker", None, 1)
+@pytest.mark.parametrize('role,maximum', [('mp-child',5),('mp-tracker',1)])
+def test_process_ceiling_is_case_global_and_consumption_does_not_reset_it(role,maximum):
+    from source_observer import Observer
+    from launch_policy import build_expected
+    value=build_expected(CASES[0],NATIVE,'a'*64,(NATIVE,'-c','pass'),(),'/source','python-command')
+    host=SimpleNamespace(case=CASES[0],intents={},serial=0,root_birth='root')
+    for index in range(maximum):
+        answer=Observer.admit_launch(host,{'birth':'root'},value,role,list(value.argv),None,maximum=maximum)
+        assert answer['ticket']==index+1
+        host.intents[answer['ticket']]['consumed']=True
+    with pytest.raises(Refused,match='independent launch reconstruction'):
+        Observer.admit_launch(host,{'birth':'root'},value,role,list(value.argv),None,maximum=maximum)
 
 
 @pytest.mark.parametrize('kind', ['fifo', 'socket'])
@@ -652,8 +610,8 @@ def test_spawn_rechecks_fd_kind_before_using_a_previous_pair_number(monkeypatch,
         raise Refused('unknown or stale socket has no pair authority')
     monkeypatch.setattr(multiprocess_pipe, 'parent_record', socket_record)
     if kind=='fifo':
-        assert entry.inherited_record(host,actor,13,('pipe',))==[13,1,2,0]
+        assert entry.inherited_record(host,actor,13)==[13,1,2,0]
     else:
         with pytest.raises(Refused, match='no pair authority'):
-            entry.inherited_record(host,actor,13,('pipe',))
+            entry.inherited_record(host,actor,13)
     assert calls==[kind]

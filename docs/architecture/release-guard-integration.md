@@ -893,15 +893,21 @@ parameter remains in the original tests; optional-null native `/usr/bin/true`
 leaves retain their separate native image declaration. No raw credential or
 additional terminal environment field follows from a matching program hash.
 
-Multiprocessing admission no longer independently reconstructs the application
-Queue endpoint/alias graph or searches the parent for unused FIFO counterparts.
-Those are application resource-lifecycle contracts exercised by the unchanged
-original multiprocessing tests. The guard retains the selected target, exact
-resource count and bootstrap positions, per-target quotas, native entry bytes,
-complete acquired descriptor inventory, FIFO access flags, anonymous-arena
-constraints, Unix open-file identity and owner, and child-side descriptor
-recensus. The live tracker still needs its authenticated READY, exact birth and
-read/write pipe identity. Numeric child waits and cleanup assertions are unchanged.
+Multiprocessing admission uses a fixed set of original test modules, at most five
+children and one tracker per case, and three to seven child descriptors. It no
+longer predicts target labels, per-target quotas or application resource counts.
+Target names were metadata, not an attestation of the unpickled program. Queue
+endpoint graphs and resource-lifecycle behavior remain contracts of the unchanged
+original product tests. The altered-stdlib-stop negative still admits no launch.
+The guard binds exact native/stdlib entry bytes, argv, environment, cwd and parent.
+The tracker retains its narrow reader/captured-stderr inventory and KCMP_FILE
+open-file identity. Child bootstrap, tracker and sentinel must be three distinct
+FIFOs with their original directions. Extra descriptors can only be measured
+UID-20000 FIFOs, exact anonymous 4096-byte arenas, or unnamed Unix streams bound
+to their cookie and actual owner birth. Complete child-side descriptor recensus,
+authenticated tracker READY, generation checks and real numeric waits remain.
+Neither the stdlib entry pin nor a matching target label attests pickle contents;
+children acquire no subprocess or provider-launch authority.
 
 Git commands no longer require a second intermediate wait-order model before
 each subsequent command. Their independently acquired repository generations,

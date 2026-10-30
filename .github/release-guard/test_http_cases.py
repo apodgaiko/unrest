@@ -100,7 +100,7 @@ def test_http_authority_and_inherited_profile_descriptors_remain_closed(tmp_path
     import source_profile as profiles
     from execution_spec import issue
     from process_ledger import canonical
-    from multiprocess_routes import LOCK
+    from test_multiprocess_catalogue import LOCK
 
     if subject=='foreign-mcp':
         host=SimpleNamespace(case=tuple(LOCK)[0],root_only=lambda actor:None,intents={})

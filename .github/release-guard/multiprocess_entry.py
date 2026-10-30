@@ -7,45 +7,15 @@ import ctypes
 
 from content_manifest import Refused
 from launch_policy import build_expected,check_expected,admit_expected
-from multiprocess_routes import ROUTES,Spawn,plan as route_plan
-
-CASES=tuple('tests/test_multiprocess_resource_ownership.py::test_original_child_status_is_preserved['+str(status)+']' for status in (0,17))
-TRACKER_SMOKE=tuple('tests/test_multiprocess_resource_ownership.py::'+name for name in (
-    'test_parent_feeder_and_both_pipe_endpoints_are_settled',
-    'test_original_failure_or_cancellation_survives_clean_teardown[error0]',
-    'test_original_failure_or_cancellation_survives_clean_teardown[error1]',
-))
-TRACKER_REMAINING=tuple('tests/test_multiprocess_resource_ownership.py::'+name for name in (
-    'test_preexisting_tracker_is_refused_and_left_owned_by_its_parent',
-    'test_reused_descriptor_number_has_no_pipe_authority',
-    'test_case_drift_refuses_without_releasing_owned_resources',
-    'test_unrelated_finalizer_is_not_consumed',
-    'test_altered_stdlib_stop_is_refused_before_launch',
-))
-ZERO=TRACKER_REMAINING[-1]
-TRACKER_CASES=(*TRACKER_SMOKE,*TRACKER_REMAINING)
-IPC_CASES=tuple('tests/test_multiprocess_resource_ownership.py::'+name for name in (
-    'test_joined_spawn_queue_event_and_value_close_before_summary',
-    'test_live_child_refusal_preserves_original_error_and_does_not_kill',
-))
-CHILD_CASES=(*CASES,*IPC_CASES,*ROUTES)
-ALL_CASES=(*CHILD_CASES,*TRACKER_CASES)
-TARGET=['tests.test_multiprocess_resource_ownership','_exit_with_status']
-TARGETS={**dict.fromkeys(CASES,TARGET),IPC_CASES[0]:[TARGET[0],'_publish'],IPC_CASES[1]:[TARGET[0],'_wait']}
+MODULES=frozenset('tests/'+name+'.py' for name in (
+    'test_multiprocess_resource_ownership','test_attention','test_patch_transaction',
+    'test_project_lock','test_supervision','test_supervision_finalization','test_supervision_nested',
+    'test_supervision_paths','test_supervision_transactions','test_terminal_review_report_ordering'))
+ZERO='tests/test_multiprocess_resource_ownership.py::test_altered_stdlib_stop_is_refused_before_launch'
 
 
-def plan(case,target):
-    if case in TARGETS:
-        if target!=TARGETS[case]:
-            raise Refused('spawn original target metadata')
-        return Spawn(('queue','arena') if case==IPC_CASES[0] else ())
-    return route_plan(case,target)
-
-
-def count(case):
-    if case not in ALL_CASES:
-        raise Refused('spawn unknown case count')
-    return 0 if case==ZERO else 1 if case in TRACKER_CASES else 1+sum(spec.maximum for spec in ROUTES[case].values()) if case in ROUTES else 2
+def eligible(case):
+    return type(case) is str and case!=ZERO and case.partition('::')[0] in MODULES
 
 
 def fd_record(pid,fd):
@@ -75,12 +45,10 @@ def arena_record(pid,fd):
     return [fd,info.st_dev,info.st_ino,os.O_RDWR,4096]
 
 
-def spawn_record(pid,fd,case):
+def spawn_record(pid,fd):
     try:
         return fd_record(pid,fd)
     except Refused:
-        if case!=IPC_CASES[0] and not any('arena' in spec.resources for spec in ROUTES.get(case,{}).values()):
-            raise
         return arena_record(pid,fd)
 
 
@@ -104,8 +72,8 @@ def stderr_record(pid,fd):
     return [fd,info.st_dev,info.st_ino,int(flags[0],8)&~os.O_CLOEXEC]
 
 
-def expected(case,argv,passfds,target,native,pin,checkout,environment):
-    if (type(case) is not str or case not in ALL_CASES or case==ZERO or type(argv) is not list
+def expected(case,argv,passfds,native,pin,checkout,environment):
+    if (not eligible(case) or type(argv) is not list
             or any(type(arg) is not str for arg in argv) or argv[:4]!=[native,'-S','-I','-c'] or type(passfds) is not list
             or any(type(fd) is not int or not 2<=fd<=1024 for fd in passfds)
             or len(set(passfds))!=len(passfds)):
@@ -115,21 +83,20 @@ def expected(case,argv,passfds,target,native,pin,checkout,environment):
         value=argv[4][len(prefix):-1]
         if not value.isascii() or not value.isdigit() or str(int(value))!=value or not 3<=int(value)<=1024:
             raise Refused('tracker read descriptor')
-        if len(passfds)!=2 or int(value) not in passfds or target is not None:
+        if len(passfds)!=2 or int(value) not in passfds:
             raise Refused('tracker descriptor inventory')
         role='mp-tracker'
         descriptors=sorted(fd for fd in passfds if fd>2)
     else:
         prefix='from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd='
-        if (case not in CHILD_CASES or len(argv)!=6 or not argv[4].startswith(prefix) or not argv[4].endswith(')')
+        if (len(argv)!=6 or not argv[4].startswith(prefix) or not argv[4].endswith(')')
                 or argv[5]!='--multiprocessing-fork'):
             raise Refused('spawn exact command and target declaration')
         parts=argv[4][len(prefix):-1].split(', pipe_handle=')
         if (len(parts)!=2 or any(not value.isascii() or not value.isdigit() or str(int(value))!=value or not 3<=int(value)<=1024 for value in parts)):
             raise Refused('spawn tracker and bootstrap descriptors')
         tracker,reader=map(int,parts)
-        spec=plan(case,target)
-        if (len(passfds)!=3+sum(2 if kind=='queue' else 1 for kind in spec.resources) or tracker==reader
+        if (not 3<=len(passfds)<=7 or tracker==reader
                 or not {tracker,reader}<=set(passfds) or 2 in passfds
                 or (passfds[0]!=tracker or passfds[-2]!=reader)):
             raise Refused('spawn inherited pipe inventory')
@@ -139,35 +106,27 @@ def expected(case,argv,passfds,target,native,pin,checkout,environment):
     return value,role,descriptors
 
 
-def quota(records,role,target,maximum):
-    used=sum(row['role']==role and (role!='mp-child' or row['mp_target']==target) for row in records)
-    if used>=maximum:
-        raise Refused('spawn per-case quota')
-
-
-def inherited_record(host,actor,fd,resources):
+def inherited_record(host,actor,fd):
     # Descriptor numbers can be reused after a prior case closes its pair.
-    mode=(Path('/proc')/str(actor['birth'].pid)/'fd'/str(fd)).stat().st_mode if 'pipe' in resources else 0
+    mode=(Path('/proc')/str(actor['birth'].pid)/'fd'/str(fd)).stat().st_mode
     if stat.S_ISSOCK(mode):
         from multiprocess_pipe import parent_record
         return parent_record(host,actor,fd)
-    return spawn_record(actor['birth'].pid,fd,host.case)
+    return spawn_record(actor['birth'].pid,fd)
 
 
 def proposal(host,actor,raw):
     from source_observer import shape
     host.root_only(actor)
-    shape(raw,('case','argv','passfds','target','executable','cwd','environment'))
+    shape(raw,('case','argv','passfds','executable','cwd','environment'))
     native=host.binding['entry']['path']
     if raw['case']!=host.case or raw['executable']!=native or raw['cwd']!=host.meta['checkout']:
         raise Refused('spawn root identity and directory')
     environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':host.case+' (call)'}
-    value,role,descriptors=expected(host.case,raw['argv'],raw['passfds'],raw['target'],native,
+    value,role,descriptors=expected(host.case,raw['argv'],raw['passfds'],native,
         host.binding['entry']['sha256'],host.meta['checkout'],environment)
     check_expected(raw,value)
     records=[row for row in host.intents.values() if row['case']==host.case]
-    spec=plan(host.case,raw['target']) if role=='mp-child' else None
-    quota(records,role,raw['target'],spec.maximum if spec is not None else 1)
     tracker=next((row for row in records if row['role']=='mp-tracker'),None)
     if role=='mp-child':
         if tracker is None:
@@ -181,11 +140,9 @@ def proposal(host,actor,raw):
         if tracker_read[3]!=os.O_RDONLY:
             raise Refused('tracker read direction')
     else:
-        if spec is None:
-            raise Refused('spawn child declaration absent')
         inherited=[]
         for fd in descriptors:
-            inherited.append(inherited_record(host,actor,fd,spec.resources))
+            inherited.append(inherited_record(host,actor,fd))
     if role=='mp-child':
         if tracker is None:
             raise Refused('spawn missing owned tracker')
@@ -210,20 +167,17 @@ def proposal(host,actor,raw):
                 or len({tuple(row[1:3]) for row in (tracked,bootstrap,sentinel)})!=3):
             raise Refused('spawn distinct bootstrap reader and sentinel writer')
     vector=[native,'-I','-S',*raw['argv'][3:]]
-    fields={'tracker_read':tracker_read} if role=='mp-tracker' else {'mp_target':raw['target']}
+    fields={'tracker_read':tracker_read} if role=='mp-tracker' else {}
     return admit_expected(host,actor,raw,value,role,vector,inherited=inherited,
-        maximum=count(host.case)-1 if role=='mp-child' else 1,fields=fields)
+        maximum=5 if role=='mp-child' else 1,fields=fields)
 
 
 def inherited(profile,actual):
     records=profile['inherited']
-    sizes={3+sum(2 if kind=='queue' else 1 for kind in spec.resources) for spec in ROUTES.get(profile['case'],{}).values()} if profile['case'] in ROUTES else {6 if profile['case']==IPC_CASES[0] else 3}
-    if (type(records) is not list or len(records) not in ((1,2) if profile['role']=='mp-tracker' else sizes)
-            or any(type(row) is not list or len(row) not in (4,5,7) or any(type(value) is not int for value in row) for row in records)):
+    if (type(records) is not list or not ((1<=len(records)<=2) if profile['role']=='mp-tracker' else 3<=len(records)<=7)
+            or any(type(row) is not list or len(row) not in (4,5,7) or any(type(value) is not int for value in row) for row in records)
+            or profile['role']=='mp-tracker' and any(len(row)!=4 for row in records)):
         raise Refused('spawn profile descriptor schema')
-    if any(len(row)==7 for row in records) and (profile['role']!='mp-child'
-            or not any('pipe' in spec.resources for spec in ROUTES.get(profile['case'],{}).values())):
-        raise Refused('spawn inherited Pipe outside finite case')
     reader=int(profile['argv'][4].removeprefix('from multiprocessing.resource_tracker import main;main(')[:-1]) if profile['role']=='mp-tracker' else None
     seen=[]
     for name in os.listdir('/proc/self/fd'):
@@ -236,7 +190,7 @@ def inherited(profile,actual):
                 from multiprocess_pipe import local_record
                 row=local_record(saved)
             else:
-                row=stderr_record(actual['pid'],fd) if reader is not None and fd!=reader else spawn_record(actual['pid'],fd,profile['case'])
+                row=stderr_record(actual['pid'],fd) if reader is not None and fd!=reader else spawn_record(actual['pid'],fd)
         except FileNotFoundError:
             continue
         flags=fcntl.fcntl(fd,fcntl.F_GETFL)

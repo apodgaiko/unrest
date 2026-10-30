@@ -1,4 +1,4 @@
-"""Finite Queue/shared-value families; target names are descriptive metadata."""
+"""Historical fixture shapes retained only as test data, not launch authority."""
 from typing import NamedTuple
 
 from content_manifest import Refused

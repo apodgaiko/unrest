@@ -1,36 +1,24 @@
 """Spawn transport metadata; the observer owns all execution authority."""
 import os
-import types
 
 from content_manifest import Refused
-from multiprocess_entry import ALL_CASES as CASES
+from multiprocess_entry import eligible
 
 
 def install(policy):
-    if not any(case in CASES for case in policy.profile['cases']):
+    if not any(eligible(case) for case in policy.profile['cases']):
         return
     from multiprocessing import util
-    from multiprocessing.process import BaseProcess
-    original,start=util.spawnv_passfds,BaseProcess.start
-    def start_with_label(process,*args,**kwargs):
-        target=vars(process).get('_target')
-        if type(target) is not types.FunctionType or type(target.__module__) is not str or type(target.__name__) is not str:
-            policy.refuse('spawn target metadata primitive')
-        previous=getattr(policy.local,'mp_target',None)
-        policy.local.mp_target=[target.__module__,target.__name__]
-        try:
-            return start(process,*args,**kwargs)
-        finally:
-            policy.local.mp_target=previous
+    original=util.spawnv_passfds
     def spawn(executable,arguments,passfds):
-        if policy.profile['role']!='root' or policy.case not in CASES:
+        if policy.profile['role']!='root' or not eligible(policy.case):
             policy.refuse('spawn outside finite root cases')
         if (type(executable) not in (str,bytes) or type(arguments) not in (list,tuple)
                 or any(type(arg) not in (str,bytes) for arg in arguments)
                 or type(passfds) not in (list,tuple) or any(type(fd) is not int for fd in passfds)):
             policy.refuse('spawn primitive transport')
         raw={'case':policy.case,'executable':os.fsdecode(executable),'argv':[os.fsdecode(arg) for arg in arguments],
-             'passfds':list(passfds),'target':getattr(policy.local,'mp_target',None),
+             'passfds':list(passfds),
              'cwd':os.getcwd(),'environment':dict(os.environ)}
         try:
             answer=policy.client.request('multiprocess-proposal',raw)
@@ -43,4 +31,3 @@ def install(policy):
         except Refused:
             policy.refuse('finite spawn refused')
     util.spawnv_passfds=spawn
-    setattr(BaseProcess,'start',start_with_label)
