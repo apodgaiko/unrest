@@ -1229,10 +1229,10 @@ The unchanged original archive oracle checks the bytes it actually consumes;
 extracted snapshot sealing, fifteen-case provenance, installed script receipts
 and process/image/parent/wait admission remain independent requirements.
 
-The supported CPython 3.13 Linux runtime supplies `os.pidfd_open`. The guard uses
-that wrapper directly and retains operand/result/error checks. The alternate
-libc syscall path for unsupported interpreter builds is removed; a missing
-wrapper fails closed instead of selecting another ABI path.
+The CI CPython build omits `os.pidfd_open`. The guard uses one explicit
+Linux/x86-64 kernel syscall434 acquisition path, retaining exact operands and
+kernel errno/results. The optional Python-wrapper selection is removed; another
+kernel ABI fails closed.
 
 The standalone collection-only diagnostic mode is retired. Normal discovery still
 records every collected original case before running bodies, and release sealing
@@ -1243,3 +1243,15 @@ remain distinct from the full unexcluded checkpoint.
 Public Git preparation retains the initial complete graph/anchor check, exact
 HEAD and tag acquisition, and acquired-ref verification; it no longer asks Git
 to prove the same immutable HEAD ancestry a second time after successful fetch.
+
+The fixed inline repository-root query supplies `safe.directory` only for its
+exact sealed source checkout, as do the retained history queries. Raw original
+argv/environment matching, native image pin and read-only namespace stay intact;
+no global Git configuration or mutable repository exception is introduced.
+
+Fixed public tag OIDs bind each selected tag's type and contents. Preparation
+no longer separately requires every pinned tag to be an ancestor of this HEAD;
+the original historical-result tests retain their assertions. Only the same six
+pinned public histories and exact CI HEAD are fetched. Normalized discovery
+identity collisions remain refused by the observer before sealing; the client
+loads that authenticated SHA-bound inventory without repeating the same check.

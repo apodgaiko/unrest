@@ -10,21 +10,29 @@ import linux_observation as observation
 
 
 @pytest.mark.parametrize('failure',[False,True])
-def test_supported_cpython_pidfd_wrapper_preserves_actual_kernel_result(monkeypatch,failure):
+def test_pidfd_acquisition_uses_actual_kernel_result_without_python_wrapper(monkeypatch,failure):
+    monkeypatch.delattr(os,'pidfd_open',raising=False)
+    monkeypatch.setattr(observation.os,'uname',lambda:SimpleNamespace(sysname='Linux',machine='x86_64'))
     calls=[]
-    def acquire(pid,flags):
-        calls.append((pid,flags))
-        if failure:
-            raise OSError(errno.EPERM,'refused')
-        return 29
-    monkeypatch.setattr(os,'pidfd_open',acquire,raising=False)
+    def acquire(*args):
+        calls.append(args)
+        return -1 if failure else 29
+    monkeypatch.setattr(observation.ctypes,'CDLL',lambda *args,**kwargs:SimpleNamespace(syscall=acquire))
+    monkeypatch.setattr(observation.ctypes,'get_errno',lambda:errno.EPERM)
     if failure:
         with pytest.raises(OSError) as error:
             observation.pidfd_open(1234)
         assert error.value.errno==errno.EPERM
     else:
         assert observation.pidfd_open(1234)==29
-    assert calls==[(1234,0)]
+    assert calls==[(434,1234,0)]
+
+
+@pytest.mark.parametrize('platform,machine',[('darwin','x86_64'),('linux','aarch64')])
+def test_pidfd_acquisition_refuses_another_kernel_abi(monkeypatch,platform,machine):
+    monkeypatch.setattr(observation.os,'uname',lambda:SimpleNamespace(sysname='Linux' if platform=='linux' else 'Darwin',machine=machine))
+    with pytest.raises(RuntimeError,match='ABI'):
+        observation.pidfd_open(1234)
 
 
 @pytest.mark.parametrize("pid,flags", [(True, 0), (0, 0), ((1 << 32) + 1, 0), (1, True), (1, 1)])

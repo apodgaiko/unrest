@@ -83,4 +83,4 @@ def finished(host):
             or process.parent_wait is None or process.parent_wait[1]!=0
             or host.ledger.process(host.ledger.current[host.launcher]).exit is None
             or host.ledger.process(host.ledger.current[host.launcher]).exit[1]!=0):
-        raise Refused('full source original uv wait missing')
+        raise Refused('full source requires successful pytest and original uv waits')

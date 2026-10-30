@@ -65,9 +65,6 @@ def public_prepare(repository: Path, destination: Path, head: str) -> dict[str, 
     for name,expected in PUBLIC_TAGS.items():
         if public_oid(public_git(repository,'rev-parse','--verify','refs/tags/'+name))!=expected:
             raise RuntimeError('public_git_historical_tag_drift')
-        if (public_git(repository,'cat-file','-t',expected).strip()!=b'tag'
-                or public_oid(public_git(repository,'rev-parse','--verify',name+'^{commit}')) not in commits):
-            raise RuntimeError('public_git_historical_ancestry')
     public_git(destination,'init','--template=','--object-format=sha1')
     # Explicit refspecs bring complete reachable public trees, without source
     # config/hooks, alternate directories, unrelated refs or automatic maintenance.

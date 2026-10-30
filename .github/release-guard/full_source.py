@@ -46,8 +46,6 @@ class FullCases(OriginalCases):
         self.cases=tuple(load(ref,self.policy.directory,profile['source_sha256'],profile['dependency_sha256'])['cases'])
         super().pytest_collection_finish(session)
         self.cases=tuple(identity(node) for node in self.cases)
-        if len(set(self.cases))!=len(self.cases):
-            raise Refused('full source ambiguous case references')
         profile['cases']=list(self.cases)
         from multiprocess_hooks import install
         install(self.policy)

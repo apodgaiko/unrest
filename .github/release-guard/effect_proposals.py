@@ -160,7 +160,7 @@ def proposal(host, actor, raw):
             root=fixture(host) if case in (*SPEED_CASES,CLI_CASE) else None
             expected = fixed_expected(case,operation,native,pin,checkout,environment,query=query,root=root)
         script_pin = expected.payload_sha256
-        vector = list(expected.argv) if query else list(fixed_translated(expected))
+        vector = ['/usr/bin/git','-c','safe.directory='+str(checkout),*expected.argv[1:]] if query else list(fixed_translated(expected))
         role,maximum='git-fixed' if query else 'pytest-regression' if case in NESTED_CASES else 'fixed-inline',1 if query else len(SEQUENCES[case])
     elif case in ORDINARY:
         host.root_only(actor)
