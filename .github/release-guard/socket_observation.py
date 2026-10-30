@@ -7,7 +7,7 @@ import stat
 import struct
 import sys
 
-from content_manifest import Refused, refuse_if
+from content_manifest import Refused as Refused, refuse_if
 from linux_observation import pidfd_open,process_identity
 from process_ledger import Birth
 
@@ -15,18 +15,16 @@ from process_ledger import Birth
 def descriptor(fd,uid):
     before=os.fstat(fd)
     flags=fcntl.fcntl(fd,fcntl.F_GETFL)
-    if (not stat.S_ISSOCK(before.st_mode) or before.st_uid!=uid
-            or flags&~os.O_CLOEXEC!=os.O_RDWR):
-        raise Refused('inherited Unix stream file custody')
+    refuse_if(not stat.S_ISSOCK(before.st_mode) or before.st_uid!=uid
+            or flags&~os.O_CLOEXEC!=os.O_RDWR, 'inherited Unix stream file custody')
     copied=os.dup(fd)
     stream=None
     try:
         stream=socket.socket(fileno=copied)
-        if (stream.getsockopt(socket.SOL_SOCKET,39)!=socket.AF_UNIX
+        refuse_if(stream.getsockopt(socket.SOL_SOCKET,39)!=socket.AF_UNIX
                 or stream.getsockopt(socket.SOL_SOCKET,socket.SO_TYPE)!=socket.SOCK_STREAM
                 or stream.getsockname() not in ('',b'') or stream.getpeername() not in ('',b'')
-                or struct.unpack('3i',stream.getsockopt(socket.SOL_SOCKET,socket.SO_PEERCRED,12))[1:]!=(uid,uid)):
-            raise Refused('inherited unnamed Unix stream domain')
+                or struct.unpack('3i',stream.getsockopt(socket.SOL_SOCKET,socket.SO_PEERCRED,12))[1:]!=(uid,uid), 'inherited unnamed Unix stream domain')
         cookie=struct.unpack('=Q',stream.getsockopt(socket.SOL_SOCKET,57,8))[0]
     finally:
         if stream is None:
@@ -34,15 +32,13 @@ def descriptor(fd,uid):
         else:
             stream.close()
     after=os.fstat(fd)
-    if (before.st_dev,before.st_ino,before.st_uid)!=(after.st_dev,after.st_ino,after.st_uid) or not 0<cookie<(1<<64)-1:
-        raise Refused('inherited Unix stream generation')
+    refuse_if((before.st_dev,before.st_ino,before.st_uid)!=(after.st_dev,after.st_ino,after.st_uid) or not 0<cookie<(1<<64)-1, 'inherited Unix stream generation')
     return [before.st_dev,before.st_ino,os.O_RDWR,cookie]
 
 
 def pipe_info(info,flags,uid):
-    if (type(info) is not os.stat_result or type(flags) is not int or type(uid) is not int
-            or flags & ~os.O_CLOEXEC or not stat.S_ISFIFO(info.st_mode) or info.st_uid!=uid):
-        raise Refused('inherited descriptor must be a blocking read pipe')
+    refuse_if(type(info) is not os.stat_result or type(flags) is not int or type(uid) is not int
+            or flags & ~os.O_CLOEXEC or not stat.S_ISFIFO(info.st_mode) or info.st_uid!=uid, 'inherited descriptor must be a blocking read pipe')
     return [info.st_dev,info.st_ino]
 
 
@@ -51,9 +47,8 @@ def pipe_descriptor(fd,uid):
 
 
 def acquire(birth,fd,inspect=descriptor):
-    if (sys.platform!='linux' or os.uname().machine!='x86_64'
-            or type(birth) is not Birth or type(fd) is not int or not 3<=fd<=1024):
-        raise Refused('inherited Unix stream acquisition operands')
+    refuse_if(sys.platform!='linux' or os.uname().machine!='x86_64'
+            or type(birth) is not Birth or type(fd) is not int or not 3<=fd<=1024, 'inherited Unix stream acquisition operands')
     refuse_if(Birth.read(process_identity(birth.pid))!=birth, 'inherited Unix stream birth changed')
     process=pidfd_open(birth.pid)
     try:

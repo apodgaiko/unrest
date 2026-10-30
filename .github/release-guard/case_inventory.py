@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 
-from content_manifest import Refused, read_regular, is_sha256, refuse_if
+from content_manifest import Refused as Refused, read_regular, is_sha256, refuse_if
 from control_transport import unique
 
 LIMIT=8*1024*1024
@@ -39,11 +39,10 @@ def document(value):
 
 
 def reference(value,directory):
-    if (type(value) is not dict or set(value)!={'path','sha256','count'}
+    refuse_if(type(value) is not dict or set(value)!={'path','sha256','count'}
             or not is_sha256(value['sha256'])
             or type(value['count']) is not int or not 0<=value['count']<=20000
-            or value['path']!=str(directory/('cases-'+value['sha256']+'.json'))):
-        raise Refused('inventory reference')
+            or value['path']!=str(directory/('cases-'+value['sha256']+'.json')), 'inventory reference')
 
 
 def load(value,directory,source,dependency):
@@ -52,8 +51,7 @@ def load(value,directory,source,dependency):
     body,_,pin=read_regular(path,LIMIT,uid=20001,mode=0o444)
     refuse_if(pin!=value['sha256'], 'inventory current bytes')
     result=document(json.loads(body,object_pairs_hook=unique))
-    if len(result['cases'])!=value['count'] or (result['source'],result['dependency'])!=(source,dependency):
-        raise Refused('inventory source generation')
+    refuse_if(len(result['cases'])!=value['count'] or (result['source'],result['dependency'])!=(source,dependency), 'inventory source generation')
     return result
 
 

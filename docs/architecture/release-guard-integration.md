@@ -1512,3 +1512,37 @@ ACP adapter. The backend-stage and other runtime-binding negatives retain no
 child authority. Original runtime recheck, quarantine and actual cleanup
 assertions remain unchanged; this controlled case proves no native-provider
 acceptance.
+
+
+### Controlled fixture and passive HTTP domains
+
+Additional controlled fixture families share the existing backend/ACP renderer,
+not native selection. Session and retained positive source functions use only
+the standard backend and configuration variant zero; the one explicit startup
+probe uses configuration variant one. Native pin/selection negatives, inline
+leaves and no-child cases do not receive transport rights. Backend-only
+registration failures cannot start an ACP. Finite owner/generation pair bounds,
+backend-before-ACP identity, READY and actual waits remain mandatory.
+
+Transport and custody Git are separate capabilities. Session, retained and
+startup owners gain no custody Git commands. Finite scheduling and cohort-drain
+fixtures use the existing closed Git grammar on owned directories; resource
+admission negatives receive their real Git setup but no transport pairs.
+Fixture membership never replaces the authenticated active collection frontier.
+
+Passive HTTP fixtures acquire canonical owned workspaces without requiring
+unrelated Git initialization. They receive no root Git fixture commands.
+Only the missing-task-truth worker has one server-owned HEAD query, whose
+original missing-repository exit is 128; other completion queries still require
+zero. Causal checkpoint roles retain their authored omission of node-type
+metadata and their exact scoped attempt/review paths. The fresh third
+orchestrator waits for both prior original-parent reaps. Finalization barriers
+retain their separate fixed runpy fixture and post-wait process inventory.
+Provider command strings in these environments confer no process authority.
+
+Fresh inspection and retirement replays share the fixed-leaf custody model.
+The program bytes, complete argv/environment/cwd, project-path components and
+finite counts remain checked. Retirement selects only the two original
+supersede/cancel cases, the pinned replay script, gate mode and gate g1; both
+fresh calls require their actual preceding parent wait. Public projections
+retain the pinned helper body and separate bundled policy/projects operands.

@@ -5,7 +5,7 @@ from pathlib import Path
 import subprocess
 
 from case_inventory import LIMIT,document,seal,identity
-from content_manifest import Refused, native_digest, read_regular, refuse_if
+from content_manifest import Refused as Refused, native_digest, read_regular, refuse_if
 from control_transport import unique
 from full_source import environment,child_environment
 from source_profile import PYTEST_COMMAND
@@ -20,8 +20,7 @@ def prepare_uv(metadata):
         cwd=metadata['checkout'],env=environment(metadata),timeout=30)
     cache=Path(metadata['owned'])/'uv-cache'
     for path in [cache,*sorted(cache.rglob('*'))]:
-        if path.is_symlink() or not (path.is_file() or path.is_dir()):
-            raise Refused('full source uv cache input')
+        refuse_if(path.is_symlink() or not (path.is_file() or path.is_dir()), 'full source uv cache input')
         os.chown(path,20000,20000)
 
 
@@ -60,14 +59,12 @@ def collection(host,actor,payload):
     host.root_only(actor)
     shape(payload,('path','sha256'))
     path=Path(host.meta['owned'])/'collection.json'
-    if not host.full or host.cases or payload['path']!=str(path):
-        raise Refused('full source collection frontier')
+    refuse_if(not host.full or host.cases or payload['path']!=str(path), 'full source collection frontier')
     body,_,pin=read_regular(path,LIMIT,uid=20000,mode=0o444)
     refuse_if(pin!=payload['sha256'], 'full source collection current bytes')
     value=document(json.loads(body,object_pairs_hook=unique))
-    if (not value['cases'] or value['source']!=host.meta['source_sha256']
-            or value['dependency']!=host.meta['dependency_sha256']):
-        raise Refused('full source complete discovery binding')
+    refuse_if(not value['cases'] or value['source']!=host.meta['source_sha256']
+            or value['dependency']!=host.meta['dependency_sha256'], 'full source complete discovery binding')
     host.cases=tuple(identity(node) for node in value['cases'])
     refuse_if(len(set(host.cases))!=len(host.cases), 'full source ambiguous case references')
     host.meta['cases']=seal(value,host.directory)
@@ -76,8 +73,7 @@ def collection(host,actor,payload):
 
 def finished(host):
     process=host.ledger.process(host.root_birth)
-    if (not host.full_started or process.exit is None or process.exit[1]!=0
+    refuse_if(not host.full_started or process.exit is None or process.exit[1]!=0
             or process.parent_wait is None or process.parent_wait[1]!=0
             or host.ledger.process(host.ledger.current[host.launcher]).exit is None
-            or host.ledger.process(host.ledger.current[host.launcher]).exit[1]!=0):
-        raise Refused('full source requires successful pytest and original uv waits')
+            or host.ledger.process(host.ledger.current[host.launcher]).exit[1]!=0, 'full source requires successful pytest and original uv waits')

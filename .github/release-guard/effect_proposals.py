@@ -13,7 +13,7 @@ from fixed_inline import CASES as FIXED, SEQUENCES, NESTED_CASES, STORAGE_CASES,
 from ordinary_acp import EXECUTION_CASES as ORDINARY, expected as ordinary_expected
 from cleanup_launch import EXECUTION_CASES as CLEANUP, expected as cleanup_expected, base_path, translated as cleanup_vector
 from controlled_startup import expected_entry, ACP
-from controlled_cases import eligible as CONTROLLED
+from controlled_cases import eligible as CONTROLLED, custody as CUSTODY
 from cohort_cases import GIT_ONLY as COHORT_GIT
 from bootstrap_cases import BOOTSTRAP
 
@@ -72,13 +72,13 @@ def proposal(host, actor, raw):
     from review_wire import CASES as REVIEW_CASES,proposal as review_proposal
     if case in REVIEW_CASES:
         return review_proposal(host,actor,raw)
-    refuse_if(not CONTROLLED(case) and case not in (*BOOTSTRAP,*COHORT_GIT,*ORDINARY,*CLEANUP,*SESSIONS,*FIXED,*PLANS), 'finite process proposal has no declaration')
+    refuse_if(not CONTROLLED(case) and not CUSTODY(case) and case not in (*BOOTSTRAP,*COHORT_GIT,*ORDINARY,*CLEANUP,*SESSIONS,*FIXED,*PLANS), 'finite process proposal has no declaration')
     refuse_if(raw['stdin'] is not None, 'process proposal has undeclared commit input')
     checkout, owned = Path(host.meta['checkout']), Path(host.meta['owned'])
     native, pin = host.binding['entry']['path'], host.binding['entry']['sha256']
     cwd, root_environment = raw['cwd'], host.meta_environment()
     vector, role, maximum, inherited, port, variant = None, None, 1, [], None, None
-    custody=(CONTROLLED(case) or case in COHORT_GIT) and argv[0]=='/usr/bin/git'
+    custody=(CUSTODY(case) or case in COHORT_GIT) and argv[0]=='/usr/bin/git'
     if custody:
         from git_policy import custody_command, custody_launch as launch
         value,kind=custody_command(case,tuple(argv),cwd,owned)

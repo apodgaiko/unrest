@@ -15,9 +15,9 @@ import stat
 from launch_policy import source_unit, build_expected, admit_expected
 from owned_fixture import acquire, retain
 from content_manifest import Refused, native_digest, read_regular, refuse_if
-from controlled_cases import eligible as CONTROLLED_CASES
+from controlled_cases import custody as CONTROLLED_CASES
 from cohort_cases import CASES as COHORT_CASES, EXTRA as COHORT_EXTRA
-from completion_roles import CASES as ROLE_CASES, SOURCE as ROLE_SOURCE, ROOT_QUERIES, DEFECT as ROLE_DEFECT, schedule as role_schedule, root as role_root, actor_slot
+from completion_roles import CASES as ROLE_CASES, SOURCE as ROLE_SOURCE, ROOT_QUERIES, DEFECT as ROLE_DEFECT, NO_GIT, schedule as role_schedule, root as role_root, actor_slot
 from composed_cases import CASES as COMPOSED_CASES, queries as composed_queries
 
 
@@ -83,8 +83,7 @@ def public_prepare(repository: Path, destination: Path, head: str) -> dict[str, 
 
 
 def operand_text(value, maximum=4096):
-    if type(value) is not str or not value or len(value) > maximum or '\0' in value:
-        raise Refused('git value primitive')
+    refuse_if(type(value) is not str or not value or len(value) > maximum or '\0' in value, 'git value primitive')
     try:
         refuse_if(len(value.encode('utf-8')) > maximum, 'git value text bound')
     except UnicodeError:
@@ -93,8 +92,7 @@ def operand_text(value, maximum=4096):
 
 
 def operand_digest(value, length=40):
-    if type(value) is not str or len(value) != length or any(c not in '0123456789abcdef' for c in value):
-        raise Refused('git value digest')
+    refuse_if(type(value) is not str or len(value) != length or any(c not in '0123456789abcdef' for c in value), 'git value digest')
     return value
 
 
@@ -146,15 +144,13 @@ SETUP_FORMS={
 def command_path(value):
     operand_text(value)
     p = PurePosixPath(value)
-    if not value.startswith('/') or value.startswith('//') or str(p) != value or '..' in p.parts:
-        raise Refused('git command canonical path')
+    refuse_if(not value.startswith('/') or value.startswith('//') or str(p) != value or '..' in p.parts, 'git command canonical path')
     return p
 
 
 def command_location(repo, path, *, target=False):
     runtime = repo / '.unrest-runtime'
-    if not ((not target and path == repo) or runtime in path.parents):
-        raise Refused('git operation location outside runtime')
+    refuse_if(not ((not target and path == repo) or runtime in path.parents), 'git operation location outside runtime')
 
 
 def command_match(repository,location,argv,stdin,environment):
@@ -184,8 +180,7 @@ def command_match(repository,location,argv,stdin,environment):
                 operand_digest(revision)
             case ('apply','--index','--binary',patch):
                 patch=command_path(patch)
-                if patch.parent!=repo/'.unrest/workspaces/patches' or patch.suffix!='.patch':
-                    raise Refused('git patch scope')
+                refuse_if(patch.parent!=repo/'.unrest/workspaces/patches' or patch.suffix!='.patch', 'git patch scope')
                 operand_digest(patch.stem,64)
             case ('update-ref',reference,new,old):
                 refuse_if(reference not in ('refs/heads/main','refs/heads/master'), 'git update reference')
@@ -212,13 +207,11 @@ def command_match(repository,location,argv,stdin,environment):
                             operand_digest(oid)
                         case ('update-index','--add','--cacheinfo',entry):
                             mode,oid,name=entry.split(',') if entry.count(',')==2 else ('','','')
-                            if mode not in ('120000','160000') or name!='unsupported':
-                                raise Refused('Git finite cache entry')
+                            refuse_if(mode not in ('120000','160000') or name!='unsupported', 'Git finite cache entry')
                             operand_digest(oid)
                         case _:
                             raise Refused('Git proposal does not match a template')
-    if operation!='commit-tree' and stdin is not None:
-        raise Refused('git unexpected command input')
+    refuse_if(operation!='commit-tree' and stdin is not None, 'git unexpected command input')
     return operation,Command(tuple(argv),str(cwd),additions,stdin)
 
 
@@ -254,8 +247,7 @@ def measurement_worker(host,actor,raw):
     repetition,operation,nodes=steps[len(records)]
     home=Path(raw['cwd'])
     fixture_root(host,host.case,str(home.parent/'workspace'))
-    if home.name!='harness-home' or home.resolve()!=home or home.parent.name!=f'rep-{repetition:02d}':
-        raise Refused('measurement worker original repetition home')
+    refuse_if(home.name!='harness-home' or home.resolve()!=home or home.parent.name!=f'rep-{repetition:02d}', 'measurement worker original repetition home')
     native=host.binding['entry']['path']
     command=native+' '+str(Path(host.meta['checkout'])/'tests/mock_measurement_acp.py')
     env={'LANG':'C.UTF-8','PATH':os.defpath,'PYTHONPATH':str(Path(host.meta['checkout'])/'src'),
@@ -361,16 +353,13 @@ def history_proposal(host,actor,raw):
     if host.case==HISTORY_CLI:
         if raw['argv'][0]==host.binding['entry']['path']:
             return history_cli_proposal(host,actor,raw)
-        if actor['role']!='fixed-inline' or actor['case']!=HISTORY_CLI or not actor['body_ready']:
-            raise Refused('history original CLI parent')
+        refuse_if(actor['role']!='fixed-inline' or actor['case']!=HISTORY_CLI or not actor['body_ready'], 'history original CLI parent')
         records=[value for value in host.intents.values() if value['role']=='fixed-inline'
             and value['case']==HISTORY_CLI and value['token']==actor['token'] and value.get('birth')==actor['birth'] and value['consumed']]
-        if len(records)!=1 or raw['cwd']!=records[0]['binding_repository']:
-            raise Refused('history original CLI repository')
+        refuse_if(len(records)!=1 or raw['cwd']!=records[0]['binding_repository'], 'history original CLI repository')
     else:
         host.root_only(actor)
-    if raw['executable']!='/usr/bin/git' or raw['stdin'] is not None or tuple(raw['argv'][1:]) not in history_commands(checkout,host.case):
-        raise Refused('history exact readonly command')
+    refuse_if(raw['executable']!='/usr/bin/git' or raw['stdin'] is not None or tuple(raw['argv'][1:]) not in history_commands(checkout,host.case), 'history exact readonly command')
     environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':host.case+' (call)'}
     command=Command(tuple(raw['argv']),raw['cwd'] if host.case==HISTORY_CLI else str(checkout))
     return issue(host,actor,raw,command,environment,role='git-custody',maximum=2 if host.case==HISTORY_REPOSITORY else 128)
@@ -385,8 +374,7 @@ def history_cli_proposal(host,actor,raw):
     refuse_if(len(argv)!=7 or raw['stdin'] is not None, 'binding CLI original argument count')
     root=retain(host,Path(argv[4]).parent, 20000)
     repository=root/'repository'
-    if repository.resolve()!=repository or (repository/'.git').resolve()!=repository/'.git':
-        raise Refused('binding CLI repository alias')
+    refuse_if(repository.resolve()!=repository or (repository/'.git').resolve()!=repository/'.git', 'binding CLI repository alias')
     previous=[value for value in host.intents.values() if value['case']==HISTORY_CLI]
     ordinal=sum(value['role']=='fixed-inline' for value in previous)
     refuse_if(ordinal>=2, 'binding CLI original two invocations')
@@ -417,8 +405,7 @@ def image(file='/usr/bin/git'):
     refuse_if(str(target.resolve(strict=True)) != file, 'git native image alias')
     for member in (target, *target.parents):
         info = member.lstat()
-        if info.st_uid != 0 or stat.S_IMODE(info.st_mode) & 0o6022:
-            raise Refused('git native image custody')
+        refuse_if(info.st_uid != 0 or stat.S_IMODE(info.st_mode) & 0o6022, 'git native image custody')
         if member == target:
             refuse_if(not stat.S_ISREG(info.st_mode) or not info.st_mode & 0o111, 'git native executable')
         elif not stat.S_ISDIR(info.st_mode):
@@ -427,8 +414,7 @@ def image(file='/usr/bin/git'):
 
 
 def issue(host,actor,raw,command,environment,*,role='git-command',maximum=128,fields=None):
-    if raw['executable']!='/usr/bin/git' or raw['stdin']!=command.stdin:
-        raise Refused('Git exact executable and input')
+    refuse_if(raw['executable']!='/usr/bin/git' or raw['stdin']!=command.stdin, 'Git exact executable and input')
     expected=build_expected(host.case,'/usr/bin/git',image(),command.argv,
         tuple(sorted(environment.items())),command.cwd,'native')
     vector=['/usr/bin/git',*command.argv[1:]]
@@ -456,8 +442,7 @@ class Git:
     def location(self, root, location):
         path = Path(location)
         command_location(root, path)
-        if not path.is_dir() or path.lstat().st_uid != 20000 or str(path.resolve(strict=True)) != location:
-            raise Refused('git original worktree directory')
+        refuse_if(not path.is_dir() or path.lstat().st_uid != 20000 or str(path.resolve(strict=True)) != location, 'git original worktree directory')
 
     def launch(self, actor, operation, repository, command, raw, environment):
         host = self.host
@@ -476,10 +461,9 @@ class Git:
         host = self.host
         process = host.ledger.process(parent)
         intent = self.commands.get(process.token)
-        if (intent is None or not intent['consumed'] or intent['case'] != host.case
+        refuse_if(intent is None or not intent['consumed'] or intent['case'] != host.case
                 or intent['operation'] not in ('integration-add', 'rollback-add')
-                or process.exit is not None or process.terminal is not None):
-            raise Refused('git child outside original worktree creation')
+                or process.exit is not None or process.terminal is not None, 'git child outside original worktree creation')
         siblings = host.ledger.children.get(parent, ())
         refuse_if(list(siblings) != [birth], 'git single current checkout helper')
         tree = intent['command'].argv[-2]
@@ -518,8 +502,7 @@ class Git:
 
     def owned_launch(self, actor, raw, repository, expected, vector):
         host = self.host
-        if host.case != OWNED_CASE or self.repositories.get((host.case,repository), {}).get('path') != repository:
-            raise Refused('workspace owned launch scope')
+        refuse_if(host.case != OWNED_CASE or self.repositories.get((host.case,repository), {}).get('path') != repository, 'workspace owned launch scope')
         cwd = repository + '/.unrest-runtime/workspaces/trees/process'
         self.location(Path(repository), cwd)
         return admit_expected(host,actor,raw,expected,'workspace-owned',vector,expected.payload_sha256)
@@ -541,8 +524,7 @@ def workspace_prepare(host,actor,raw):
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
     owned=raw['argv']==[native,'-c',SITE_OWNED_BODY]
     if owned:
-        if case!=OWNED_CASE or slot is None or raw['stdin'] is not None or raw['cwd']!=repository+'/.unrest-runtime/workspaces/trees/process':
-            raise Refused('Git proposal owned process scope')
+        refuse_if(case!=OWNED_CASE or slot is None or raw['stdin'] is not None or raw['cwd']!=repository+'/.unrest-runtime/workspaces/trees/process', 'Git proposal owned process scope')
         expected=build_expected(
             case,
             native, pin,
@@ -596,10 +578,8 @@ CUSTODY_FIXED = (
 
 
 def custody_command(case, argv, cwd, owned):
-    if type(case) is not str or not (CONTROLLED_CASES(case) or case in COHORT_CASES) or type(argv) is not tuple or any(type(v) is not str for v in argv):
-        raise Refused('custody Git finite command primitives')
-    if type(cwd) is not str or str(Path(cwd).resolve()) != cwd or not Path(cwd).is_relative_to(owned/'pytest'):
-        raise Refused('custody Git owned repository')
+    refuse_if(type(case) is not str or not (CONTROLLED_CASES(case) or case in COHORT_CASES) or type(argv) is not tuple or any(type(v) is not str for v in argv), 'custody Git finite command primitives')
+    refuse_if(type(cwd) is not str or str(Path(cwd).resolve()) != cwd or not Path(cwd).is_relative_to(owned/'pytest'), 'custody Git owned repository')
     refuse_if(argv[:len(CUSTODY_PREFIX)] != CUSTODY_PREFIX, 'custody Git literal executable and prefix')
     args = argv[len(CUSTODY_PREFIX):]
     if args not in (*CUSTODY_FIXED,*COHORT_EXTRA.get(case,())):
@@ -634,6 +614,8 @@ COMPLETION_FIXTURE=(('git','init','-q'),('git','-c','user.name=Test','-c','user.
 
 
 def completion_fixture(case):
+    if case in NO_GIT:
+        return ()
     return (COMPLETION_FIXTURE[0],('git','add','product.txt'),
         ('git','-c','user.name=Test','-c','user.email=test@example.invalid','commit','-qm','defective candidate')) if case==ROLE_DEFECT else COMPLETION_FIXTURE
 
@@ -654,8 +636,7 @@ def completion_ready(host,workspace):
 
 def completion_proposal(host,actor,raw):
     case=host.case
-    if case not in ROLE_CASES or raw['stdin'] is not None or raw['executable']!='/usr/bin/git':
-        raise Refused('completion exact Git proposal')
+    refuse_if(case not in ROLE_CASES or raw['stdin'] is not None or raw['executable']!='/usr/bin/git', 'completion exact Git proposal')
     parent=role_root(host,raw['cwd'])
     workspace=parent/'workspace'
     records=[row for row in host.intents.values() if row['case']==case and row['role']=='git-command'
@@ -664,9 +645,8 @@ def completion_proposal(host,actor,raw):
     commands=completion_fixture(case)
     if actor['role']=='root':
         host.root_only(actor)
-        if (len(records)>=len(commands)+ROOT_QUERIES.get(case,0)
-                or any(row['case']==case and 'server_slot' in row for row in host.intents.values())):
-            raise Refused('completion root fixture sequence')
+        refuse_if(len(records)>=len(commands)+ROOT_QUERIES.get(case,0)
+                or any(row['case']==case and 'server_slot' in row for row in host.intents.values()), 'completion root fixture sequence')
         is_fixture=len(records)<len(commands)
         if is_fixture:
             vector=commands[len(records)]

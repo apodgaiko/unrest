@@ -1,7 +1,7 @@
 """Closed original role-server schedules, environments and literal templates."""
 from pathlib import Path
 
-from content_manifest import Refused, refuse_if
+from content_manifest import Refused as Refused, refuse_if
 from owned_fixture import acquire
 from node_environment import scoped,project_path
 from launch_policy import source_unit,assignment,render_string
@@ -40,6 +40,11 @@ BINDING={SERVER_TEST+f'::test_real_completion_target_binding[{value}]':('binding
     for value in ('missing','extra','attempt','type','validator','scope','evidence')}
 DEFECT=SERVER_TEST+'::test_structurally_valid_defect_requires_independent_validator_and_gate'
 CASES.update({**RESTART,**TARGETLESS,**BINDING,DEFECT:('defect','work','')})
+FALLBACK=SERVER_TEST+'::test_real_worker_mcp_refuses_missing_task_truth_without_git_carrier'
+CAUSAL={SERVER_TEST+'::test_real_http_all_role_supervision_is_coordinator_causal['+action+'-'+role+'-'+mode+']':('causal',mode,'')
+    for action in ('continue','nudge','blocked-delivery','stop') for role,mode in (('worker','worker'),('validator','validator'),('terminal_reviewer','terminal-reviewer'))}
+NO_GIT=(FALLBACK,*CAUSAL)
+CASES.update({FALLBACK:('fallback','work',''),**CAUSAL})
 CASES.update(dict.fromkeys(COMPOSED,('composed','orchestrator','')))
 ROOT_QUERIES={**SOURCE,**{case:int(role=='work') for case,(_,role,_) in RESTART.items()},**dict.fromkeys(BINDING,1)}
 HTTP=tuple(case for case,row in CASES.items() if row[0] not in ('setup','source','defect'))
@@ -51,6 +56,10 @@ OWNER=20000
 def schedule(case):
     refuse_if(type(case) is not str or case not in CASES, 'completion closed role case')
     family,role,scenario=CASES[case]
+    if family=='causal':
+        return (('http',role,0),('http','orchestrator',0),('http','orchestrator',0))
+    if family=='fallback':
+        return (('http','worker',1),)
     mode='validator' if role=='validate' else 'worker'
     if family=='composed':
         return (('http','orchestrator',0),)*COMPOSED_HTTP[case]
@@ -134,22 +143,21 @@ def environment(checkout,parent,case,ordinal,ambient,*,native=None,observed=None
             result['PYTHONPATH']=str(parent/'workspace')
     if mode(case,ordinal)=='orchestrator':
         return result
+    if case==FALLBACK:
+        result['UNREST_NODE_ASSIGNMENT']='{"targets":["VAL-A"],"task_type":"work"}'
     project=project_path(parent/'.unrest',observed.get('UNREST_PROJECT_ID'))
     return scoped(observed,result,parent/'.unrest',project.name,
-        'work' if mode(case,ordinal)=='worker' else 'validate',module=False)
+        {'worker':'work','validator':'validate','terminal-reviewer':'terminal_reviewer'}[mode(case,ordinal)],module=False,node_type=family!='causal')
 
 
 
 def actor_slot(host,actor):
     from source_observer import bound_intent
     row=bound_intent(host,actor)
-    if (host.case not in CASES or actor['case']!=host.case or not actor['body_ready']
-            or row is None or not host.ledger.body_ready(actor['birth'],actor['token'])):
-        raise Refused('completion actual ready server')
+    refuse_if(host.case not in CASES or actor['case']!=host.case or not actor['body_ready']
+            or row is None or not host.ledger.body_ready(actor['birth'],actor['token']), 'completion actual ready server')
     slot=row.get('server_slot')
-    if type(slot) is not int or not 0<=slot<len(schedule(host.case)):
-        raise Refused('completion finite server slot')
+    refuse_if(type(slot) is not int or not 0<=slot<len(schedule(host.case)), 'completion finite server slot')
     kind=row['server_kind']
-    if row['role']!=actor['role'] or actor['role']!=('mcp' if kind=='http' else 'fixed-inline'):
-        raise Refused('completion server role generation')
+    refuse_if(row['role']!=actor['role'] or actor['role']!=('mcp' if kind=='http' else 'fixed-inline'), 'completion server role generation')
     return row

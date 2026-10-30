@@ -36,6 +36,9 @@ NAMES=(
 WORKERS={TEST+'::test_'+name: ('end_mission' if name.endswith('[end_mission]') else
          'advance_project' if name.endswith('[advance_project]') else 'start_project') for name in NAMES}
 MAXIMUM=dict(zip(WORKERS,(1,1,1,1,2,1,2,1,1,1,1,1),strict=True))
+WAITING=tuple('tests/test_waiting_elapsed.py::test_waiting_row_stable_across_ticks_and_attached_projection['+role+']' for role in ('worker','validator','terminal_reviewer'))
+WORKERS.update(dict.fromkeys(WAITING,'advance_project'))
+MAXIMUM.update(dict.fromkeys(WAITING,1))
 MEASUREMENT_EVOLUTION='tests/test_measurement.py::test_evolution_cases_use_real_public_state_machine_and_cold_state'
 MEASUREMENT_PROJECT='tests/test_measurement.py::test_project_cases_use_real_run_control_and_nested_acp'
 REGISTERED='tests/test_run_cancel_delivery.py::test_cancel_registered_child_drains_before_unlock'
@@ -154,6 +157,7 @@ def admit_worker(host,actor,raw,home,operation,env,maximum,binding=None,custom=F
     refuse_if(document.get('run_id')!=run or document.get('operation')!=operation or document.get('generation')!=1, 'async error worker exact retained request')
     arguments=document.get('arguments',{})
     refuse_if(type(arguments) is not dict, 'worker retained request arguments')
+    refuse_if(case in WAITING and arguments!={'project_id':'project-1','max_steps':99}, 'waiting worker original slow request')
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
     vector=[native,'-m','unrest_harness.run_worker','--project-root',str(home),'--run-id',run,
             '--executor',executor or ('executor_fixture:execute' if custom else 'unrest_harness.runtime_executor:execute'),'--custody-root-id','local:unrest-run-control','--generation','1']

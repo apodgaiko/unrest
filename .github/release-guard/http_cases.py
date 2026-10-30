@@ -10,13 +10,14 @@ from composed_cases import CASES as COMPOSED,ps_limit
 
 SUPERVISION = tuple('tests/test_supervision_transactions.py::test_actual_role_excludes_both_diagnostic_interleavings['+state+'-'+role+']'
     for state in ('cancelled-client','held-inbox','held-recovery') for role in ('worker','validator','terminal_reviewer'))
-CASES = (*SUPERVISION, *ROLE_HTTP)
+FINALIZATION=tuple('tests/test_supervision_finalization.py::test_actual_role_mcp_delayed_admission_refuses_terminal_snapshot['+role+']' for role in ('worker','validator','terminal_reviewer'))
+CASES = (*SUPERVISION,*FINALIZATION,*ROLE_HTTP)
 
 
 def expected(host, actor, raw):
     host.root_only(actor)
     case = host.case
-    refuse_if(case not in (*SUPERVISION,*RESTART,*COMPOSED) or case in (*RESTART,*COMPOSED) and raw['argv'][:1]!=['ps']
+    refuse_if(case not in (*SUPERVISION,*FINALIZATION,*RESTART,*COMPOSED) or case in (*RESTART,*COMPOSED) and raw['argv'][:1]!=['ps']
             or raw['stdin'] is not None, 'HTTP original case or input')
     native, pin = host.binding['entry']['path'], host.binding['entry']['sha256']
     checkout, owned = Path(host.meta['checkout']), Path(host.meta['owned'])
@@ -33,11 +34,12 @@ def expected(host, actor, raw):
         root = Path(raw['cwd'])
         refuse_if(str(root.resolve())!=raw['cwd'] or root.name!='workspace' or not root.parent.is_relative_to(owned/'pytest'), 'HTTP original owned workspace')
         base, role, executable, kind = root.parent, 'mcp', native, 'python-command'
-        subject = case.rsplit('-',1)[1][:-1]
+        subject = case.rsplit('[' if case in FINALIZATION else '-',1)[1][:-1]
         mode = subject.replace('_','-')
         from network_scope import port_argument
         port=port_argument(raw['argv'][-1])
-        code = f"import runpy; runpy.run_path({str(checkout/'tests/fixtures/supervision_role_process.py')!r}, run_name='__main__')"
+        script='supervision_finalization_role.py' if case in FINALIZATION else 'supervision_role_process.py'
+        code = f"import runpy; runpy.run_path({str(checkout/'tests/fixtures'/script)!r}, run_name='__main__')"
         vector = (native,'-c',code,'--mode',mode,'--transport','streamable-http','--host','127.0.0.1','--port',str(port))
         environment.update(PYTHONPATH=str(checkout/'src'), UNREST_HOME=str(base/'home'),
             UNREST_PROJECTS_DIR=str(base/'home/projects'), UNREST_PROJECT_ID='project-1',

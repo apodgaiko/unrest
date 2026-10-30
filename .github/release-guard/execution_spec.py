@@ -1,7 +1,7 @@
 """Exact observer-issued execution domain; no candidate-derived authority."""
 from pathlib import Path
 
-from content_manifest import Refused, capture, refuse_if
+from content_manifest import Refused as Refused, capture, refuse_if
 
 def issue(role, vector, script, script_pin, fixture=None):
     if vector[3] in ('-c','-m'):
@@ -14,26 +14,22 @@ def issue(role, vector, script, script_pin, fixture=None):
 
 def validate(profile,event,arguments,directory):
     value=profile['execution']
-    if event!=value['event'] or arguments!=(value['argument'],):
-        raise Refused('execution specification exact body or domain')
+    refuse_if(event!=value['event'] or arguments!=(value['argument'],), 'execution specification exact body or domain')
     if value['fixture'] is not None:
         binding=value['fixture']
         if binding.get('kind')=='undeliverable':
             from composed_cases import UNDELIVERABLE
-            if (profile['case']!=UNDELIVERABLE or profile['role'] not in ('mcp','cleanup-acp')
-                    or binding['path']!=str(Path(profile['cwd'])/'sitecustomize.py')):
-                raise Refused('execution specification fixed delivery bootstrap')
+            refuse_if(profile['case']!=UNDELIVERABLE or profile['role'] not in ('mcp','cleanup-acp')
+                    or binding['path']!=str(Path(profile['cwd'])/'sitecustomize.py'), 'execution specification fixed delivery bootstrap')
         else:
             from run_worker_launch import WORKERS
-            if (binding.get('kind') is not None or profile['case'] not in WORKERS or profile['role']!='fixed-inline'
+            refuse_if(binding.get('kind') is not None or profile['case'] not in WORKERS or profile['role']!='fixed-inline'
                     or profile['argv'][3:5]!=['-m','unrest_harness.run_worker']
-                    or binding['path']!=str(Path(profile['cwd'])/'executor_fixture.py')):
-                raise Refused('execution specification finite executor fixture')
+                    or binding['path']!=str(Path(profile['cwd'])/'executor_fixture.py'), 'execution specification finite executor fixture')
     if profile['script'] is not None:
         file=Path(profile['script'])
-        if (str(file.resolve())!=str(file)
-                or capture(file.parent,[file.name])['files'][0]['sha256']!=value['script_sha256']):
-            raise Refused('execution specification current script bytes')
+        refuse_if(str(file.resolve())!=str(file)
+                or capture(file.parent,[file.name])['files'][0]['sha256']!=value['script_sha256'], 'execution specification current script bytes')
 
 
 def admitted(intents,role,case,pid,token,vector,environment,cwd,script):

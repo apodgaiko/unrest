@@ -8,7 +8,7 @@ from content_manifest import Refused
 import http_cases
 
 
-@pytest.fixture(params=http_cases.SUPERVISION)
+@pytest.fixture(params=(*http_cases.SUPERVISION,*http_cases.FINALIZATION))
 def prepared(request,tmp_path):
     checkout=tmp_path/'source'
     cwd=tmp_path/'pytest/case/workspace'
@@ -24,10 +24,11 @@ def prepared(request,tmp_path):
 def test_exact_original_http_role_environment_and_program(prepared):
     host,raw=prepared
     value,role,port=http_cases.expected(host,{},raw)
-    subject=host.case.rsplit('-',1)[1][:-1]
+    subject=host.case.rsplit('[' if host.case in http_cases.FINALIZATION else '-',1)[1][:-1]
     assert role=='mcp' and port==12345
     assert value.argv[3:] == ('--mode',subject.replace('_','-'),'--transport','streamable-http','--host','127.0.0.1','--port','12345')
-    assert str(Path(host.meta['checkout'])/'tests/fixtures/supervision_role_process.py') in value.argv[2]
+    script='supervision_finalization_role.py' if host.case in http_cases.FINALIZATION else 'supervision_role_process.py'
+    assert str(Path(host.meta['checkout'])/'tests/fixtures'/script) in value.argv[2]
     environment=dict(value.environment)
     assert environment['UNREST_PROJECT_ID']=='project-1'
     assert environment['UNREST_WORKER_ACP_COMMAND']=='/bin/true'

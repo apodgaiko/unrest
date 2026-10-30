@@ -6,13 +6,13 @@ import hashlib
 import json
 from pathlib import Path
 
-from content_manifest import Refused, refuse_if
+from content_manifest import Refused as Refused, refuse_if
 from git_policy import image
 from launch_policy import build_expected,source_unit,literal,render_string
 from speed_inline import CASES as SPEED_CASES, PRELUDE, CLI_CASE, cli_expected
 from nested_pytest import CASE as NESTED_CASE, NODES, PYTEST_PIN, CASES as NESTED_CASES, HERMETIC, hermetic
 
-from fixed_leaves import (STORAGE_CASES,DIRECTORY as STORAGE_DIRECTORY,INSPECTION_CASES,FRONTIER,
+from fixed_leaves import (STORAGE_CASES,DIRECTORY as STORAGE_DIRECTORY,INSPECTION_CASES,FRONTIER,RETIREMENT_CASES,
     MEASUREMENT_CASE,COMPLETION_CASES,COMPLETION_SEQUENCES)
 
 TEST = 'tests/test_repository_contract.py'
@@ -71,7 +71,7 @@ SEQUENCES[JOURNAL_CASE]=('sleep',)
 SEQUENCES[MEASUREMENT_CASE]=('simulate',)
 SEQUENCES[DRAIN_CASE]=('drain',)
 SEQUENCES.update(COMPLETION_SEQUENCES)
-SEQUENCES.update({case:('read0','read1') if case==FRONTIER else ('read0',) for case in INSPECTION_CASES})
+SEQUENCES.update({case:('read0','read1') if case in (FRONTIER,*RETIREMENT_CASES) else ('read0',) for case in INSPECTION_CASES})
 SEQUENCES.update({case:(operation,) for case,operation in ISOLATED.items()})
 PINS[STDIO_TEST] = '588e6f2128c32f4020cae0dfaf00182bdc117ea640760da1790dd687f5246105'
 
@@ -85,8 +85,7 @@ def translated(value):
 def startup_expected(case,native,pin,cwd,owned):
     refuse_if(type(case) is not str or case not in STDIO or type(cwd) is not str, 'fixed startup declaration')
     root=Path(cwd)
-    if str(root.resolve())!=cwd or root==owned/'pytest' or not root.is_relative_to(owned/'pytest'):
-        raise Refused('fixed startup original fixture root')
+    refuse_if(str(root.resolve())!=cwd or root==owned/'pytest' or not root.is_relative_to(owned/'pytest'), 'fixed startup original fixture root')
     role,index=STDIO[case]
     environment={'PATH':'/bin:/usr/bin','HOME':cwd,'UNREST_HOME':str(root/'home'),**STDIO_INVALID[index]}
     vector=(native,'-I','-c',STDIO_BODY,'--mode',role)
@@ -152,7 +151,6 @@ def expected(case, operation, native, pin, checkout, environment, *, root=None):
 
 
 def query_expected(case,operation,checkout,environment):
-    if case not in IMPORT_CASES or operation!='check' or operation not in SEQUENCES[case]:
-        raise Refused('fixed inline query scope; other leaves have no descendants')
+    refuse_if(case not in IMPORT_CASES or operation!='check' or operation not in SEQUENCES[case], 'fixed inline query scope; other leaves have no descendants')
     return build_expected(case,'/usr/bin/git',image(),('git','-C',str(checkout),'rev-parse','--show-toplevel'),
         tuple(sorted(environment.items())),str(checkout),'native')

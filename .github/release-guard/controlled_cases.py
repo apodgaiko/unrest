@@ -2,6 +2,7 @@
 from content_manifest import Refused, read_regular, refuse_if
 from cohort_cases import CAMPAIGNS
 from cohort_controller import CASES as CRASH
+from controlled_owners import selection, GIT_CASES
 
 SOURCE_UID=20000
 STANDARD=('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53','fake-app-server')
@@ -60,7 +61,11 @@ BACKENDS={'01d855c9d7ae2c91b6055a8e5eec1621714a1f6b84d3ae7bad1f190e70b19d3e': 'f
 
 
 def eligible(case):
-    return type(case) is str and (case==RUNTIME_DRIFT or case in CAMPAIGNS or case in CRASH or '::' in case and case.split('::')[0] in MODULES)
+    return type(case) is str and (selection(case) is not None or custody(case) and case not in GIT_CASES or case==RUNTIME_DRIFT)
+
+
+def custody(case):
+    return type(case) is str and (case in CAMPAIGNS or case in CRASH or case in GIT_CASES or '::' in case and case.split('::')[0] in MODULES)
 
 
 def backend_path(case,root):
@@ -70,9 +75,8 @@ def backend_path(case,root):
 def acquire_backend(case,home):
     file=backend_path(case,home.parent)
     _,_,pin=read_regular(file,4*1024*1024,uid=SOURCE_UID,forbidden=0o6022)
-    if (not eligible(case) or BACKENDS.get(pin)!=file.name
-            or case in (*CAMPAIGNS,*CRASH,RUNTIME_DRIFT) and pin!=STANDARD[0]):
-        raise Refused('unknown controlled backend bytes or layout')
+    refuse_if(not eligible(case) or BACKENDS.get(pin)!=file.name
+            or (case in (*CAMPAIGNS,*CRASH,RUNTIME_DRIFT) or selection(case) is not None) and pin!=STANDARD[0], 'unknown controlled backend bytes or layout')
     return pin
 
 
@@ -81,7 +85,8 @@ def select_entry(case,checkout,home,native,native_pin,raw,*,backend,relay,record
     from launch_policy import check_expected
     refuse_if(not eligible(case), 'controlled source module')
     pin=acquire_backend(case,home) if backend else None
-    variants=(0,) if case in (*CAMPAIGNS,*CRASH,RUNTIME_DRIFT) else range(4)
+    selected=selection(case)
+    variants=(selected.variant,) if selected is not None else (0,) if case in (*CAMPAIGNS,*CRASH,RUNTIME_DRIFT) else range(4)
     if not backend:
         pairs=[row for row in records if row['cwd']==str(home) and row['role']=='backend']
         refuse_if(len(pairs)!=1 or type(pairs[0].get('controlled_variant')) is not int or pairs[0]['controlled_variant'] not in variants, 'controlled ACP configuration pair')

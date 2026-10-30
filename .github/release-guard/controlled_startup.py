@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 
 from bootstrap_cases import configuration, wrapper, declaration
-from content_manifest import Refused, is_sha256, refuse_if
+from content_manifest import Refused as Refused, is_sha256, refuse_if
 from controlled_cases import eligible as CONTROLLED, backend_path, BACKENDS, SERVERS
 from launch_policy import build_expected
 
@@ -29,8 +29,7 @@ def expected_entry(case,checkout,home,native,native_pin,*,backend,relay=None,var
     if backend:
         script = backend_path(case,home.parent) if CONTROLLED(case) else home.parent/'fake-app-server'
         pin = backend_pin if CONTROLLED(case) else BACKEND_PIN
-        if CONTROLLED(case) and BACKENDS.get(pin)!=script.name:
-            raise Refused('controlled independent backend pin')
+        refuse_if(CONTROLLED(case) and BACKENDS.get(pin)!=script.name, 'controlled independent backend pin')
         source = (native,str(script),*options,'app-server')
         delay = None if CONTROLLED(case) else wrapper(case)
         vector = (native,'-c',delay,*source[1:]) if delay is not None else source

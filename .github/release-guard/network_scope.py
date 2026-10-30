@@ -4,31 +4,27 @@ import fcntl
 import socket
 import struct
 from pathlib import Path
-from content_manifest import Refused, refuse_if
+from content_manifest import Refused as Refused, refuse_if
 
 
 def port_argument(value):
     refuse_if(type(value) is not str or not value.isascii() or not value.isdigit() or not 0<len(value)<=5, 'source literal loopback port argument')
     port=int(value)
-    if not 1<=port<=65535:
-        raise Refused('source literal loopback port argument')
+    refuse_if(not 1<=port<=65535, 'source literal loopback port argument')
     return port
 
 
 def isolated(before):
     namespace=os.readlink('/proc/self/ns/net')
-    if namespace==before or {row.split(':')[0].strip() for row in Path('/proc/self/net/dev').read_text().splitlines()[2:]}!={'lo'}:
-        raise Refused('source private loopback namespace')
+    refuse_if(namespace==before or {row.split(':')[0].strip() for row in Path('/proc/self/net/dev').read_text().splitlines()[2:]}!={'lo'}, 'source private loopback namespace')
     ipv4=Path('/proc/net/route').read_text().splitlines()[1:]
     for row in ipv4:
         fields=row.split()
-        if len(fields)!=11 or fields[0]!='lo' or fields[2]!='00000000':
-            raise Refused('source external IPv4 route')
+        refuse_if(len(fields)!=11 or fields[0]!='lo' or fields[2]!='00000000', 'source external IPv4 route')
     for row in Path('/proc/net/ipv6_route').read_text().splitlines():
         fields=row.split()
-        if (len(fields)!=10 or fields[-1]!='lo' or fields[4]!='0'*32
-                or fields[0]!='0'*31+'1' and not int(fields[8],16)&0x200):
-            raise Refused('source external IPv6 route')
+        refuse_if(len(fields)!=10 or fields[-1]!='lo' or fields[4]!='0'*32
+                or fields[0]!='0'*31+'1' and not int(fields[8],16)&0x200, 'source external IPv6 route')
     return namespace
 
 

@@ -1,7 +1,7 @@
 """Finite concurrent role-server slots; reservations never confer listener authority."""
 from pathlib import Path
 
-from completion_roles import CASES,root,schedule,program,environment,mode
+from completion_roles import CASES,NO_GIT,CAUSAL,root,schedule,program,environment,mode
 from git_policy import completion_proposal as git_proposal, completion_ready as git_ready
 from content_manifest import Refused, refuse_if
 from launch_policy import admit_expected,build_expected,check_expected
@@ -41,16 +41,21 @@ def proposal(host,actor,raw):
     slot=(int(raw['argv'][3]) if family=='setup' and len(raw['argv'])==6 and raw['argv'][3] in ('0','1')
           else len(existing))
     refuse_if(slot>=len(profiles) or any(row['server_slot']==slot for row in existing), 'completion server quota exhausted')
-    selected=host.fixture_roots.get(('completion-role',case))
-    refuse_if(selected is None, 'completion server before fixture Git')
-    parent=root(host,str(Path(selected[0])/'workspace'))
+    if case in CAUSAL and slot==2 and any(not host.ledger.reaped(row['birth'],row['token']) for row in existing):
+        return None
+    if case in NO_GIT:
+        parent=root(host,raw['cwd'])
+    else:
+        selected=host.fixture_roots.get(('completion-role',case))
+        refuse_if(selected is None, 'completion server before fixture Git')
+        parent=root(host,str(Path(selected[0])/'workspace'))
     git_ready(host,parent/'workspace')
     if any(not host.executed(row) for row in existing):
         return None
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
     checkout=Path(host.meta['checkout'])
     ambient={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}
-    for variant in ((slot,) if family in ('setup','crash') else range(len(profiles))):
+    for variant in ((slot,) if family in ('setup','crash') or family=='causal' and slot==2 else range(len(profiles))):
         kind=profiles[variant][0]
         try:
             env=environment(checkout,parent,case,variant,ambient,native=native,observed=raw['environment'])

@@ -20,7 +20,12 @@ PROGRAM='import pathlib,sys; sys.stdout.buffer.write(pathlib.Path(sys.argv[1]).r
 FRONTIER='tests/test_coordinator.py::TestCurrentEvidenceFrontier::test_frontier_reconstructs_byte_identically_in_fresh_interpreters'
 RECOVERY='tests/test_stranded_recovery.py::test_real_cli_inspection_after_recovery'
 SEALED='tests/test_coordinator.py::TestCurrentEvidenceFrontier::test_invalid_cycle_rejects_before_persistence_and_cleared_gate_stays_sealed'
-INSPECTION_CASES=(FRONTIER,RECOVERY,SEALED)
+RETIREMENT_CASES=tuple('tests/test_coordinator.py::TestCurrentEvidenceFrontier::test_retirement_history_and_fresh_replay_are_closed_and_exact['+operation+']' for operation in ('supersede','cancel'))
+PROJECTION_CASES=tuple('tests/test_server.py::'+name+'['+variant+']' for name,variants in (
+    ('test_terminal_review_generation_identity_matches_direct_mcp_and_restart',('negative','runtime-failure')),
+    ('test_malformed_handoff_retains_dispatch_identity_across_mcp_and_restart',('worker','validator')))
+    for variant in variants)
+INSPECTION_CASES=(FRONTIER,RECOVERY,SEALED,*RETIREMENT_CASES,*PROJECTION_CASES)
 REPLAY='tests/fixtures/evidence_frontier_v045/replay.py'
 REPLAY_PIN='5296e65bdf9bd8a7896636e71a503f0965a6ebbcfebb49ce0147b44d976fe8a9'
 INSPECTION_PINS={'tests/test_coordinator.py': '8ab30d0ce4bc4a318c3fd5f8fc295fb506e76dab128be6324dc5ab3713a6eeec', 'tests/test_stranded_recovery.py': '07dc29e2387be16906373ef66b02d5e508744a084284486da5d4fb69c71c8f7b'}
@@ -53,23 +58,29 @@ def expected(host,operation,argv,cwd,environment,native,pin):
             raise Refused('storage owned fixture root') from None
         root=retain(host,root, OWNER)
         location=Path(cwd)
-        if (actual.resolve()!=actual or location.resolve()!=location
-                or location!=checkout and not location.is_relative_to(root)):
-            raise Refused('storage canonical owned read path')
+        refuse_if(actual.resolve()!=actual or location.resolve()!=location
+                or location!=checkout and not location.is_relative_to(root), 'storage canonical owned read path')
         file=actual.stat(follow_symlinks=False)
-        if not stat.S_ISREG(file.st_mode) or file.st_uid!=OWNER or file.st_nlink!=1:
-            raise Refused('storage owned regular read input')
+        refuse_if(not stat.S_ISREG(file.st_mode) or file.st_uid!=OWNER or file.st_nlink!=1, 'storage owned regular read input')
         vector=(native,'-c',PROGRAM,str(target))
     elif case in INSPECTION_CASES:
-        refuse_if(len(argv)!=(6 if case==RECOVERY else 5), 'inspection finite original arguments')
+        refuse_if(len(argv)!=(7 if case in PROJECTION_CASES else 6 if case==RECOVERY or case in RETIREMENT_CASES else 5), 'inspection finite original arguments')
         path=case.split('::')[0]
-        if case==SEALED:
-            source_unit(checkout,path,INSPECTION_PINS[path],case.split('::')[1:])
+        if case in PROJECTION_CASES:
+            from completion_roles import PINS
+            home=Path(argv[4])
+            root=home.parent
+            project_id=argv[6]
+            script=literal(source_unit(checkout,path,PINS[path],('_fresh_process_project_projection',)),'script')
+            vector=(native,'-c',script,str(checkout/'src/unrest_harness/bundled'),str(home),str(home/'projects'),project_id)
+            expected_cwd=str(checkout)
+        elif case==SEALED or case in RETIREMENT_CASES:
+            source_unit(checkout,path,INSPECTION_PINS[path],case.split('[',1)[0].split('::')[1:])
             source_unit(checkout,REPLAY,REPLAY_PIN)
             home=Path(argv[3])
             root=home.parent
             project_id=argv[4]
-            vector=(native,str(checkout/REPLAY),'sealed-patch',str(root/'.unrest'),project_id)
+            vector=(native,str(checkout/REPLAY),'gate' if case in RETIREMENT_CASES else 'sealed-patch',str(root/'.unrest'),project_id,*(('g1',) if case in RETIREMENT_CASES else ()))
             expected_cwd=str(checkout)
         elif case==FRONTIER:
             home=Path(argv[3])
@@ -87,12 +98,11 @@ def expected(host,operation,argv,cwd,environment,native,pin):
             vector=(native,'-c','from unrest_harness.cli import cli; cli()','inspect-tasks','--project',project_id)
             expected_cwd=str(root)
         root=retain(host,root, OWNER)
-        if (home!=root/('home' if case==RECOVERY else '.unrest') or home.resolve()!=home
-                or not project_id or Path(project_id).name!=project_id or project_id in ('.','..')):
-            raise Refused('inspection owned original home')
+        refuse_if(home!=root/('home' if case==RECOVERY else '.unrest') or home.resolve()!=home
+                or not project_id or Path(project_id).name!=project_id or project_id in ('.','..'), 'inspection owned original home')
         record=home/'projects'/project_id/'.unrest-runtime/project.json'
         refuse_if(record.resolve()!=record, 'inspection aliased project record')
-        kind,reference=('python-script',REPLAY_PIN) if case==SEALED else ('python-command',None)
+        kind,reference=('python-script',REPLAY_PIN) if case==SEALED or case in RETIREMENT_CASES else ('python-command',None)
     elif case in COMPLETION_CASES:
         refuse_if(operation not in COMPLETION_SEQUENCES[case], 'completion exact primitive sequence')
         suffix,phase=COMPLETION_CASES[case]

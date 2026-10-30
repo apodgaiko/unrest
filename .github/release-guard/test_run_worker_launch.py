@@ -169,3 +169,27 @@ def test_each_worker_ordinal_requires_real_execution_and_authorized_cleanup(case
         assert host.completed_child(actor) is True
         actor['signals']=set()
         assert host.completed_child(actor) is (actual>=0)
+
+
+@pytest.mark.parametrize('case',worker.WAITING)
+@pytest.mark.parametrize('arguments',[{'project_id':'project-1','max_steps':99},{'project_id':'foreign','max_steps':99},{'project_id':'project-1','max_steps':1},{'project_id':'project-1','max_steps':99,'brief':'descendant'}])
+def test_waiting_worker_is_one_original_slow_request_without_descendant_authority(tmp_path,monkeypatch,case,arguments):
+    home=tmp_path/'home'
+    run='run:'+'a'*64
+    file=home/'.unrest/runs'/run[4:]/'request.json'
+    file.parent.mkdir(parents=True)
+    file.write_text(json.dumps({'run_id':run,'generation':1,'operation':'advance_project','arguments':arguments}))
+    file.chmod(0o600)
+    read=worker.read_regular
+    monkeypatch.setattr(worker,'read_regular',lambda path,*args,**kwargs:read(path,*args,**{**kwargs,'uid':os.getuid()}))
+    monkeypatch.setattr(worker,'native_digest',lambda path:'b'*64)
+    host=SimpleNamespace(case=case,intents={},meta={'checkout':'/source'},binding={'entry':{'path':'/native','sha256':'a'*64}})
+    host.admit_launch=lambda *args,**kwargs:host.intents.setdefault(1,{}) or {'ticket':1}
+    env={'LANG':'C.UTF-8','PATH':os.defpath,'PYTHONPATH':'/source/src'}
+    raw={'argv':['/native','-m','unrest_harness.run_worker','--project-root',str(home),'--run-id',run,'--executor','executor_fixture:execute','--custody-root-id','local:unrest-run-control','--generation','1'],'environment':env,'cwd':str(home)}
+    assert worker.MAXIMUM[case]==1 and case not in worker.DESCENDANTS
+    if arguments=={'project_id':'project-1','max_steps':99}:
+        assert worker.admit_worker(host,{},raw,home,'advance_project',env,1,custom=True)['ticket']==1
+    else:
+        with pytest.raises(Refused,match='waiting worker original slow request'):
+            worker.admit_worker(host,{},raw,home,'advance_project',env,1,custom=True)

@@ -34,7 +34,7 @@ def project_path(home,identity):
     return path
 
 
-def scoped(observed,base,home,project,role,*,module):
+def scoped(observed,base,home,project,role,*,module,node_type=True):
     mission=component(observed.get('UNREST_MISSION_ID'))
     runtime=home/'projects'/project/'.unrest-runtime/missions'/mission
     if role=='terminal_reviewer':
@@ -50,7 +50,7 @@ def scoped(observed,base,home,project,role,*,module):
         suffix='__'+node+'.json'
         valid=path.parent==runtime/'attempts' and path.name.endswith(suffix)
         component(path.name[:-len(suffix)])
-        data={key:str(path),'UNREST_NODE_ID':node,'UNREST_NODE_TYPE':role}
+        data={key:str(path),'UNREST_NODE_ID':node,**({'UNREST_NODE_TYPE':role} if node_type else {})}
         if module:
             body=observed.get('UNREST_NODE_ASSIGNMENT','')
             refuse_if(type(body) is not str or len(body.encode())>8192, 'node assignment bound')

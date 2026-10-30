@@ -21,7 +21,7 @@ from linux_observation import process_identity
 from process_ledger import Birth, Ledger, canonical
 from session_launch import TIMEOUT as SESSION_TIMEOUT
 from fixed_inline import CLI_CASE, JOURNAL_CASE
-from completion_roles import CASES as ROLE_CASES,actor_slot
+from completion_roles import CASES as ROLE_CASES,FALLBACK,actor_slot
 from git_policy import Git
 from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, snapshot_path
 import approval_launch
@@ -303,7 +303,7 @@ class Observer:
             from completion_server import status
             return value is not None and status(self,actor,value['server_slot'])
         if actor['role']=='git-command' and value is not None and value.get('operation')=='completion-head':
-            return actor.get('kernel_admitted') is True and terminal is not None and terminal[2]==0
+            return actor.get('kernel_admitted') is True and terminal is not None and terminal[2]==(128 if actor['case']==FALLBACK else 0)
         if actor['role']=='pytest-regression':
             return terminal is not None and terminal[2]==0 and actor['body_ready'] and actor.get('preselected_complete') is True
         if actor['case'] in PLAN_CASES:

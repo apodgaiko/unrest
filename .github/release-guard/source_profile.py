@@ -32,9 +32,8 @@ def digest(path: Path) -> str:
 def inherited_descriptor(expected, descriptor, info, flags, uid):
     from socket_observation import pipe_info
     value=pipe_info(info,flags,uid)
-    if (type(descriptor) is not int or not 3<=descriptor<=1024
-            or expected!=[[descriptor,*value]]):
-        raise Refused('source ambient inherited descriptor')
+    refuse_if(type(descriptor) is not int or not 3<=descriptor<=1024
+            or expected!=[[descriptor,*value]], 'source ambient inherited descriptor')
     return [descriptor,*value]
 
 
@@ -44,11 +43,10 @@ def validate(profile: dict, event: str, arguments: tuple) -> dict:
     actual = process_identity(os.getpid())
     filesystem = os.stat('/')
     root = profile.get('filesystem_root')
-    if (type(root) is not list or any(type(value) is not int for value in root)
-            or root != [filesystem.st_dev, filesystem.st_ino]):
-        raise Refused('source private filesystem generation')
+    refuse_if(type(root) is not list or any(type(value) is not int for value in root)
+            or root != [filesystem.st_dev, filesystem.st_ino], 'source private filesystem generation')
     parent, observer = Birth.read(profile['parent']), Birth.read(profile['observer'])
-    if (canonical(profile['identity']) != profile['identity'] or canonical(actual) != profile['identity'] or parent.pid != os.getppid()
+    refuse_if(canonical(profile['identity']) != profile['identity'] or canonical(actual) != profile['identity'] or parent.pid != os.getppid()
             or Birth.read(credential_identity(parent.pid)) != parent or observer.uid != 20001
             or (parent.uid != 20000 if full and profile['role']=='root' else parent != observer if profile['role'] == 'root' else parent.uid != 20000)
             or profile['network_namespace']!=os.readlink('/proc/self/ns/net')
@@ -61,11 +59,9 @@ def validate(profile: dict, event: str, arguments: tuple) -> dict:
             or type(profile['generation']) is not int or profile['generation'] != 1
             or [sys.flags.isolated, sys.flags.no_site, sys.flags.dont_write_bytecode, sys.flags.utf8_mode] != [1, 1, 0, 1]
             or (str(Path(profile['runtime_root'])/'bin/pytest') if full and profile['role']=='root' else profile['native']) != sys.executable or digest(Path(sys.executable)) != profile['native_sha256']
-            or digest(Path(__file__).with_name('native_entry.py')) != profile['entry_sha256']):
-        raise Refused('source actual profile binding')
-    if (profile['environment'] != dict(os.environ) or profile['cwd'] != os.getcwd()
-            or profile['argv'] != sys.orig_argv):
-        raise Refused('source actual request binding')
+            or digest(Path(__file__).with_name('native_entry.py')) != profile['entry_sha256'], 'source actual profile binding')
+    refuse_if(profile['environment'] != dict(os.environ) or profile['cwd'] != os.getcwd()
+            or profile['argv'] != sys.orig_argv, 'source actual request binding')
     inherited = profile['inherited']
     if profile['role'] in ('mp-child','mp-tracker'):
         from multiprocess_entry import inherited as validate_inherited
@@ -76,10 +72,9 @@ def validate(profile: dict, event: str, arguments: tuple) -> dict:
         from approval_launch import CASES as APPROVAL
         mcp = mcp or profile['role']=='mcp' and profile['case'] in APPROVAL
         mcp = mcp or profile['role']=='fixed-inline' and profile['case'] in STREAM_CASES
-        if (type(inherited) is not list or (not mcp and inherited)
+        refuse_if(type(inherited) is not list or (not mcp and inherited)
                 or mcp and (len(inherited) != 1 or type(inherited[0]) is not list
-                    or len(inherited[0]) != 3 or any(type(value) is not int or value <= 0 for value in inherited[0]))):
-            raise Refused('source finite inherited inventory')
+                    or len(inherited[0]) != 3 or any(type(value) is not int or value <= 0 for value in inherited[0])), 'source finite inherited inventory')
         seen = []
         for name in os.listdir('/proc/self/fd'):
             descriptor = int(name)
@@ -96,12 +91,11 @@ def validate(profile: dict, event: str, arguments: tuple) -> dict:
     native = profile['native']
     role, script = profile['role'], profile['script']
     if role == 'root' and not full and tuple(profile['cases'])==ARCHIVE_CASES:
-        if (profile['cwd']!=profile['checkout'] or script is not None or event!='cpython.run_command'
+        refuse_if(profile['cwd']!=profile['checkout'] or script is not None or event!='cpython.run_command'
                 or arguments!=(ARCHIVE_COMMAND+'\n',) or len(profile['argv'])!=6
                 or profile['argv'][:5]!=[native,'-I','-S','-c',ARCHIVE_COMMAND]
                 or not Path(profile['argv'][5]).is_absolute() or str(Path(profile['argv'][5]).resolve())!=profile['argv'][5]
-                or Path(profile['checkout']).is_relative_to(Path(profile['argv'][5]))):
-            raise Refused('archive fixed original oracle body')
+                or Path(profile['checkout']).is_relative_to(Path(profile['argv'][5])), 'archive fixed original oracle body')
     elif role == 'root' and not full:
         raise Refused('source unknown root domain')
     return actual
