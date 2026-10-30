@@ -19,12 +19,23 @@ from control_transport import Admission, Frame, REQUEST_LIMIT, cancelled_empty, 
 from controlled_cases import eligible as CONTROLLED, backend_path, WARNING_REFUSALS, NOTIFICATION_SIGNALS
 from linux_observation import process_identity
 from process_ledger import Birth, Ledger, canonical
-from source_profile import METHODS
 from session_launch import TIMEOUT as SESSION_TIMEOUT
 from fixed_inline import CLI_CASE, JOURNAL_CASE
 from completion_roles import CASES as ROLE_CASES,actor_slot
 from git_policy import Git
 from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, snapshot_path
+import approval_launch
+import archive_snapshot
+import cohort_controller
+import composed_adoption
+import desktop_launch
+import package_cases
+import package_security
+import plan_observer
+import run_worker_launch
+import source_profile
+import speed_inline
+import uv_cli
 
 
 
@@ -61,7 +72,7 @@ class Observer:
         self.root = root_pid
         self.root_birth = Birth.read(process_identity(root_pid))
         self.ledger = Ledger(os.urandom(32).hex())
-        self.admission = Admission(self.ledger, METHODS)
+        self.admission = Admission(self.ledger, source_profile.METHODS)
         self.git = Git(self)
         self.actors, self.intents, self.mp_pipes = {}, {}, {}
 
@@ -107,9 +118,7 @@ class Observer:
         self.actors[pid] = actor
         command_class = {**dict.fromkeys(('approval-adapter','approval-relay','approval-backend'),'controlled-approval-fixture'),'root': 'bootstrap-root', 'acp': 'controlled-acp',
                          'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline','plan-python':'plan-python','mp-child':'mp-child','mp-tracker':'mp-tracker','review-wire':'review-wire','pytest-regression':'pytest-regression','desktop':'desktop',**dict.fromkeys(('archive-checker','archive-leaf','archive-installed'),'archive-python')}[role]
-        from run_worker_launch import ALL_CASES as RUN_WORKERS
-        from approval_launch import RUNS as APPROVAL_RUNS
-        new_session = role in ('backend','delayed-backend','acp','workspace-owned','session-adapter','session-inline') or role=='mcp' and case in HTTP_CASES and vector[3]=='-c' or role=='fixed-inline' and case in (*ROLE_CASES,*RUN_WORKERS,*APPROVAL_RUNS)
+        new_session = role in ('backend','delayed-backend','acp','workspace-owned','session-adapter','session-inline') or role=='mcp' and case in HTTP_CASES and vector[3]=='-c' or role=='fixed-inline' and case in (*ROLE_CASES,*run_worker_launch.ALL_CASES,*approval_launch.RUNS)
         self.ledger.register(actor['birth'], token, (), case=case,
                              command_class=command_class, new_session=new_session, expected_generation=1)
         if new_session:
@@ -121,13 +130,11 @@ class Observer:
     def consume(self, trace):
         self.ledger_trace = trace
         while self.ledger.next_kernel < len(trace.records):
-            from composed_adoption import refresh
-            refresh(self)
+            composed_adoption.refresh(self)
             row = trace.records[self.ledger.next_kernel]
             self.ledger.kernel(self.ledger.next_kernel, row)
             if self.case in PLAN_CASES:
-                from plan_observer import consume
-                consume(self,row)
+                plan_observer.consume(self,row)
             if row['kind'] == 'kernel_child':
                 birth = Birth.read(row['identity'])
                 if birth.pid == birth.tgid:
@@ -142,9 +149,8 @@ class Observer:
                     if actor is None or actor['role'] not in ('root', 'mcp', 'git-command', 'session-adapter', 'fixed-inline','desktop','archive-checker','uv-cli','approval-adapter','approval-relay') or len(candidates) != 1:
                         raise Refused('source fork without a unique original launch intent')
             if row['kind']=='original_parent_wait4':
-                from cohort_controller import WAIVED
                 for value in self.intents.values():
-                    if self.case in WAIVED and value.get('cohort_controller') and value.get('pid')==row['child']:
+                    if self.case in cohort_controller.WAIVED and value.get('cohort_controller') and value.get('pid')==row['child']:
                         value.setdefault('closeout_started',time.monotonic())
             if row['kind'] == 'kernel_exit' and row.get('raw') == 86 << 8:
                 raise Refused('native guard refusal')
@@ -154,8 +160,7 @@ class Observer:
                 self.profile(self.root, 'root', '<bootstrap>',
                     vector,
                     self.meta_environment(), self.meta['checkout'], os.urandom(16).hex())
-        from composed_adoption import refresh
-        refresh(self)
+        composed_adoption.refresh(self)
 
     def before_exit(self,trace,pid):
         self.consume(trace)
@@ -176,8 +181,7 @@ class Observer:
                 or actual_namespaces['pid'] != self.meta['pid_namespace']):
             return False
         if self.case in PLAN_CASES:
-            from plan_observer import resolve as plan_resolve
-            return plan_resolve(self,trace,pid,path,vector,environment,cwd)
+            return plan_observer.resolve(self,trace,pid,path,vector,environment,cwd)
         self.consume(trace)
         if self.full and not self.full_started:
             from full_launch import resolve as full_resolve
@@ -194,24 +198,20 @@ class Observer:
                    and value['cwd'] == cwd and path == value.get('attempt_path',value.get('executable', self.binding['entry']['path']))]
         if len(matches) != 1:
             return False
-        from uv_cli import uv_digest
         measured=Path(path) if Path(path).is_absolute() else Path(cwd)/path
-        actual_pin=(uv_digest(measured.resolve(strict=True)) if matches[0]['role']=='uv-cli'
+        actual_pin=(uv_cli.uv_digest(measured.resolve(strict=True)) if matches[0]['role']=='uv-cli'
                     else native_digest(measured.resolve(strict=True)))
         if actual_pin != matches[0].get('executable_sha256', self.binding['entry']['sha256']):
             return False
         intent = matches[0]
         if intent.get('credential_snapshot') is not None:
-            from archive_snapshot import retained
             target,state=intent['credential_snapshot']
-            retained(Path(target),state)
+            archive_snapshot.retained(Path(target),state)
         if intent['role']=='archive-leaf':
-            from archive_snapshot import retained
             state=self.fixture_roots[intent['case']]['document']
-            retained(Path(state['root']),state['snapshot'])
-        from desktop_launch import CASE as DESKTOP_CASE,retained as desktop_retained
-        if intent['case']==DESKTOP_CASE:
-            desktop_retained(self)
+            archive_snapshot.retained(Path(state['root']),state['snapshot'])
+        if intent['case']==desktop_launch.CASE:
+            desktop_launch.retained(self)
             if intent['role']=='ps' and str(Path(path).resolve(strict=True))!='/usr/bin/ps':
                 raise Refused('desktop retained system ps alias')
         intent['consumed'], intent['pid'], intent['birth'] = True, pid, birth
@@ -224,12 +224,10 @@ class Observer:
             self.actors[pid] = {'birth': birth, 'role': intent['role'], 'case': intent['case'], 'token': intent['token'],
                 'body_ready': False, 'signals': set(), 'kernel_admitted': True,'intent':intent}
             if intent['role']=='uv-cli':
-                from uv_cli import reserve_child
-                reserve_child(self,intent,birth)
+                uv_cli.reserve_child(self,intent,birth)
         else:
-            from speed_inline import CASES as SPEED_CASES,fixture
-            if intent['case'] in (*SPEED_CASES,CLI_CASE):
-                fixture(self)
+            if intent['case'] in (*speed_inline.CASES,CLI_CASE):
+                speed_inline.fixture(self)
             self.profile(pid, intent['role'], intent['case'], intent.get('python_vector',vector), environment, cwd, intent['token'], intent.get('inherited', ()))
         return True
 
@@ -238,28 +236,23 @@ class Observer:
             raise Refused('source root-only operation')
 
     def launch_owner(self, actor):
-        from approval_launch import CASES as APPROVAL
-        if actor['role'] in ('approval-adapter','approval-relay') and self.case in APPROVAL and actor['case']==self.case and actor['body_ready'] and not self.finished:
+        if actor['role'] in ('approval-adapter','approval-relay') and self.case in approval_launch.CASES and actor['case']==self.case and actor['body_ready'] and not self.finished:
             return
         if actor['role'] == 'root':
             self.root_only(actor)
             return
         if actor['role']=='archive-checker' and actor['case']==self.case and actor['body_ready'] and not self.finished:
-            from package_cases import POSITIVE
-            if self.case==POSITIVE:
+            if self.case==package_cases.POSITIVE:
                 return
         if actor['role']=='desktop' and actor['case']==self.case and not self.finished:
-            from desktop_launch import CASE
-            if self.case==CASE:
+            if self.case==desktop_launch.CASE:
                 return
         if actor['role'] == 'fixed-inline' and actor['case'] == self.case and not self.finished:
-            from approval_launch import RUNS as APPROVAL_RUNS,worker_owner
-            if self.case in APPROVAL_RUNS:
-                worker_owner(self,actor)
+            if self.case in approval_launch.RUNS:
+                approval_launch.worker_owner(self,actor)
                 return
-            from cohort_controller import CASES as CRASH,owner
-            if self.case in CRASH:
-                owner(self,actor)
+            if self.case in cohort_controller.CASES:
+                cohort_controller.owner(self,actor)
                 return
             from composed_cases import CASES as COMPOSED
             if self.case in COMPOSED:
@@ -269,13 +262,11 @@ class Observer:
             if self.case in ROLE_CASES:
                 actor_slot(self,actor)
                 return
-            from run_worker_launch import MEASUREMENT_PROJECT
-            if self.case==MEASUREMENT_PROJECT:
+            if self.case==run_worker_launch.MEASUREMENT_PROJECT:
                 from measurement_runtime import owner
                 owner(self,actor)
                 return
-            from run_worker_launch import DESCENDANTS
-            if self.case in DESCENDANTS and any(value.get('run_worker') and value.get('birth')==actor['birth'] and value['token']==actor['token'] for value in self.intents.values()):
+            if self.case in run_worker_launch.DESCENDANTS and any(value.get('run_worker') and value.get('birth')==actor['birth'] and value['token']==actor['token'] for value in self.intents.values()):
                 return
             if sum(value.get('fixed_operation') == 'check' and value['token'] == actor['token'] for value in self.intents.values()) != 1:
                 raise Refused('fixed inline has no query authority')
@@ -318,15 +309,12 @@ class Observer:
         process = self.ledger.process(actor['birth'])
         terminal = process.terminal
         value=bound_intent(self,actor)
-        from package_security import CASES as SECURITY_CASES
-        if actor.get('case') in SECURITY_CASES and actor['role']=='archive-installed':
-            from package_security import completed
-            return value is not None and completed(self,value)
+        if actor.get('case') in package_security.CASES and actor['role']=='archive-installed':
+            return value is not None and package_security.completed(self,value)
         if actor['role'] in ('archive-checker','archive-leaf','archive-installed'):
-            from package_cases import MUTATIONS,NEGATIVE
-            code=1 if actor['role']=='archive-checker' and actor['case'] in MUTATIONS or actor['role']=='archive-leaf' and actor['case'] in NEGATIVE else 0
-            expected={'kind':NEGATIVE.get(actor['case'],'normal'),'count':0 if NEGATIVE.get(actor['case'])=='missing-package' else 15,
-                'failed':15 if NEGATIVE.get(actor['case'])=='missing-corpus' else 0,'exit':code}
+            code=1 if actor['role']=='archive-checker' and actor['case'] in package_cases.MUTATIONS or actor['role']=='archive-leaf' and actor['case'] in package_cases.NEGATIVE else 0
+            expected={'kind':package_cases.NEGATIVE.get(actor['case'],'normal'),'count':0 if package_cases.NEGATIVE.get(actor['case'])=='missing-package' else 15,
+                'failed':15 if package_cases.NEGATIVE.get(actor['case'])=='missing-corpus' else 0,'exit':code}
             return terminal is not None and terminal[2]==code and actor['body_ready'] and (actor['role']!='archive-leaf' or actor.get('archive_result')==expected)
         if actor['role'] in ('fixed-inline','mcp') and value is not None and 'server_slot' in value:
             from completion_server import status
@@ -352,8 +340,7 @@ class Observer:
                 and self.ledger.reaped(actor['birth'],actor['token']))
         if terminal is None or value is None or terminal[2]<0 and -terminal[2] not in actor['signals']:
             return False
-        from run_worker_launch import MEASUREMENT_PROJECT,DESCENDANTS
-        early_cleanup=actor['case'] not in (MEASUREMENT_PROJECT,*DESCENDANTS) and actor['role'] in ('backend','delayed-backend','acp','mock-acp','cleanup-acp','cleanup-inline',
+        early_cleanup=actor['case'] not in (run_worker_launch.MEASUREMENT_PROJECT,*run_worker_launch.DESCENDANTS) and actor['role'] in ('backend','delayed-backend','acp','mock-acp','cleanup-acp','cleanup-inline',
             'workspace-owned','session-adapter','session-child','session-inline') and terminal[2] in (-9,-15)
         return actor.get('kernel_admitted') is True or actor['body_ready'] or early_cleanup
 
@@ -402,26 +389,22 @@ class Observer:
                 self.ledger.process(self.root_birth).case = self.case
             else:
                 children = [value for value in self.actors.values() if value['role'] != 'root' and value['case'] == self.case]
-                from package_security import CASES as SECURITY_CASES,provenance
-                if self.case in SECURITY_CASES:
-                    provenance(self)
+                if self.case in package_security.CASES:
+                    package_security.provenance(self)
                 if skipped:
                     if children:
                         raise Refused('skipped source case launched children')
-                from cohort_controller import CASES as CRASH,closeout
-                waived=closeout(self,children) if self.case in CRASH else set()
+                waived=cohort_controller.closeout(self,children) if self.case in cohort_controller.CASES else set()
                 if waived is None:
                     return None
-                from composed_adoption import closeout as adopted_closeout
-                from composed_adoption import CLOSEOUT
-                if not adopted_closeout(self,children):
+                if not composed_adoption.closeout(self,children):
                     return None
                 ordinary=children if not waived else [value for value in children if value['birth'] not in waived]
                 if (payload['case'] != self.case
                         or any(not self.completed_child(value) for value in ordinary)
                         or any(not value['consumed'] for value in self.intents.values() if value['case'] == self.case)
                         or any(not (self.git.reaped(value) if value['role']=='git-helper' else
-                            self.ledger.reaped(value['birth'], value['token']) or self.case in CLOSEOUT and self.ledger.process(value['birth']).init_wait is not None) for value in ordinary)):
+                            self.ledger.reaped(value['birth'], value['token']) or self.case in composed_adoption.CLOSEOUT and self.ledger.process(value['birth']).init_wait is not None) for value in ordinary)):
                     raise Refused('source original case actual cleanup incomplete')
                 if self.full:
                     self.outcomes.append(dict(payload))
@@ -429,10 +412,9 @@ class Observer:
                 self.case = None
         elif kind == 'root-finish':
             self.root_only(actor)
-            from source_profile import case_seal
             shape(payload, ('count', 'cases_sha256'))
             if (self.case is not None or any(row['outcome']=='failed' for row in self.outcomes) or type(payload['count']) is not int or type(payload['cases_sha256']) is not str
-                    or payload != case_seal(self.cases) or tuple(self.completed) != self.cases):
+                    or payload != source_profile.case_seal(self.cases) or tuple(self.completed) != self.cases):
                 raise Refused('source original source completion incomplete')
             self.finished = True
         elif kind == 'multiprocess-proposal':
@@ -442,14 +424,13 @@ class Observer:
             from package_proposals import snapshot
             return snapshot(self,actor,payload)
         elif kind=='archive-result':
-            from package_cases import NEGATIVE,POSITIVE
-            if (actor['role']!='archive-leaf' or actor['case']!=self.case or self.case not in (*NEGATIVE,POSITIVE)
+            if (actor['role']!='archive-leaf' or actor['case']!=self.case or self.case not in (*package_cases.NEGATIVE,package_cases.POSITIVE)
                     or not actor['body_ready'] or 'archive_result' in actor):
                 raise Refused('archive result scope')
             if bound_intent(self,actor) is None:
                 raise Refused('archive result original consumed intent')
-            expected={'kind':NEGATIVE.get(self.case,'normal'),'count':0 if NEGATIVE.get(self.case)=='missing-package' else 15,
-                'failed':15 if NEGATIVE.get(self.case)=='missing-corpus' else 0,'exit':1 if self.case in NEGATIVE else 0}
+            expected={'kind':package_cases.NEGATIVE.get(self.case,'normal'),'count':0 if package_cases.NEGATIVE.get(self.case)=='missing-package' else 15,
+                'failed':15 if package_cases.NEGATIVE.get(self.case)=='missing-corpus' else 0,'exit':1 if self.case in package_cases.NEGATIVE else 0}
             shape(payload,('kind','count','failed','exit'))
             if (type(payload['kind']) is not str or any(type(payload[key]) is not int for key in ('count','failed','exit'))
                     or payload!=expected):
@@ -457,25 +438,22 @@ class Observer:
             actor['archive_result']=dict(payload)
         elif kind == 'preselected-finish':
             from nested_pytest import CASES
-            from source_profile import case_seal
             if (actor['role']!='pytest-regression' or actor['case']!=self.case or self.case not in CASES
-                    or not actor['body_ready'] or actor.get('preselected_complete') or payload!=case_seal(CASES[self.case]) or bound_intent(self,actor) is None):
+                    or not actor['body_ready'] or actor.get('preselected_complete') or payload!=source_profile.case_seal(CASES[self.case]) or bound_intent(self,actor) is None):
                 raise Refused('preselected child completion scope')
             actor['preselected_complete']=True
         elif kind == 'fixture-root':
-            from speed_inline import CASES,directory
             self.root_only(actor)
             shape(payload,('path',))
-            if self.case not in CASES or self.case in self.fixture_roots:
+            if self.case not in speed_inline.CASES or self.case in self.fixture_roots:
                 raise Refused('speed fixture once per active case')
-            self.fixture_roots[self.case]=directory(payload['path'],Path(self.meta['owned']),self.case)
+            self.fixture_roots[self.case]=speed_inline.directory(payload['path'],Path(self.meta['owned']),self.case)
         elif kind == 'launch-proposal':
             from effect_proposals import proposal
             return proposal(self,actor,payload)
         elif kind=='self-group':
             shape(payload,('signal',))
-            from run_worker_launch import self_group
-            return self_group(self,actor,payload)
+            return run_worker_launch.self_group(self,actor,payload)
         elif kind == 'self-stop':
             shape(payload, ('signal',))
             children = [value for value in self.actors.values() if self.ledger.process(value['birth']).parent == actor['birth']]
@@ -485,14 +463,12 @@ class Observer:
                 raise Refused('session self stop before original child wait')
         elif kind=='approval-signal':
             shape(payload,('pid','signal','group'))
-            from approval_launch import signal
-            return signal(self,actor,payload)
+            return approval_launch.signal(self,actor,payload)
         elif kind=='resumed-signal':
             shape(payload,('pid','signal','group'))
             if type(payload['pid']) is not int or type(payload['signal']) is not int or type(payload['group']) is not bool:
                 raise Refused('composed resumed signal schema')
-            from composed_adoption import signal
-            return signal(self,actor,payload)
+            return composed_adoption.signal(self,actor,payload)
         elif kind == 'custody_signal':
             self.launch_owner(actor)
             shape(payload, ('pid', 'child_token', 'signal', 'group'))
@@ -527,8 +503,7 @@ class Observer:
             if (Birth.read(actual) != self.ledger.peer_birth(child['birth']) or payload['group'] and (not process.new_session or actual['pgid'] != child['birth'].pid or actual['sid'] != child['birth'].pid)):
                 return {'ok': True, 'live': False}
             if payload['group']:
-                from composed_adoption import record_group
-                record_group(self,child,payload['signal'])
+                composed_adoption.record_group(self,child,payload['signal'])
             else:
                 child['signals'].add(payload['signal'])
             return {'ok': True, 'live': True}
@@ -575,9 +550,7 @@ class Observer:
                             raise Refused('source undischarged empty control EOF')
                     continue
                 admitted=self.admission.admit(frame)
-                from cohort_controller import WAIVED
-                from composed_adoption import CLOSEOUT
-                if actor['role']=='root' and admitted['kind']=='case-finish' and self.case in (*WAIVED,*CLOSEOUT):
+                if actor['role']=='root' and admitted['kind']=='case-finish' and self.case in (*cohort_controller.WAIVED,*composed_adoption.CLOSEOUT):
                     frame.seconds=22
                 channel['request'] = admitted
                 self.controls.append({**admitted, 'observed_monotonic_ns': time.monotonic_ns()})
