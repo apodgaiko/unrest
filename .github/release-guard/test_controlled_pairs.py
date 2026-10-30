@@ -10,7 +10,7 @@ from controlled_pairs import before_spawn, limits, scope
 
 def test_every_catalogue_case_has_a_finite_source_bound():
     assert len(CASES) == 193
-    assert all(0 <= limits(case)[0] <= 20 and 0 <= limits(case)[1] <= 43 for case in CASES)
+    assert all(0 <= limits(case) <= 20 for case in CASES)
 
 
 def test_pair_cannot_borrow_another_owner_backend():
@@ -28,12 +28,11 @@ def test_pair_cannot_borrow_another_owner_backend():
 
 
 def test_pair_replay_and_case_bound_refuse():
-    case = next(case for case in CASES if limits(case)[0] == 1)
+    case = next(case for case in CASES if limits(case)==20)
     records = [{'cwd':'/owned/pytest/a/worker','role':'backend','consumed':True,'pid':12}]
     with pytest.raises(Refused):
         before_spawn(case,'/owned/pytest/a/worker','backend',records,{})
-    with pytest.raises(Refused):
-        before_spawn(case,'/owned/pytest/b/worker','backend',records,{})
+    before_spawn(case,'/owned/pytest/b/worker','backend',records,{})
     with pytest.raises(Refused):
         before_spawn('foreign','/owned/pytest/a/worker','backend',[],{})
 
@@ -59,8 +58,15 @@ def test_startup_failure_cannot_start_an_adapter():
 
 @pytest.mark.parametrize('case', CASES)
 def test_each_case_rejects_one_more_backend_than_its_declared_bound(case):
-    maximum, _ = limits(case)
+    maximum = limits(case)
     records = [{'cwd':f'/owned/pytest/owner{index}/worker','role':'backend','consumed':True,'pid':100+index}
                for index in range(maximum)]
     with pytest.raises(Refused):
         before_spawn(case,'/owned/pytest/extra/worker','backend',records,{})
+
+
+def test_exact_crash_and_campaign_bounds_are_not_replaced_by_the_common_ceiling():
+    from cohort_cases import CAMPAIGNS
+    from cohort_controller import CASES as CRASH
+    assert all(limits(case)==value[0] for case,value in CAMPAIGNS.items())
+    assert [limits(case) for case in CRASH]==[0,1,1,1]

@@ -15,7 +15,6 @@ from launch_policy import source_unit, build_expected, admit_expected
 from owned_fixture import acquire, retain
 from content_manifest import Refused, native_digest, read_regular
 from controlled_cases import CASES as CONTROLLED_CASES
-from controlled_pairs import limits as pair_limits
 from cohort_cases import CASES as COHORT_CASES, EXTRA as COHORT_EXTRA
 from completion_roles import CASES as ROLE_CASES, SOURCE as ROLE_SOURCE, ROOT_QUERIES, DEFECT as ROLE_DEFECT, schedule as role_schedule, root as role_root, actor_slot
 from composed_cases import CASES as COMPOSED_CASES, queries as composed_queries
@@ -725,7 +724,7 @@ def custody_launch(host,actor,result,kind,raw):
     parent(host,actor)
     prior = [v for v in host.intents.values() if v['case'] == host.case and v['role'] == 'git-custody']
     from cohort_controller import CASES as CRASH
-    maximum=4 if host.case in CRASH else COHORT_CASES[host.case][1] if host.case in COHORT_CASES else 12+8*pair_limits(host.case)[0]
+    maximum=4 if host.case in CRASH else COHORT_CASES[host.case][1] if host.case in COHORT_CASES else 128
     if len(prior) >= maximum:
         raise Refused('custody Git finite case command bound')
     identity = custody_repository(result.cwd,Path(host.meta['owned']),initialize=result.argv[len(CUSTODY_PREFIX)] == 'init')

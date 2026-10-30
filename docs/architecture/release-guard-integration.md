@@ -1156,3 +1156,15 @@ exactly the sealed source cwd, whose root ownership intentionally differs from
 the source process UID. Raw original argv/environment still match the declared
 query; only its measured translated vector contains that exact exception. It is
 not a wildcard, global config change, mutable-fixture exception or extra command.
+
+
+Ordinary controlled-Python pair admission uses the existing overall ceiling of
+20, rather than predicting the maximum pair count of each test history. Every
+backend body/configuration association remains case-specific and byte-pinned;
+a fresh owned cwd has one backend and one ACP attached to that actual backend.
+Cohort campaign and crash bounds, reservation's zero-pair rule, startup failure's
+no-ACP rule, signal rules and numeric wait dispositions remain exact. The unused
+second network-topology quota is removed. Controlled custody Git retains its
+existing eligible cases and closed commands under the shared local ceiling of
+128; cohort/crash Git budgets are unchanged. Neither fixture matching nor these
+resource bounds select controlled transport or admit native/provider execution.
