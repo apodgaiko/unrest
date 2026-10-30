@@ -18,7 +18,8 @@ def pin(path: Path) -> dict:
 
 
 def main():
-    if (os.environ.get('GITHUB_ACTIONS') != 'true' or sys.platform != 'linux'
+    if (os.environ.get('GITHUB_ACTIONS') != 'true' or os.environ.get('GITHUB_REPOSITORY')!='apodgaiko/unrest'
+            or sys.platform != 'linux'
             or sys.version_info[:2] != (3, 13) or os.uname().machine != 'x86_64'):
         raise RuntimeError('native control build requires its Linux CI lane')
     original_support = Path(__file__).resolve().parent

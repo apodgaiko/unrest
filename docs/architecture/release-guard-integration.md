@@ -1127,3 +1127,14 @@ adopted process identities, review restrictions and cleanup remain independent.
 All original product tests and parameters remain unchanged; guard-only tests of
 the retired fixture-order and naming predictions are replaced by closed union,
 case-directory custody, foreign-command and native execution controls.
+
+
+Public-history input preparation now uses an explicit local fetch of the trusted
+`apodgaiko/unrest` hosted-CI checkout's HEAD and six pinned historical tags.
+Complete reachable public trees are admitted; minimal-tree object projection and
+non-delta-pack claims are retired. This public-ancestry assumption does not apply
+to arbitrary developer checkouts. The generated target carries no source hooks,
+configuration, credentials, alternates or unrelated refs. Fetch disables lazy
+upstream acquisition and automatic maintenance; the existing complete metadata
+capture and 64 MiB member bound remain. Candidate historical queries stay
+read-only and acquire no new executable permission.

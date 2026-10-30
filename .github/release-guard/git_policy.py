@@ -4,9 +4,9 @@ Families retain independent case sets, parent roles, budgets and helper rights.
 """
 from __future__ import annotations
 
-import hashlib
 import os
 import re
+import shlex
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -48,44 +48,8 @@ def public_oid(value: bytes) -> str:
     return result
 
 
-def public_projection(repository: Path, head: str) -> tuple[dict[str, str], dict[str, str]]:
-    if PUBLIC_OID.fullmatch(head) is None or public_oid(public_git(repository, 'rev-parse', '--verify', 'HEAD')) != head:
-        raise RuntimeError('public_git_head_drift')
-    commits = public_git(repository, 'rev-list', head).decode('ascii').splitlines()
-    if not commits or len(commits) > 20000 or any(PUBLIC_OID.fullmatch(item) is None for item in commits):
-        raise RuntimeError('public_git_commit_graph')
-    objects = dict.fromkeys(commits, 'commit')
-    roots = {head, PUBLIC_FM000}
-    if PUBLIC_FM000 not in objects:
-        raise RuntimeError('public_git_required_ancestor')
-    for name, expected in PUBLIC_TAGS.items():
-        if public_oid(public_git(repository, 'rev-parse', '--verify', 'refs/tags/' + name)) != expected:
-            raise RuntimeError('public_git_historical_tag_drift')
-        if public_git(repository, 'cat-file', '-t', expected).strip() != b'tag':
-            raise RuntimeError('public_git_historical_tag_type')
-        objects[expected] = 'tag'
-        commit = public_oid(public_git(repository, 'rev-parse', '--verify', name + '^{commit}'))
-        if commit not in objects or objects[commit] != 'commit':
-            raise RuntimeError('public_git_historical_ancestry')
-        roots.add(commit)
-    for commit in sorted(roots):
-        tree = public_oid(public_git(repository, 'rev-parse', '--verify', commit + '^{tree}'))
-        objects[tree] = 'tree'
-        for row in public_git(repository, 'ls-tree', '-r', '-t', '-z', '--full-tree', commit).split(b'\0'):
-            if not row:
-                continue
-            header, _ = row.split(b'\t', 1)
-            _, kind, object_id = header.decode('ascii').split(' ')
-            if kind not in {'tree', 'blob'} or PUBLIC_OID.fullmatch(object_id) is None:
-                raise RuntimeError('public_git_tree_member')
-            if objects.setdefault(object_id, kind) != kind:
-                raise RuntimeError('public_git_object_type_conflict')
-    if len(objects) > 50000:
-        raise RuntimeError('public_git_projection_bound')
-    return objects, dict(PUBLIC_TAGS)
-
-
 def public_prepare(repository: Path, destination: Path, head: str) -> dict[str, object]:
+    """Acquire reachable public history from the trusted CI checkout, not .git."""
     if destination.resolve(strict=True) != destination:
         raise RuntimeError('public_git_destination_alias')
     repository, destination = repository.resolve(strict=True), destination.resolve(strict=True)
@@ -93,47 +57,33 @@ def public_prepare(repository: Path, destination: Path, head: str) -> dict[str, 
             or repository.is_relative_to(destination) or (destination / '.git').exists()
             or (destination / '.git').is_symlink()):
         raise RuntimeError('public_git_destination')
-    objects, tags = public_projection(repository, head)
-    # Explicit IDs, no revision traversal or delta reuse: no other trees,
-    # branches, hooks, runner config, credentials or alternate path is copied.
-    pack = public_git(repository, 'pack-objects', '--stdout', '--no-reuse-delta',
-               '--no-reuse-object', '--window=0', data=''.join(k + '\n' for k in sorted(objects)).encode())
-    if len(pack) > 256 * 1024 * 1024 or not pack.startswith(b'PACK'):
-        raise RuntimeError('public_git_pack_bound')
-    metadata = destination / '.git'
-    packed = metadata / 'objects/pack'
-    packed.mkdir(parents=True)
-    (metadata / 'refs/tags').mkdir(parents=True)
-    (metadata / 'config').write_bytes(b'[core]\nrepositoryformatversion = 0\nbare = false\n')
-    (metadata / 'HEAD').write_text(head + '\n')
-    name = hashlib.sha1(pack[:-20]).hexdigest()
-    if bytes.fromhex(name) != pack[-20:]:
-        raise RuntimeError('public_git_pack_checksum')
-    path = packed / ('pack-' + name + '.pack')
-    path.write_bytes(pack)
-    if public_oid(public_git(destination, 'index-pack', '--index-version=2', str(path))) != name:
-        raise RuntimeError('public_git_index_identity')
-    index = path.with_suffix('.idx')
-    observed = {}
-    for line in public_git(destination, 'verify-pack', '-v', str(index)).decode('ascii').splitlines():
-        fields = line.split()
-        if fields and PUBLIC_OID.fullmatch(fields[0]):
-            if len(fields) != 5 or fields[0] in observed or fields[1] not in {'commit', 'tree', 'blob', 'tag'}:
-                raise RuntimeError('public_git_pack_member')
-            observed[fields[0]] = fields[1]
-        elif not (line.startswith('non delta: ') or line == str(path) + ': ok'):
-            raise RuntimeError('public_git_pack_verification')
-    if observed != objects:
-        raise RuntimeError('public_git_object_set')
-    for name, object_id in tags.items():
-        (metadata / 'refs/tags' / name).write_text(object_id + '\n')
-    public_git(destination, 'read-tree', head)
-    if public_oid(public_git(destination, 'rev-parse', '--verify', 'HEAD^{commit}')) != head:
-        raise RuntimeError('public_git_head_consumption')
-    public_git(destination, 'merge-base', '--is-ancestor', PUBLIC_FM000, head)
-    return {'head': head, 'historical_tags': tags, 'objects': len(objects),
-            'pack_sha256': hashlib.sha256(pack).hexdigest(), 'external_deltas': False,
-            'scope': 'public HEAD commit graph; HEAD/FM000/six historical trees; exact tag objects'}
+    if PUBLIC_OID.fullmatch(head) is None or public_oid(public_git(repository,'rev-parse','--verify','HEAD'))!=head:
+        raise RuntimeError('public_git_head_drift')
+    commits=public_git(repository,'rev-list',head).decode('ascii').splitlines()
+    if (not commits or len(commits)>20000 or PUBLIC_FM000 not in commits
+            or any(PUBLIC_OID.fullmatch(item) is None for item in commits)):
+        raise RuntimeError('public_git_commit_graph')
+    for name,expected in PUBLIC_TAGS.items():
+        if public_oid(public_git(repository,'rev-parse','--verify','refs/tags/'+name))!=expected:
+            raise RuntimeError('public_git_historical_tag_drift')
+        if (public_git(repository,'cat-file','-t',expected).strip()!=b'tag'
+                or public_oid(public_git(repository,'rev-parse','--verify',name+'^{commit}')) not in commits):
+            raise RuntimeError('public_git_historical_ancestry')
+    public_git(destination,'init','--template=','--object-format=sha1')
+    # Explicit refspecs bring complete reachable public trees, without source
+    # config/hooks, alternate directories, unrelated refs or automatic maintenance.
+    git_dir=public_git(repository,'rev-parse','--absolute-git-dir').decode().strip()
+    upload=shlex.join(['/usr/bin/git','-c','safe.directory='+git_dir,'upload-pack'])
+    public_git(destination,'fetch','--upload-pack='+upload,'--no-tags','--no-recurse-submodules','--no-write-fetch-head',
+        '--no-auto-maintenance',str(repository),head,*('refs/tags/'+name+':refs/tags/'+name for name in PUBLIC_TAGS))
+    (destination/'.git/HEAD').write_text(head+'\n')
+    public_git(destination,'read-tree',head)
+    if (public_oid(public_git(destination,'rev-parse','--verify','HEAD^{commit}'))!=head
+            or any(public_oid(public_git(destination,'rev-parse','--verify','refs/tags/'+name))!=oid for name,oid in PUBLIC_TAGS.items())):
+        raise RuntimeError('public_git_acquired_refs')
+    public_git(destination,'merge-base','--is-ancestor',PUBLIC_FM000,head)
+    return {'head':head,'historical_tags':dict(PUBLIC_TAGS),'commits':len(commits),
+            'scope':'trusted public CI HEAD and six pinned tags; complete reachable history'}
 
 
 def operand_text(value, maximum=4096):

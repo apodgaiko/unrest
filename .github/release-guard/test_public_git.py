@@ -1,20 +1,19 @@
 """Real Git consumes the public projection without runner configuration/history trees."""
-import hashlib
 import io
 import tarfile
 from pathlib import Path
 
 import pytest
 
-from git_policy import PUBLIC_FM000 as FM000, PUBLIC_TAGS as TAGS, public_git as git, public_prepare as prepare, public_projection as projection
+from git_policy import PUBLIC_FM000 as FM000, PUBLIC_TAGS as TAGS, public_git as git, public_prepare as prepare
 
 SUPPORT = Path(__file__).resolve().parent
 ROOT = next(p for p in SUPPORT.parents if (p/'pyproject.toml').is_file())
 
 
-@pytest.fixture
-def copied(tmp_path):
-    destination = tmp_path / 'source'
+@pytest.fixture(scope='module')
+def copied(tmp_path_factory):
+    destination = tmp_path_factory.mktemp('public-history') / 'source'
     destination.mkdir()
     head = git(ROOT, 'rev-parse', 'HEAD').decode().strip()
     with tarfile.open(fileobj=io.BytesIO(git(ROOT, 'archive', '--format=tar', head))) as archive:
@@ -47,22 +46,17 @@ def test_real_status_index_and_historical_queries_are_faithful(copied):
         ROOT, 'diff', '--name-only', FM000, 'v0.2.1')
     assert git(destination, 'archive', '5a3d568aa881c746432b7034597bbb8a1ffe025f') == git(
         ROOT, 'archive', '5a3d568aa881c746432b7034597bbb8a1ffe025f')
-    assert proof['external_deltas'] is False
+    assert proof['commits']>0 and 'complete reachable history' in proof['scope']
 
 
-def test_only_closed_objects_and_minimal_metadata_are_copied(copied):
-    destination, head, proof = copied
-    metadata = destination / '.git'
-    assert {p.name for p in metadata.iterdir()} == {'objects', 'refs', 'HEAD', 'config', 'index'}
-    assert (metadata / 'config').read_bytes() == b'[core]\nrepositoryformatversion = 0\nbare = false\n'
-    assert {p.name for p in (metadata / 'refs/tags').iterdir()} == set(TAGS)
-    assert not (metadata / 'objects/info/alternates').exists()
-    assert all(not p.is_symlink() and p.stat().st_nlink == 1
-               for p in metadata.rglob('*') if p.is_file())
-    pack, = (metadata / 'objects/pack').glob('*.pack')
-    assert hashlib.sha256(pack.read_bytes()).hexdigest() == proof['pack_sha256']
-    objects, _ = projection(ROOT, head)
-    assert len(objects) == proof['objects']
+def test_closed_refs_and_clean_generated_metadata_are_acquired(copied):
+    destination,head,proof=copied
+    metadata=destination/'.git'
+    assert not (metadata/'hooks').exists() and not (metadata/'objects/info/alternates').exists()
+    assert {p.name for p in (metadata/'refs/tags').iterdir()}==set(TAGS)
+    assert all(not p.is_symlink() and p.stat().st_nlink==1 for p in metadata.rglob('*') if p.is_file())
+    assert 'remote' not in (metadata/'config').read_text() and 'credential' not in (metadata/'config').read_text()
+    assert git(destination,'for-each-ref','--format=%(refname)').decode().splitlines()==['refs/tags/'+name for name in sorted(TAGS)]
 
 
 def test_wrong_head_cannot_create_a_projection(tmp_path):
@@ -103,27 +97,24 @@ def test_aliased_destination_cannot_acquire_metadata(tmp_path):
     assert not (destination / '.git').exists()
 
 
-def test_unselected_pack_object_is_rejected(copied, tmp_path, monkeypatch):
-    import git_policy as module
-    source, head, _ = copied
-    packed, = (source / '.git/objects/pack').glob('*.pack')
-    body = packed.read_bytes()
-    objects, tags = projection(ROOT, head)
-    objects.pop(next(key for key, kind in objects.items() if kind == 'blob'))
-    original = module.public_git
-
-    def calls(repository, *arguments, data=None):
-        if arguments[0] == 'pack-objects':
-            return body
-        return original(repository, *arguments, data=data)
-
-    monkeypatch.setattr(module, 'public_projection', lambda *_: (objects, tags))
-    monkeypatch.setattr(module, 'public_git', calls)
-    destination = tmp_path / 'refused'
+def test_unrelated_private_branch_and_blob_are_not_acquired(tmp_path):
+    import subprocess
+    source=tmp_path/'local-public-input'
+    source.mkdir()
+    git(source,'init','--bare','--template=','--object-format=sha1')
+    head=git(ROOT,'rev-parse','HEAD').decode().strip()
+    git(source,'fetch','--no-tags','--no-auto-maintenance',str(ROOT),head,*('refs/tags/'+name+':refs/tags/'+name for name in TAGS))
+    (source/'HEAD').write_text(head+'\n')
+    blob=git(source,'hash-object','-w','--stdin',data=b'unrelated-private-branch-marker').decode().strip()
+    tree=git(source,'mktree',data=('100644 blob '+blob+'\tprivate.txt\n').encode()).decode().strip()
+    commit=git(source,'-c','user.name=Test','-c','user.email=test@invalid','commit-tree',tree,'-m','unrelated').decode().strip()
+    git(source,'update-ref','refs/heads/private-unrelated',commit)
+    destination=tmp_path/'target'
     destination.mkdir()
-    with pytest.raises(RuntimeError, match='object_set'):
-        prepare(ROOT, destination, head)
-    assert not (destination / '.git/index').exists()
+    prepare(source,destination,head)
+    with pytest.raises(subprocess.CalledProcessError):
+        git(destination,'cat-file','-e',blob)
+    assert git(destination,'for-each-ref','refs/heads')==b''
 
 
 def test_status_handles_readonly_metadata_without_rewriting_index(copied):
