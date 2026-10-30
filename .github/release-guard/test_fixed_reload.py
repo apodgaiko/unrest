@@ -1,5 +1,7 @@
 """Exact original import/reload child: no arbitrary inline or descendant entry."""
 
+from fixed_inline import query_expected
+
 import ast
 import hashlib
 from pathlib import Path
@@ -106,6 +108,6 @@ def test_reload_proposal_is_exact_and_single_use(mutation):
 
 def test_reload_child_cannot_request_a_repository_query():
     with pytest.raises(Refused, match="descendant"):
-        expected(RELOAD_CASE, "reload", "/native/python", "a" * 64, ROOT, {}, query=True)
+        query_expected(RELOAD_CASE,"reload",ROOT,{})
     with pytest.raises(Refused, match="closed"):
         expected(RELOAD_CASE, "check", "/native/python", "a" * 64, ROOT, {})

@@ -106,15 +106,17 @@ def proposal(host, actor, raw):
                 raise Refused('session exact invalid executable fixture')
         vector = list(expected.argv) if expected.payload_kind=='expected-exec-failure' else [native,'-I','-S',*expected.argv[1:]]
     elif case in FIXED:
-        query = actor['role']=='fixed-inline'
-        records = [row for row in host.intents.values() if row['case']==case and row['role']=='fixed-inline']
-        if not query and (len(records)>=len(SEQUENCES[case]) or any(not row['consumed'] or not host.ledger.reaped(row['birth'],row['token']) for row in records)):
-            raise Refused('finite fixed proposal exhausted')
-        operation = 'check' if query else SEQUENCES[case][len(records)]
         environment = {**root_environment,'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}
+        if actor['role']=='fixed-inline':
+            from fixed_inline import query_expected
+            expected=query_expected(case,'check',checkout,environment)
+            return admit_expected(host,actor,raw,expected,'git-fixed',
+                ['/usr/bin/git','-c','safe.directory='+str(checkout),*expected.argv[1:]],expected.payload_sha256)
+        records = [row for row in host.intents.values() if row['case']==case and row['role']=='fixed-inline']
+        if len(records)>=len(SEQUENCES[case]) or any(not row['consumed'] or not host.ledger.reaped(row['birth'],row['token']) for row in records):
+            raise Refused('finite fixed proposal exhausted')
+        operation = SEQUENCES[case][len(records)]
         if case==DRAIN_CASE:
-            if query:
-                raise Refused('pipe drain child has no descendants')
             import ast
             from fixed_inline import DRAIN_TEST,PINS
             from owned_fixture import retain
@@ -129,28 +131,18 @@ def proposal(host, actor, raw):
             expected=build_expected(case,native,pin,(native,'-c',body),
                 (('PATH',root_environment['PATH']),),cwd,'python-command')
         elif case in COMPLETION_CASES:
-            if query:
-                raise Refused('completion primitive has no descendants')
             from completion_launch import expected as completion_expected
             expected=completion_expected(host,operation,argv,cwd,environment,native,pin)
         elif case==MEASUREMENT_CASE:
-            if query:
-                raise Refused('simulation child has no descendants')
             from measurement_launch import expected as measurement_expected
             expected=measurement_expected(host,argv,cwd,environment,native,pin)
         elif case in INSPECTION_CASES:
-            if query:
-                raise Refused('inspection child has no descendants')
             from inspection_launch import expected as inspection_expected
             expected=inspection_expected(host,argv,cwd,environment,native,pin)
         elif case in STORAGE_CASES:
-            if query:
-                raise Refused('storage read child has no descendants')
             from storage_launch import expected as storage_expected
             expected=storage_expected(host,argv,cwd,environment,native,pin)
         elif case in STDIO:
-            if query:
-                raise Refused('fixed startup has no descendant query')
             expected = startup_expected(case,native,pin,cwd,owned)
         else:
             from speed_inline import CASES as SPEED_CASES,fixture,CLI_CASE,directory
@@ -161,10 +153,10 @@ def proposal(host, actor, raw):
                 if host.fixture_roots.setdefault(case,value)!=value:
                     raise Refused('speed CLI fixture reuse generation')
             root=fixture(host) if case in (*SPEED_CASES,CLI_CASE) else None
-            expected = fixed_expected(case,operation,native,pin,checkout,environment,query=query,root=root)
+            expected = fixed_expected(case,operation,native,pin,checkout,environment,root=root)
         script_pin = expected.payload_sha256
-        vector = ['/usr/bin/git','-c','safe.directory='+str(checkout),*expected.argv[1:]] if query else list(fixed_translated(expected))
-        role,maximum='git-fixed' if query else 'pytest-regression' if case in NESTED_CASES else 'fixed-inline',1 if query else len(SEQUENCES[case])
+        vector = list(fixed_translated(expected))
+        role,maximum='pytest-regression' if case in NESTED_CASES else 'fixed-inline',len(SEQUENCES[case])
     elif case in ORDINARY:
         host.root_only(actor)
         from ordinary_acp import MOCK_CASE,STARTUP_CASES,TEMPLATE_CASES,BATCH_CASES,CRASH_CASES

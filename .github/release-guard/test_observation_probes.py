@@ -1,5 +1,7 @@
 """Three finite fresh-process import probes, preserving their exact source body."""
 
+from fixed_inline import query_expected
+
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -83,4 +85,4 @@ def test_observation_probe_has_exact_body_arguments_and_finite_ordinal(ordinal, 
 def test_observation_probe_has_no_repository_query_or_unknown_operation():
     for operation in (*OBSERVATION_OPERATIONS, "foreign"):
         with pytest.raises(Refused):
-            expected(OBSERVATION_CASE, operation, "/native/python", "a" * 64, ROOT, {}, query=True)
+            query_expected(OBSERVATION_CASE,operation,ROOT,{})

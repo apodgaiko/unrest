@@ -117,37 +117,31 @@ def script(checkout, operation, root=None):
     return literal(functions[0],'script')
 
 
-def expected(case, operation, native, pin, checkout, environment, *, query=False, root=None):
-    if type(case) is not str or case not in (*IMPORT_CASES,OBSERVATION_CASE,CLI_CASE,JOURNAL_CASE,*NESTED_CASES,*ISOLATED) or type(operation) is not str or operation not in SEQUENCES[case] or type(query) is not bool:
+def expected(case, operation, native, pin, checkout, environment, *, root=None):
+    if type(case) is not str or case not in (*IMPORT_CASES,OBSERVATION_CASE,CLI_CASE,JOURNAL_CASE,*NESTED_CASES,*ISOLATED) or type(operation) is not str or operation not in SEQUENCES[case]:
         raise Refused('fixed inline closed operation')
     if case==JOURNAL_CASE:
-        if query:
-            raise Refused('journal sleep has no descendants')
         owner=source_unit(checkout,JOURNAL_TEST,PINS[JOURNAL_TEST],(JOURNAL_CASE.split('::')[-1],))
         calls=[node for node in ast.walk(owner) if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr=='Popen']
         program=ast.literal_eval(calls[0].args[0].elts[2])
         return build_expected(case,native,pin,(native,'-c',program),tuple(sorted(environment.items())),str(checkout),'python-command')
-    if case==HERMETIC and not query:
+    if case==HERMETIC:
         body,environment=hermetic(checkout,environment)
         nodes=NESTED_CASES[case]
         vector=(native,'-c',body,'-q',*(str(checkout/node) for node in nodes[:2]),nodes[2])
         return build_expected(case,native,pin,vector,tuple(sorted(environment.items())),str(checkout),'python-command')
-    if case==NESTED_CASE and not query:
+    if case==NESTED_CASE:
         for path in ('tests/test_task_adapter.py',RELOAD_TEST):
             if hashlib.sha256((checkout/path).read_bytes()).hexdigest()!=PINS[path]:
                 raise Refused('preselected original source bytes')
         return build_expected(case,native,pin,(native,'-m','pytest','-q',*NODES),
             tuple(sorted({**environment,'PYTHONDONTWRITEBYTECODE':'1'}.items())),str(checkout),'python-module',PYTEST_PIN)
-    if case==CLI_CASE and not query:
+    if case==CLI_CASE:
         return cli_expected(native,pin,checkout,root,operation)
     if case in ISOLATED:
-        if query:
-            raise Refused('fixed isolated has no descendant authority')
         return build_expected(case,native,pin,(native,'-c',script(checkout,ISOLATED[case],root)),
                               tuple(sorted({**environment,'PYTHONDONTWRITEBYTECODE':'1'}.items())),str(checkout),'python-command')
     if case==OBSERVATION_CASE:
-        if query or operation not in OBSERVATION_OPERATIONS:
-            raise Refused('observation probe has no query authority')
         argv=(native,'-c',script(checkout,operation),*OBSERVATION_ARGUMENTS[operation])
         return build_expected(
             case,
@@ -156,18 +150,14 @@ def expected(case, operation, native, pin, checkout, environment, *, query=False
             tuple(sorted(environment.items())),
             str(checkout), 'python-command',
         )
-    if query:
-        if operation != 'check':
-            raise Refused('fixed inline query scope')
-        argv, executable, pin, kind = ('git','-C',str(checkout),'rev-parse','--show-toplevel'), '/usr/bin/git', image(), 'native'
-    else:
-        body = script(checkout, operation)
-        tail = (json.dumps(REMOVED),) if operation == 'mcp' else (json.dumps(() if operation == 'check' else REMOVED), json.dumps(ARGUMENTS[operation]))
-        argv, executable, kind = (native,'-c',body,*tail), native, 'python-command'
-    return build_expected(
-        case,
-        executable, pin,
-        argv,
-        tuple(sorted(environment.items())),
-        str(checkout), kind, None,
-    )
+    body = script(checkout, operation)
+    tail = (json.dumps(REMOVED),) if operation == 'mcp' else (json.dumps(() if operation == 'check' else REMOVED), json.dumps(ARGUMENTS[operation]))
+    return build_expected(case,native,pin,(native,'-c',body,*tail),
+        tuple(sorted(environment.items())),str(checkout),'python-command')
+
+
+def query_expected(case,operation,checkout,environment):
+    if case not in IMPORT_CASES or operation!='check' or operation not in SEQUENCES[case]:
+        raise Refused('fixed inline query scope; other leaves have no descendants')
+    return build_expected(case,'/usr/bin/git',image(),('git','-C',str(checkout),'rev-parse','--show-toplevel'),
+        tuple(sorted(environment.items())),str(checkout),'native')

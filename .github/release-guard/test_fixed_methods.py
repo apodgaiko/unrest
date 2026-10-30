@@ -1,5 +1,7 @@
 """Finite bound-alias parameters preserve the original isolated programs."""
 
+from fixed_inline import query_expected
+
 import ast
 from pathlib import Path
 
@@ -49,7 +51,7 @@ def test_full_original_program_and_one_real_child_declaration(case, method):
     with pytest.raises(Refused):
         expected(case, "reload", "/native/python", "a" * 64, ROOT, {})
     with pytest.raises(Refused):
-        expected(case, method, "/native/python", "a" * 64, ROOT, {}, query=True)
+        query_expected(case,method,ROOT,{})
 
 
 @pytest.mark.parametrize("method", ("__class__", "close", "recv;import os", "shutdown-foreign"))

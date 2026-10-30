@@ -1417,3 +1417,11 @@ project id beneath their retained private home. Canonical project/output paths,
 fixed bodies, complete security environments and parent-specific role budgets
 remain mandatory; guard no longer enumerates one project or predicts its JSON
 truth. Actual run cursor parsing for resumed-signal authorization is retained.
+
+
+The fixed-inline family has one separate Git query route. Its already-authorized
+`check` parent may request only the source checkout root query with its complete
+fixed environment, image, cwd and one-child budget. Other Python leaf builders
+construct no query variants; they retain their existing finite bodies and child
+quotas. This removes repeated no-query branches without granting any additional
+parent, executable or command form.

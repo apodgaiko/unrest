@@ -1,5 +1,7 @@
 """A pure two-node child never receives inner-case or release-root authority."""
 
+from fixed_inline import query_expected
+
 from types import SimpleNamespace
 
 import pytest
@@ -190,7 +192,7 @@ def test_hermetic_literal_environment_and_selection_match_original_source():
         module._UNRELATED_ENV:'outer-unrelated-value'}
     assert translated(value) == ('/native/python','-I','-S',*value.argv[1:])
     with pytest.raises(Refused):
-        expected(HERMETIC,'pytest','/native/python','a'*64,root,environment,query=True)
+        query_expected(HERMETIC,'pytest',root,environment)
 
 
 def test_hermetic_child_seals_all_three_nodes_without_advancing_outer_case(monkeypatch):

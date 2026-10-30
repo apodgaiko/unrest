@@ -1,4 +1,6 @@
 """Fixed command contracts and unchanged original import-boundary assertions."""
+
+from fixed_inline import query_expected
 import ast
 import hashlib
 import json
@@ -37,7 +39,7 @@ def test_each_fixed_declaration_is_limited_to_its_original_sequence(case):
             assert json.loads(result.argv[-1]) == list(ARGUMENTS[operation])
         if operation != 'check':
             with pytest.raises(Refused,match='query scope'):
-                expected(case,operation,'/native/python','a'*64,ROOT,{},query=True)
+                query_expected(case,operation,ROOT,{})
     with pytest.raises(Refused,match='closed'):
         expected(case,'unregistered','/native/python','a'*64,ROOT,{})
 
@@ -55,7 +57,7 @@ def test_journal_keeps_the_original_sleep_and_no_descendant_authority():
     assert translated(value)==('/native/python','-I','-S','-c',body)
     assert SEQUENCES[JOURNAL_CASE]==('sleep',)
     with pytest.raises(Refused,match='no descendants'):
-        expected(JOURNAL_CASE,'sleep','/native/python','a'*64,ROOT,{},query=True)
+        query_expected(JOURNAL_CASE,'sleep',ROOT,{})
 
 
 def test_journal_zero_signal_is_one_owned_liveness_probe_not_generic_permission(monkeypatch):
