@@ -39,8 +39,6 @@ def body(tree, operation, root, checkout):
     function=next(node for node in tree.body if isinstance(node,ast.FunctionDef) and node.name==NAMES[CASES.index(operation)])
     calls=[node for node in ast.walk(function) if isinstance(node,ast.Call)
            and isinstance(node.func,ast.Name) and node.func.id=='_isolated_python' and len(node.args)==1]
-    if len(calls)!=1 or not isinstance(calls[0].args[0],ast.JoinedStr):
-        raise Refused('speed sole string template')
     constants={node.targets[0].id:node.value.value for node in tree.body if isinstance(node,ast.Assign)
                and len(node.targets)==1 and isinstance(node.targets[0],ast.Name)
                and isinstance(node.value,ast.Constant) and type(node.value.value) is str}

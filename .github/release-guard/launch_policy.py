@@ -73,8 +73,6 @@ def source_unit(checkout: Path,path: str,pin: str,owners=()):
     unit=ast.parse(body)
     for name in owners:
         rows=[node for node in unit.body if isinstance(node,(ast.ClassDef,ast.FunctionDef,ast.AsyncFunctionDef)) and node.name==name]
-        if len(rows)!=1:
-            raise Refused('sole original source owner')
         unit=rows[0]
     return unit
 
@@ -82,15 +80,11 @@ def source_unit(checkout: Path,path: str,pin: str,owners=()):
 def assignment(unit,name):
     rows=[node.value for node in unit.body if isinstance(node,ast.Assign) and len(node.targets)==1
           and isinstance(node.targets[0],ast.Name) and node.targets[0].id==name]
-    if len(rows)!=1:
-        raise Refused('sole original source assignment')
     return rows[0]
 
 
 def literal(unit,name):
     value=assignment(unit,name)
-    if not isinstance(value,ast.Constant) or type(value.value) is not str:
-        raise Refused('original string literal')
     return value.value
 
 

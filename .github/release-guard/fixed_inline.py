@@ -117,19 +117,13 @@ def script(checkout, operation, root=None):
         return body(tree,operation,root,checkout)
     name = NETWORK_NAME if operation in NETWORK else 'test_detached_socket_descriptor_is_preflight_evidence' if operation=='detached' else RELOAD_NAME if operation=='reload' else METHOD_NAME if operation in METHODS else 'test_fresh_entrypoint_import_boundary' if operation in OBSERVATION_OPERATIONS else 'test_mcp_help_does_not_import_repository_modules' if operation == 'mcp' else '_import_probe'
     functions = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == name]
-    if len(functions) != 1:
-        raise Refused('fixed inline literal owner')
     if operation in ('reload','detached',*METHODS,*NETWORK):
         bodies=[node.args[0] for node in ast.walk(functions[0]) if isinstance(node,ast.Call)
                 and isinstance(node.func,ast.Name) and node.func.id=='_isolated_python'
                 and len(node.args)==1]
-        if len(bodies)!=1:
-            raise Refused('fixed isolated sole literal body')
         body=bodies[0]
-        if operation in ('reload','detached') and isinstance(body,ast.Constant) and type(body.value) is str:
+        if operation in ('reload','detached'):
             return body.value
-        if operation not in (*METHODS,*NETWORK) or not isinstance(body,ast.JoinedStr):
-            raise Refused('fixed isolated literal template')
         substitutions=(('method',-1,operation),) if operation in METHODS else (
             ('family',-1,str(NETWORK[operation][0])),('detached',114,repr(NETWORK[operation][1])))
         return render_string(body,substitutions)
@@ -144,8 +138,6 @@ def expected(case, operation, native, pin, checkout, environment, *, query=False
             raise Refused('journal sleep has no descendants')
         owner=source_unit(checkout,JOURNAL_TEST,PINS[JOURNAL_TEST],(JOURNAL_CASE.split('::')[-1],))
         calls=[node for node in ast.walk(owner) if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr=='Popen']
-        if len(calls)!=1:
-            raise Refused('journal sole original child')
         program=ast.literal_eval(calls[0].args[0].elts[2])
         return build_expected(case,native,pin,(native,'-c',program),tuple(sorted(environment.items())),str(checkout),'python-command')
     if case==HERMETIC and not query:

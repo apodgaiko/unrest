@@ -119,8 +119,6 @@ def proposal(host, actor, raw):
             unit=source_unit(checkout,DRAIN_TEST,PINS[DRAIN_TEST],(case.split('::')[-1],))
             calls=[node for node in ast.walk(unit) if isinstance(node,ast.Call)
                    and isinstance(node.func,ast.Attribute) and node.func.attr=='create_subprocess_exec']
-            if len(calls)!=1 or len(calls[0].args)!=3:
-                raise Refused('pipe drain sole original child')
             body=ast.literal_eval(calls[0].args[2])
             parent=retain(host,Path(cwd).parent,case.split('::')[-1][:30],20000)
             if Path(cwd)!=parent/'workspace':

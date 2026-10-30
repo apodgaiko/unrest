@@ -1214,3 +1214,10 @@ still chooses only the fixed console names and normalized paths, pins actual
 installed script bytes against the immutable preparation receipt, and matches
 exact argv, environment, cwd, native entry and parent. Metadata cannot substitute
 another executable; the UV parent retains its independent child-script join.
+
+Original fixture AST extraction relies on the independent literal SHA256 check
+in `source_unit` before parsing. It no longer separately validates the known
+syntax shape of those same pinned bytes. Runtime substitution names, order,
+conversion and values remain checked by `render_string`; filesystem and launch
+operands retain their independent validation. A changed fixture cannot supply
+its own expected pin or reach extraction under the old pin.

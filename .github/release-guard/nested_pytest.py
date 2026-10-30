@@ -25,8 +25,6 @@ def hermetic(checkout, environment):
     values={name:f'ambient-{index}-{name.lower()}' for index,name in enumerate(sorted(names),1)}
     overrides=[node for node in ast.walk(function) if isinstance(node,ast.Call)
                and isinstance(node.func,ast.Attribute) and node.func.attr=='update']
-    if len(overrides)!=1 or len(overrides[0].args)!=1:
-        raise Refused('hermetic original seeded environment')
     values.update(ast.literal_eval(overrides[0].args[0]))
     if set(values)!=names:
         raise Refused('hermetic complete environment inventory')

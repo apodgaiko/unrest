@@ -1,5 +1,4 @@
 """Closed original role-server schedules, environments and literal templates."""
-import ast
 import re
 import stat
 from pathlib import Path
@@ -105,10 +104,6 @@ def program(checkout,parent,case,ordinal):
     if family=='defect':
         owner=source_unit(checkout,SERVER_TEST,PINS[SERVER_TEST],(case.split('::')[1],'ProcessDispatcher','dispatch'))
         call=assignment(owner,'child')
-        if (not isinstance(call,ast.Call) or ast.unparse(call.func)!='subprocess.Popen'
-                or len(call.args)!=1 or not isinstance(call.args[0],ast.List) or len(call.args[0].elts)!=3
-                or not isinstance(call.args[0].elts[2],ast.Constant) or type(call.args[0].elts[2].value) is not str):
-            raise Refused('completion exact independent validator literal')
         return call.args[0].elts[2].value
     if schedule(case)[ordinal][0]=='http':
         source_unit(checkout,case.split('::')[0],PINS[case.split('::')[0]])
@@ -118,8 +113,6 @@ def program(checkout,parent,case,ordinal):
     name=name.split('[')[0]
     owner=source_unit(checkout,path,PINS[path],(name,))
     template=assignment(owner,'script')
-    if not isinstance(template,ast.JoinedStr):
-        raise Refused('completion sole original role template')
     path=attempt(parent,case,ordinal)
     substitutions=(('str(path)',str(path)),('phase',scenario)) if family=='crash' else (
         ('str(path.parent)',str(path.parent)),('str(barrier)',str(parent/'workspace/barrier')),
