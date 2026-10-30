@@ -8,7 +8,7 @@ CASES=tuple(TEST+'::test_real_mcp_inventory_fd_redacts_before_crash_and_restart[
             for mode in ('worker','terminal-reviewer'))
 
 
-def proposal(host,actor,raw):
+def inventory_proposal(host,actor,raw):
     from cleanup_launch import read_pipe,system_git,SERVER,PINS as CLEANUP_PINS
     case=host.case
     checkout=Path(host.meta['checkout'])
@@ -61,3 +61,42 @@ def proposal(host,actor,raw):
         vector=[image,*argv[1:]]
     value=build_expected(case,image,pin,argv,tuple(sorted(env.items())),str(base/'workspace'),kind,reference)
     return admit_expected(host,actor,raw,value,role,vector,reference,port=port,inherited=inherited)
+
+
+DIAGNOSTICS=tuple(TEST+'::test_'+name for name in (
+    'missing_end_node_diagnostics_survive_production_dispatch_and_attention',
+    'worker_mcp_readiness_timeout_persists_generation_before_dispatch_return'))
+INVENTORY_CASES=CASES
+CASES=(*CASES,*DIAGNOSTICS)
+
+
+def proposal(host,actor,raw):
+    if host.case in INVENTORY_CASES:
+        return inventory_proposal(host,actor,raw)
+    import re
+    from owned_fixture import retain
+    from node_launch import proposal as node
+    from ordinary_acp import MOCK
+    host.root_only(actor)
+    case=host.case
+    checkout=Path(host.meta['checkout'])
+    source_unit(checkout,TEST,PINS[TEST])
+    base=retain(host,Path(raw['cwd']).parent,case.split('::')[1][:30],20000)
+    first=case==DIAGNOSTICS[0]
+    project=raw['environment'].get('UNREST_PROJECT_ID','')
+    slug='missing-handoff-regression' if first else 'worker-mcp-timeout-regression'
+    if (case not in DIAGNOSTICS or re.fullmatch(r'[0-9]{8}T[0-9]{6}Z-'+slug,project) is None
+            or raw['environment'].get('UNREST_MISSION_ID')!='mission-001'
+            or raw['environment'].get('UNREST_NODE_ID')!=('w1' if first else 'w-timeout')):
+        raise Refused('diagnostic exact project and node')
+    if host.fixture_roots.setdefault(('diagnostic-project',case),project)!=project:
+        raise Refused('diagnostic project changed')
+    module=raw['argv'][1:2]==['-m']
+    if module and raw['environment'].get('UNREST_NODE_ASSIGNMENT')!='{"targets":["VAL-001"],"task_type":"work"}':
+        raise Refused('diagnostic exact assignment')
+    if not module:
+        records=[row for row in host.intents.values() if row['case']==case and row['role']=='mcp' and row['parent']==actor['birth']]
+        if not first or len(records)!=1 or not host.executed(records[0]) or not host.actors[records[0]['pid']]['body_ready']:
+            raise Refused('diagnostic mock before actual MCP ready')
+    return node(host,actor,raw,base/'workspace',host.meta_environment(),base/'.unrest',project,{'work':1},
+        checkout/MOCK,PINS[MOCK],('--missing-handoff-session-error',),1,{},'mock-acp')

@@ -332,6 +332,11 @@ class Observer:
         if actor['role'] == 'session-invalid':
             failures = [row for row in self.ledger_trace.records if row['kind'] == 'exec_syscall_return' and row['pid'] == actor['birth'].pid]
             return process.generation == 0 and terminal is not None and terminal[2] == 255 and len(failures) == 1 and failures[0]['return'] == -8
+        from mcp_inventory import DIAGNOSTICS
+        if actor['case']==DIAGNOSTICS[1] and actor['role']=='mcp':
+            return (value is not None and terminal is not None and process.generation==1
+                and terminal[2] in (-9,-15) and -terminal[2] in actor['signals']
+                and self.ledger.reaped(actor['birth'],actor['token']))
         if terminal is None or value is None or terminal[2]<0 and -terminal[2] not in actor['signals']:
             return False
         from run_worker_launch import MEASUREMENT_PROJECT,DESCENDANT
