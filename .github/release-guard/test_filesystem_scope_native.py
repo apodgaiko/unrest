@@ -24,8 +24,14 @@ def main():
         (base / 'output').chmod(0o700)
         (base / 'output/private').write_text('public observer custody sentinel')
         runtime = str(Path(sys.base_prefix).resolve(strict=True))
-        metadata = {'owned': str(base / 'owned'), 'runtime_root': runtime,
-                    'mounts': dict.fromkeys((str(base / 'input'), str(base / 'support'), runtime))}
+        native=base/'native-input'
+        native.mkdir(mode=0o755)
+        (native/'node.data').write_text('public native metadata sentinel')
+        native.chmod(0o555)
+        native_identity=native.stat()
+        metadata = {'owned' : str(base / 'owned'), 'runtime_root': runtime,
+                    'mounts': {**{path:path for path in (str(base / 'input'),str(base / 'support'),runtime)},'/native':str(native)},
+                    '_native_input':{'root':str(native),'generation':[native_identity.st_dev,native_identity.st_ino]}}
 
         def contained():
             child = os.fork()
@@ -38,8 +44,11 @@ def main():
                     root = os.stat('/')
                     assert result['filesystem_root'] == [root.st_dev, root.st_ino]
                     assert Path.cwd() == Path('/') and not (base / 'outside').exists()
+                    assert '_native_input' not in result and '/native' in result['mounts']
                     credentials(20000)
                     assert (base / 'input/member').read_text() == 'public selected input'
+                    assert Path('/native/node.data').read_text()=='public native metadata sentinel'
+                    assert not native.exists()
                     (base / 'owned/created').write_text('owned scratch')
                     for path in (base / 'input/member', base / 'input/new-member'):
                         try:
@@ -68,6 +77,27 @@ def main():
                 os._exit(0)
             assert os.waitpid(child, 0) == (child, 0)
 
+        def rejected_generation():
+            from content_manifest import Refused
+            child=os.fork()
+            if child==0:
+                code=1
+                try:
+                    bad={**metadata,'owned':str(base/'negative/owned'),
+                        '_native_input':{**metadata['_native_input'],'generation':[0,0]}}
+                    enter(bad,str(base/'support'),base/'output')
+                except Refused as error:
+                    if str(error)=='filesystem mounted native input generation':
+                        code=0
+                except BaseException:
+                    traceback.print_exc()
+                os._exit(code)
+            assert os.waitpid(child,0)==(child,0)
+
+        (base/'negative').mkdir(mode=0o755)
+        (base/'negative/owned').mkdir(mode=0o755)
+        os.chown(base/'negative/owned',20000,20000)
+        run(rejected_generation)
         run(contained)
         assert (base / 'input/member').read_text() == 'public selected input'
         assert (base / 'owned/created').read_text() == 'owned scratch'

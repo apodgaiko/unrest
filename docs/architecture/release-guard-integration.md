@@ -1017,3 +1017,11 @@ home/project paths without parsing project JSON to predict its ID or workspace
 value. The product owns malformed/missing-record behavior and the original
 fresh-process reconstruction and sealed-patch assertions. Fixture generation,
 path-alias refusal, exact program/environment and finite child counts remain.
+
+Filesystem entry is the sole owner of selected input binding and mount census.
+The earlier bind/remount/census before entry is removed. Trusted preparation maps
+canonical destinations to measured source trees, including `/native` without
+creating a host `/native` mount. Entry verifies that mounted native destination's
+original device/inode, root owner and mode0555, then records complete read-only
+mount IDs after chroot. Private mount propagation, network/IPC isolation, final
+root identity and the measured-runtime alias remain unchanged.

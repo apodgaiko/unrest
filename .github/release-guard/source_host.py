@@ -180,27 +180,12 @@ def isolate(metadata, support, output):
     # Private mount/network/IPC namespaces; no shared-host mount mutation.
     network_before=os.readlink('/proc/self/ns/net')
     require(libc.unshare(0x00020000 | 0x40000000 | 0x08000000) == 0, 'private namespace refused')
-    def mount(source, target, flags):
-        if libc.mount(source, target, None, ctypes.c_ulong(flags), None):
-            raise OSError(ctypes.get_errno(), 'private input mount refused')
-    mount(None, b'/', (1 << 18) | (1 << 14))  # private recursively
-    native_input = metadata.get('_native_input')
-    metadata = {key:value for key,value in metadata.items() if key != '_native_input'}
-    points: tuple[str,...] = (metadata['checkout'], metadata['dependencies'], metadata['runtime_root'], support)
-    for point in points:
-        encoded = os.fsencode(point)
-        mount(encoded, encoded, 4096)
-        mount(None, encoded, 4096 | 32 | 1 | 2 | 4)  # bind remount ro,nosuid,nodev
+    if libc.mount(None, b'/', None, ctypes.c_ulong((1 << 18) | (1 << 14)), None):
+        raise OSError(ctypes.get_errno(), 'private mount propagation refused')
+    points={path:path for path in (metadata['checkout'],metadata['dependencies'],metadata['runtime_root'],support)}
+    native_input=metadata.get('_native_input')
     if native_input is not None:
-        target = Path('/native')
-        require(not target.exists() and not target.is_symlink(), 'private native mount target already exists')
-        target.mkdir(mode=0o755)
-        mount(os.fsencode(native_input['root']), b'/native', 4096)
-        mount(None, b'/native', 4096 | 32 | 1 | 2 | 4)
-        info=target.stat()
-        require([info.st_dev,info.st_ino]==native_input['generation'] and info.st_uid==0
-                and stat.S_IMODE(info.st_mode)==0o555, 'native readonly input generation changed')
-        points = (*points, '/native')
+        points['/native']=native_input['root']
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as stream:
         request = struct.pack('16sH14x', b'lo', 0)
         current = fcntl.ioctl(stream.fileno(), 0x8913, request)
@@ -208,16 +193,8 @@ def isolate(metadata, support, output):
         fcntl.ioctl(stream.fileno(), 0x8914, struct.pack('16sH14x', b'lo', flags | 1))
     from network_scope import isolated
     metadata['network_namespace']=isolated(network_before)
-    mounts = {}
-    for line in Path('/proc/self/mountinfo').read_text().splitlines():
-        fields = line.split()
-        if fields[4] in points:
-            info = os.stat(fields[4], follow_symlinks=False)
-            require('ro' in fields[5].split(','), 'private input remained writable')
-            mounts[fields[4]] = [int(fields[0]), info.st_dev, info.st_ino]
-    require(set(mounts) == set(points), 'private mount inventory incomplete')
     from filesystem_scope import enter
-    return enter({**metadata, 'mounts': mounts}, support, output)
+    return enter({**metadata, 'mounts': points}, support, output)
 
 
 def settle(pid, terminate=False, deadline=None):

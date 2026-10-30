@@ -69,8 +69,14 @@ def enter(metadata, support, output):
         source = Path('/etc') / name
         if source.exists():
             bind(source.resolve(strict=True), source)
-    for path in metadata['mounts']:
-        bind(path)
+    for destination,source in metadata['mounts'].items():
+        bind(source,destination)
+    native=metadata.get('_native_input')
+    if native is not None:
+        selected=(root/'native').stat()
+        if ([selected.st_dev,selected.st_ino]!=native['generation'] or selected.st_uid!=0
+                or stat.S_IMODE(selected.st_mode)!=0o555):
+            raise Refused('filesystem mounted native input generation')
     # Already imported observer packages retain this prefix. It exposes only the
     # same measured interpreter copy, never the original host runtime directory.
     if sys.base_prefix != metadata['runtime_root']:
@@ -98,4 +104,4 @@ def enter(metadata, support, output):
             mounts[fields[4]] = [int(fields[0]), selected.st_dev, selected.st_ino]
     if set(mounts) != set(metadata['mounts']):
         raise Refused('filesystem selected mount inventory incomplete')
-    return {**metadata, 'mounts': mounts, 'filesystem_root': [info.st_dev, info.st_ino]}
+    return {**{key:value for key,value in metadata.items() if key!='_native_input'}, 'mounts': mounts, 'filesystem_root': [info.st_dev, info.st_ino]}
