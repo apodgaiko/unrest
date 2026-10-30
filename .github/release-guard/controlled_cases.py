@@ -6,6 +6,7 @@ from cohort_controller import CASES as CRASH
 SOURCE_UID=20000
 STANDARD=('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53','fake-app-server')
 STARTUP_FAILURE='tests/test_experimental_startup_diagnostics.py::test_coordinator_persists_startup_and_separate_cleanup_failure'
+RUNTIME_DRIFT='tests/test_controlled_runtime_binding.py::test_runtime_rechecked_at_each_child_boundary[adapter]'
 WARNING='tests/test_controlled_acp_warnings.py::test_original_owner_warning_state_and_phase'
 NOTIFICATION='tests/test_experimental_notifications.py::test_controlled_process_http_revocation_and_warning_privacy'
 WARNING_REFUSALS=tuple('tests/test_controlled_acp_warnings.py::test_owned_warning_refusal_and_cleanup['+value+']'
@@ -59,7 +60,7 @@ BACKENDS={'01d855c9d7ae2c91b6055a8e5eec1621714a1f6b84d3ae7bad1f190e70b19d3e': 'f
 
 
 def eligible(case):
-    return type(case) is str and (case in CAMPAIGNS or case in CRASH or '::' in case and case.split('::')[0] in MODULES)
+    return type(case) is str and (case==RUNTIME_DRIFT or case in CAMPAIGNS or case in CRASH or '::' in case and case.split('::')[0] in MODULES)
 
 
 def backend_path(case,root):
@@ -70,7 +71,7 @@ def acquire_backend(case,home):
     file=backend_path(case,home.parent)
     _,_,pin=read_regular(file,4*1024*1024,uid=SOURCE_UID,forbidden=0o6022)
     if (not eligible(case) or BACKENDS.get(pin)!=file.name
-            or case in (*CAMPAIGNS,*CRASH) and pin!=STANDARD[0]):
+            or case in (*CAMPAIGNS,*CRASH,RUNTIME_DRIFT) and pin!=STANDARD[0]):
         raise Refused('unknown controlled backend bytes or layout')
     return pin
 
@@ -80,7 +81,7 @@ def select_entry(case,checkout,home,native,native_pin,raw,*,backend,relay,record
     from launch_policy import check_expected
     refuse_if(not eligible(case), 'controlled source module')
     pin=acquire_backend(case,home) if backend else None
-    variants=(0,) if case in (*CAMPAIGNS,*CRASH) else range(4)
+    variants=(0,) if case in (*CAMPAIGNS,*CRASH,RUNTIME_DRIFT) else range(4)
     if not backend:
         pairs=[row for row in records if row['cwd']==str(home) and row['role']=='backend']
         refuse_if(len(pairs)!=1 or type(pairs[0].get('controlled_variant')) is not int or pairs[0]['controlled_variant'] not in variants, 'controlled ACP configuration pair')

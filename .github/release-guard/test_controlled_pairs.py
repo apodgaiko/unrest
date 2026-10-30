@@ -56,6 +56,20 @@ def test_startup_failure_cannot_start_an_adapter():
                      {12:{'returned':True}})
 
 
+def test_runtime_drift_retains_one_backend_and_no_adapter_authority():
+    from controlled_cases import RUNTIME_DRIFT, eligible
+    home='/owned/pytest/a/worker'
+    assert eligible(RUNTIME_DRIFT) and limits(RUNTIME_DRIFT)==1
+    assert not eligible(RUNTIME_DRIFT.replace('[adapter]','[backend]'))
+    assert not eligible(RUNTIME_DRIFT.replace('[adapter]','[foreign]'))
+    before_spawn(RUNTIME_DRIFT,home,'backend',[],{})
+    records=[{'cwd':home,'role':'backend','consumed':True,'pid':12}]
+    with pytest.raises(Refused):
+        before_spawn(RUNTIME_DRIFT,home,'acp',records,lambda row:True)
+    with pytest.raises(Refused):
+        before_spawn(RUNTIME_DRIFT,'/owned/pytest/b/worker','backend',records,{})
+
+
 @pytest.mark.parametrize('case', CASES)
 def test_each_case_rejects_one_more_backend_than_its_declared_bound(case):
     maximum = limits(case)

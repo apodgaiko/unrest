@@ -82,6 +82,20 @@ def test_cohort_configuration_and_image_do_not_borrow_ordinary_union(backend,mon
         live.acquire_backend(case,home)
 
 
+def test_runtime_drift_backend_keeps_standard_bytes_and_unconfigured_environment(backend,monkeypatch):
+    home,_=backend
+    case=live.RUNTIME_DRIFT
+    pin=live.acquire_backend(case,home)
+    value,_,_=expected_entry(case,ROOT,home,'/native/python','a'*64,backend=True,variant=0,backend_pin=pin)
+    assert live.select_entry(case,ROOT,home,'/native/python','a'*64,operands(value),backend=True,relay=None,records=[])[1]==0
+    configured,_,_=expected_entry(case,ROOT,home,'/native/python','a'*64,backend=True,variant=1,backend_pin=pin)
+    with pytest.raises(Refused,match='original launch operands'):
+        live.select_entry(case,ROOT,home,'/native/python','a'*64,operands(configured),backend=True,relay=None,records=[])
+    monkeypatch.setattr(live,'read_regular',lambda *args,**kwargs:(None,None,original.DRAIN[0]))
+    with pytest.raises(Refused,match='unknown controlled backend'):
+        live.acquire_backend(case,home)
+
+
 @pytest.mark.parametrize('role',('fixed-inline','git-custody','backend','acp'))
 def test_module_eligibility_changes_only_backend_pair_cwd_quotas(role):
     from types import SimpleNamespace

@@ -125,7 +125,7 @@ kernel exit/original-parent wait evidence. Its ceiling is 10,000 physical
 enforcement lines, counting every non-test file under `.github` and the complete
 `tools/check_distribution.py` oracle; guard tests are reported separately. The earlier
 9,999-line snapshot lacked launch families exposed by the unexcluded checkpoint.
-The replacement measures 9,925 enforcement lines after retiring its temporary
+The replacement measures 9,928 enforcement lines after retiring its temporary
 diagnostic workflow and consolidating unchanged refusal preconditions. The count
 includes the complete external distribution oracle. Certification still requires
 the frozen candidate to satisfy the same counter and dependency-closure review.

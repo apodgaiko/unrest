@@ -1500,3 +1500,15 @@ Unproved complex ingress/core conditions and callback-extensible loaders retain
 explicit branches. The primitive remains active under `-O`; it neither catches
 exceptions nor replaces the audit's poison/reporting path. The frozen candidate must validate the extra stack frame and successful-path
 call overhead through focused and native controls.
+
+
+### Runtime-binding negative case
+
+The adapter-stage runtime-drift case starts one standard controlled backend
+before deliberately changing the interpreter identity. Its guard declaration
+admits only that exact collected case, the standard backend bytes and the
+unconfigured environment, with one backend across owned roots. It admits no
+ACP adapter. The backend-stage and other runtime-binding negatives retain no
+child authority. Original runtime recheck, quarantine and actual cleanup
+assertions remain unchanged; this controlled case proves no native-provider
+acceptance.

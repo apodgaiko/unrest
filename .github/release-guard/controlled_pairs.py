@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from content_manifest import Refused, refuse_if
-from controlled_cases import eligible, STARTUP_FAILURE
+from controlled_cases import eligible, STARTUP_FAILURE, RUNTIME_DRIFT
 
 
 def limits(case: str) -> int:
@@ -20,6 +20,8 @@ def limits(case: str) -> int:
         return CAMPAIGNS[case][0]
     if case in CRASH:
         return 0 if case==CRASH[0] else 1
+    if case==RUNTIME_DRIFT:
+        return 1
     return 20
 
 
@@ -36,7 +38,7 @@ def scope(case: str, tag: str, value: object, owned: Path) -> str:
 
 def before_spawn(case: str, home: str, role: str, records: list[dict], executed) -> bool:
     maximum = limits(case)
-    if case == STARTUP_FAILURE and role != 'backend':
+    if case in (STARTUP_FAILURE,RUNTIME_DRIFT) and role != 'backend':
         raise Refused('startup failure has no ACP launch')
     pairs = {row['cwd'] for row in records if row['role'] == 'backend'}
     pair = [row for row in records if row['cwd'] == home]
