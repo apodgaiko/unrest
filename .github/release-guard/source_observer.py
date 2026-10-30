@@ -199,9 +199,6 @@ class Observer:
             from archive_snapshot import retained
             target,state=intent['credential_snapshot']
             retained(Path(target),state)
-        if intent.get('package_inputs') is not None:
-            from package_proposals import retained_archive
-            retained_archive(intent['package_inputs'],intent['case'])
         if intent['role']=='archive-leaf':
             from archive_snapshot import retained
             state=self.fixture_roots[intent['case']]['document']

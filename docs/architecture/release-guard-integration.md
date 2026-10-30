@@ -1221,3 +1221,10 @@ syntax shape of those same pinned bytes. Runtime substitution names, order,
 conversion and values remain checked by `render_string`; filesystem and launch
 operands retain their independent validation. A changed fixture cannot supply
 its own expected pin or reach extraction under the old pin.
+
+Archive input acquisition retains canonical directory/member ownership, modes,
+regular single-link files, byte bounds and acquisition-race checks. It no longer
+stores a second archive content/generation manifest for exec-time comparison.
+The unchanged original archive oracle checks the bytes it actually consumes;
+extracted snapshot sealing, fifteen-case provenance, installed script receipts
+and process/image/parent/wait admission remain independent requirements.

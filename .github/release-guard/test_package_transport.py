@@ -83,11 +83,8 @@ def test_original_checker_has_exact_path_environment_and_current_data(tmp_path,m
     result=transport.proposal(value,{'role':'root'},raw)
     assert calls[-1][1]=='archive-checker'
     assert result['translated'][:4]==['/native/python','-I','-S','-c']
-    row=value.intents[1]['package_inputs']
-    transport.retained_archive(row,case)
-    (dist/'candidate.whl').write_bytes(b'changed admitted generation')
-    with pytest.raises(Refused,match='generation'):
-        transport.retained_archive(row,case)
+    assert 'package_inputs' not in value.intents[1]
+
 
 
 @pytest.mark.parametrize('case',[FIRST,LIFECYCLE])
@@ -220,12 +217,9 @@ def test_foreign_or_incomplete_archive_result_cannot_seal(mutation):
 def test_prepared_auxiliary_members_are_bound_but_never_treated_as_archives(tmp_path,monkeypatch):
     value,data,_=host(tmp_path,monkeypatch,POSITIVE)
     (data['dist']/'.gitignore').write_bytes(b'*\n')
-    row=transport.archive_inputs(data['dist'],POSITIVE)
-    assert [member[0] for member in row[2]]==['.gitignore','candidate.tar.gz','candidate.whl']
-    transport.retained_archive(row,POSITIVE)
-    (data['dist']/'.gitignore').write_bytes(b'changed')
-    with pytest.raises(Refused,match='generation'):
-        transport.retained_archive(row,POSITIVE)
+    assert transport.archive_inputs(data['dist'],POSITIVE) is None
+    (data['dist']/'.gitignore').write_bytes(b'changed archive data is checked by the original oracle')
+    transport.archive_inputs(data['dist'],POSITIVE)
     with pytest.raises(Refused,match='two-member'):
         transport.archive_inputs(data['dist'],next(iter(MUTATIONS)))
 
@@ -242,3 +236,23 @@ def test_standalone_archive_seals_root_only_after_all_fifteen_real_reports(monke
     with pytest.raises(Refused):
         finish(policy,'normal',0,leaf,False,True)
     assert len(calls)==1
+
+
+@pytest.mark.parametrize('mutation',['symlink','hardlink','mode','size'])
+def test_archive_input_custody_remains_bounded_and_alias_free(tmp_path,monkeypatch,mutation):
+    _,data,_=host(tmp_path,monkeypatch,POSITIVE)
+    file=data['dist']/'candidate.whl'
+    if mutation in ('symlink','hardlink'):
+        other=tmp_path/'other'
+        file.rename(other)
+        if mutation=='symlink':
+            file.symlink_to(other)
+        else:
+            os.link(other,file)
+    elif mutation=='mode':
+        file.chmod(0o666)
+    else:
+        with file.open('wb') as stream:
+            stream.truncate(4*1024*1024+1)
+    with pytest.raises(Refused):
+        transport.archive_inputs(data['dist'],POSITIVE)

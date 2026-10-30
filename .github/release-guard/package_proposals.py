@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 import stat
 
-from content_manifest import Refused, read_regular, _directory_key, _key
+from content_manifest import Refused, read_regular, _directory_key
 from launch_policy import admit_expected,build_expected
 from package_cases import CASES as CASES, POSITIVE, NEGATIVE, MUTATIONS, FIRST, LIFECYCLE, literal, CONTRACT, SECURITY_CASES
 from archive_leaf import CHECKER_COMMAND, LEAF_COMMAND
@@ -71,18 +71,11 @@ def archive_inputs(path,case):
             or before.st_mode&0o6022 or case!=POSITIVE and len(names)!=2
             or len(list(path.glob('*.whl')))!=1 or len(list(path.glob('*.tar.gz')))!=1):
         raise Refused('archive original two-member directory')
-    rows=[]
     for name in names:
-        _,info,pin=read_regular(path/name,4*1024*1024,uid=uid,forbidden=0o6022,retain=False)
-        rows.append([name,list(_key(info)),pin])
+        read_regular(path/name,4*1024*1024,uid=uid,forbidden=0o6022,retain=False)
     if list(_directory_key(path.stat(follow_symlinks=False)))!=list(_directory_key(before)):
         raise Refused('archive input directory race')
-    return [str(path),list(_directory_key(before)),rows]
 
-
-def retained_archive(row,case):
-    if archive_inputs(Path(row[0]),case)!=row:
-        raise Refused('archive admitted input generation changed')
 
 
 def proposal(host,actor,raw):
@@ -96,7 +89,6 @@ def proposal(host,actor,raw):
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
     checkout,owned_root=Path(host.meta['checkout']),Path(host.meta['owned'])
     leaf=actor['role']=='archive-checker' or case in NEGATIVE
-    archive_data=None
     if leaf:
         state=host.fixture_roots.get(case)
         if (state is None or state['parent']!=actor['birth'] or state['token']!=actor['token']
@@ -124,7 +116,7 @@ def proposal(host,actor,raw):
         expected_names=sorted(item.name for item in data['dist'].iterdir() if item.name.endswith(('.whl','.tar.gz')))
         if case in MUTATIONS and sorted(item.name for item in path.iterdir())!=expected_names:
             raise Refused('archive exact original filenames')
-        archive_data=archive_inputs(path,case)
+        archive_inputs(path,case)
         env=environment(host,case,'call')
         if case==POSITIVE:
             env['PYTHONPATH']=str(checkout/'src')
@@ -162,8 +154,7 @@ def proposal(host,actor,raw):
         raise Refused('package exact original launch case')
     value=build_expected(case,native,pin,argv,tuple(sorted(env.items())),cwd,
         'native' if role=='archive-checker' else 'python-command')
-    answer=admit_expected(host,actor,raw,value,role,vector,
-        fields={'package_inputs':archive_data})
+    answer=admit_expected(host,actor,raw,value,role,vector)
     if answer is not None and case==FIRST:
         row=host.intents[answer['ticket']]
         row.update(security_status=0,security_operation='provenance')
