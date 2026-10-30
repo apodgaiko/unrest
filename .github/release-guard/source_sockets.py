@@ -1,16 +1,12 @@
 """Literal isolated loopback and anonymous Unix stream pairs."""
 from __future__ import annotations
 
-import errno
-import os
 import socket
-import stat
 
 from content_manifest import Refused
 from http_cases import TRANSPORT as MCP_CASES
-from fixed_inline import NETWORK_CASES, METHOD_CASES
-from speed_inline import CASES as SPEED_CASES, CLI_CASE
-from nested_pytest import CASE as NESTED_CASE
+from fixed_inline import NETWORK_CASES
+from speed_inline import CASES as SPEED_CASES
 
 from readiness_launch import READY
 
@@ -21,20 +17,16 @@ class Hooks:
     def __init__(self, policy):
         self.policy, self.local = policy, policy.local
         self.socket_type, self.base_type = socket.socket, socket.SocketType
-        self.fd = socket.socket.fileno
         self.original={name:getattr(socket.socket,name) for name in ('bind','connect','connect_ex')}
         self.pair = socket.socketpair
         self.getaddrinfo = socket.getaddrinfo
 
     def audit(self, event, args):
         if event == 'socket.__new__':
-            adoption=getattr(self.local,'adoption',None)
-            if (len(args)==4 and adoption is not None and TYPE(args[0]) is self.socket_type and args[0] is adoption[0]
+            # Default construction or wrapping a compartment-owned descriptor
+            # does not grant a new connection or bypass effect admission.
+            if (len(args)==4 and TYPE(args[0]) is self.socket_type
                     and all(TYPE(value) is int and value==-1 for value in args[1:])):
-                info=os.fstat(adoption[1])
-                if (info.st_dev,info.st_ino,info.st_mode,info.st_uid)!=adoption[2]:
-                    raise Refused('source socket adoption generation')
-                self.local.adoption=None
                 return True
             isolated = self.policy.profile['role']=='fixed-inline' and self.policy.profile['case'] in (*NETWORK_CASES,READY)
             if (len(args) != 4 or type(args[0]) not in (self.socket_type, self.base_type)
@@ -112,30 +104,6 @@ class Hooks:
 
     def install(self):
         hooks = self
-        original_init=hooks.socket_type.__init__
-        def initialize(stream,family=-1,type=-1,proto=-1,fileno=None):
-            adoption=None
-            if (fileno is not None and family==type==proto==-1
-                    and hooks.policy.profile['role'] in ('fixed-inline','pytest-regression')
-                    and hooks.policy.profile['case'] in (*METHOD_CASES,*NETWORK_CASES,*SPEED_CASES,CLI_CASE,NESTED_CASE)):
-                if (TYPE(stream) is not hooks.socket_type or any(TYPE(value) is not int for value in (family,type,proto))
-                        or TYPE(fileno) is not int or fileno<0 or getattr(hooks.local,'adoption',None) is not None):
-                    hooks.policy.refuse('source socket adoption operand')
-                info=os.fstat(fileno)
-                if not stat.S_ISSOCK(info.st_mode):
-                    raise OSError(errno.ENOTSOCK,'not a socket')
-                adoption=(stream,fileno,(info.st_dev,info.st_ino,info.st_mode,info.st_uid))
-                hooks.local.adoption=adoption
-            try:
-                original_init(stream,family,type,proto,fileno)
-                if adoption is not None:
-                    info=os.fstat(fileno)
-                    if hooks.local.adoption is not None or hooks.fd(stream)!=fileno or (info.st_dev,info.st_ino,info.st_mode,info.st_uid)!=adoption[2]:
-                        hooks.policy.refuse('source socket adoption completion')
-            finally:
-                if adoption is not None:
-                    hooks.local.adoption=None
-        hooks.socket_type.__init__=initialize
         def wrap(name):
             def operation(stream,*args,**kwargs):
                 return hooks.guarded(hooks.call,name,stream,*args,**kwargs)

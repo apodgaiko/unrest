@@ -995,3 +995,11 @@ image and actual-parent intent through the existing ledger. Family adapters
 still select command forms, original parameter/ordinal restrictions, repository
 generations, actor roles, quotas and helper eligibility before issuance. The
 shared issuer grants no new Git form, config key, provider route or descendant.
+
+Within source socket Hooks, the exact primitive default constructor triple
+`(-1,-1,-1)` is ordinary local construction or wrapping of an existing descriptor.
+Per-case adoption eligibility and constructor-time inode matching are retired.
+Available descriptors remain subject to compartment entry and inherited-inventory
+checks; multiprocessing retains its independent open-file/cookie recensus.
+Bind/connect and resolver restrictions are unchanged, as are session roles that
+do not install these Hooks. Wrapping a descriptor grants no new connection route.

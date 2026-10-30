@@ -76,3 +76,67 @@ def test_every_exec_branch_rejects_foreign_network_namespace_before_delegation(m
     monkeypatch.setattr(source_observer,'os',SimpleNamespace(readlink=lambda path:'mnt:[123]'))
     monkeypatch.setattr(source_observer,'process_identity',lambda pid:{'namespaces':{'mnt':'mnt:[123]','net':'net:[foreign]'}})
     assert Observer.resolve(host,None,123,'/native',[],{},'/') is False
+
+
+@pytest.mark.parametrize('triple',[(-1,-1,-1),(True,-1,-1),(-1,True,-1),(-1,-1,True),(-1,-1,0)])
+def test_default_socket_adoption_does_not_select_a_case_or_grant_effects(triple):
+    import socket
+    import threading
+    from types import SimpleNamespace
+    from source_sockets import Hooks
+    policy=SimpleNamespace(local=threading.local(),profile={'role':'root','case':'ordinary'},
+        private_call=lambda:False)
+    hooks=Hooks(policy)
+    with socket.socket() as stream:
+        if triple==(-1,-1,-1):
+            assert hooks.audit('socket.__new__',(stream,*triple)) is True
+        else:
+            with pytest.raises(Refused):
+                hooks.audit('socket.__new__',(stream,*triple))
+        for target in (('localhost',12345),('0.0.0.0',12345),('::1',12345)):
+            with pytest.raises(Refused):
+                hooks.audit('socket.connect',(stream,target))
+    left,right=socket.socketpair()
+    with left,right:
+        with pytest.raises(Refused):
+            hooks.audit('socket.connect',(left,'/host/service.sock'))
+
+
+def test_socket_adoption_uses_normal_os_errors_and_preserves_private_pairs(tmp_path):
+    import errno
+    import os
+    import socket
+    left,right=socket.socketpair()
+    try:
+        fd=os.dup(left.fileno())
+        with socket.socket(fileno=fd) as adopted:
+            adopted.sendall(b'private')
+            assert right.recv(7)==b'private'
+        with (tmp_path/'ordinary-file').open('wb') as stream:
+            fd=os.dup(stream.fileno())
+            try:
+                with pytest.raises(OSError) as error:
+                    socket.socket(fileno=fd)
+                assert error.value.errno==errno.ENOTSOCK
+            finally:
+                os.close(fd)
+    finally:
+        left.close()
+        right.close()
+
+
+@pytest.mark.parametrize('unix',[False,True])
+def test_adoption_does_not_clear_sticky_forbidden_connect(unix):
+    import socket
+    from types import SimpleNamespace
+    from source_entry import Policy
+    from source_sockets import Hooks
+    requests=[]
+    client=SimpleNamespace(request=lambda kind,payload:requests.append(kind))
+    policy=Policy(None,{'role':'root','case':'ordinary'},None,client)
+    policy.sockets=Hooks(policy)
+    with socket.socket(socket.AF_UNIX if unix else socket.AF_INET) as stream:
+        assert policy.audit('socket.__new__',(stream,-1,-1,-1)) is True
+        with pytest.raises(Refused):
+            policy.audit('socket.connect',(stream,'/host/service.sock' if unix else ('localhost',12345)))
+    assert policy.poison is True and requests==['guard-refusal']
