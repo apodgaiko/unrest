@@ -1041,3 +1041,17 @@ lease-message interpretation are retired from guard admission. The original
 integration test now observes the real forwarded subprocess call and actual
 predecessor-date query, asserting the message order and all six identity values
 after successful Git execution. Actual native/helper waits remain mandatory.
+
+Git directory names no longer serve as application-role predictions. The case
+and family operation inventories remain closed, but a Git cwd may be the
+registered repository or a canonical owned directory strictly below its private
+`.unrest-runtime`. Worktree add/remove targets must be strictly below that
+runtime, never the repository or runtime root; physical target aliases are
+refused before admission. The checkout-producing exact worktree-add form has one
+canonical intent label regardless of integration/rollback directory spelling.
+Only that consumed parent intent can reserve the same single pinned reset
+helper. The no-checkout form gains no helper. Repository generation, exact argv,
+environment, quotas, patch scope, real parent/helper waits and the separately
+exact workspace-owned Python command remain enforced. The sandbox protects
+external files; original workspace and evolution tests own scratch naming and
+application-state correctness.

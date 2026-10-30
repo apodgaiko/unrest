@@ -205,25 +205,10 @@ def command_path(value):
     return p
 
 
-def command_location_role(repo, cwd):
-    if cwd == repo:
-        return 'parent'
-    if cwd.parent == repo / '.unrest-runtime/workspaces/trees':
-        if cwd.name and all(c in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-' for c in cwd.name):
-            return 'lease'
-    for role, parent, prefix in (('integration', repo / '.unrest-runtime/workspaces', 'integration-'),
-                                  ('rollback', repo / '.unrest-runtime/evolution', 'rollback-')):
-        suffix = cwd.name.removeprefix(prefix)
-        if cwd.parent == parent and cwd.name.startswith(prefix) and len(suffix) == 8 and all(c in 'abcdefghijklmnopqrstuvwxyz0123456789_' for c in suffix):
-            return role
-    raise Refused('git operation location')
-
-
-COMMAND_ROLES = {**dict.fromkeys(COMMAND_OPERATIONS, ('parent',)),
-    'top': ('parent', 'lease'), 'head': ('parent', 'lease'),
-    **dict.fromkeys(('inventory', 'stage-return', 'checkout', 'diff-return', 'stage-child', 'commit-child'), ('lease',)),
-    **dict.fromkeys(('apply', 'write-tree', 'commit-tree'), ('integration',)),
-    'check-index': ('integration', 'rollback')}
+def command_location(repo, path, *, target=False):
+    runtime = repo / '.unrest-runtime'
+    if not ((not target and path == repo) or runtime in path.parents):
+        raise Refused('git operation location outside runtime')
 
 
 def command_match(operation, repository, location, argv, stdin, environment, *, family, fixture=None, branch="main"):
@@ -233,11 +218,7 @@ def command_match(operation, repository, location, argv, stdin, environment, *, 
     if type(argv) is not list or not argv or any(type(value) is not str for value in argv) or argv[0]!='git':
         raise Refused('git literal argument vector')
     repo,cwd=command_path(repository),command_path(location)
-    role=command_location_role(repo,cwd)
-    if role=='rollback' and family!='evolution':
-        raise Refused('git rollback location family')
-    if role not in COMMAND_ROLES[operation]:
-        raise Refused('git operation location role')
+    command_location(repo,cwd)
     args=tuple(argv[1:])
     additions=()
     if operation in COMMAND_FIXED:
@@ -252,21 +233,18 @@ def command_match(operation, repository, location, argv, stdin, environment, *, 
             'stage-child':('add','child.txt'),'commit-child':('commit','-m','child self commit')}[operation]
         if fixture is not None and operation in ('init','config-name','config-email','stage-base','commit-base'):
             expected=fixture.commands[('init','config-name','config-email','stage-base','commit-base').index(operation)]
-        if (args!=expected or (operation in ('stage-child','commit-child'))!=(cwd!=repo)
-                or family=='evolution' and operation in ('stage-child','commit-child','stage-advance','commit-advance')):
+        if (args!=expected or family=='evolution' and operation in ('stage-child','commit-child','stage-advance','commit-advance')):
             raise Refused('git fixture command or family')
     else:
         match operation,args:
             case ('lease-add',('worktree','add','--detach','--no-checkout',tree,revision)) | (('integration-add'|'rollback-add'),('worktree','add','--detach',tree,revision)):
                 tree=command_path(tree)
-                target={'lease-add':'lease','integration-add':'integration','rollback-add':'rollback'}[operation]
-                if command_location_role(repo,tree)!=target or target=='rollback' and family!='evolution':
-                    raise Refused('git add tree scope or rollback family')
+                command_location(repo,tree,target=True)
+                if operation=='rollback-add' and family!='evolution':
+                    raise Refused('git rollback family')
                 operand_digest(revision)
             case ('remove-tree',('worktree','remove','--force',tree)):
-                target=command_location_role(repo,command_path(tree))
-                if target not in ('lease','integration','rollback') or target=='rollback' and family!='evolution':
-                    raise Refused('git remove tree scope or rollback target family')
+                command_location(repo,command_path(tree),target=True)
             case ('verify-base',('rev-parse','--verify',revision)) if revision.endswith('^{commit}'):
                 operand_digest(revision[:-9])
             case ('checkout',('checkout','--detach',revision)) | ('diff-return',('diff','--cached','--binary','--no-ext-diff',revision)) | ('date',('show','-s','--format=%aI',revision)):
@@ -834,8 +812,8 @@ class Git:
 
     def location(self, root, location):
         path = Path(location)
-        command_location_role(root, path)
-        if not path.is_dir() or str(path.resolve(strict=True)) != location:
+        command_location(root, path)
+        if not path.is_dir() or path.lstat().st_uid != 20000 or str(path.resolve(strict=True)) != location:
             raise Refused('git original worktree directory')
 
     def launch(self, actor, operation, repository, command, raw, environment):
@@ -848,6 +826,11 @@ class Git:
             raise Refused('Git finite operation declaration')
         root = self.repository(repository, operation, family)
         self.location(root, command.cwd)
+        if operation in ('lease-add','integration-add','rollback-add','remove-tree'):
+            target = Path(command.argv[-1] if operation=='remove-tree' else command.argv[-2])
+            command_location(root,target,target=True)
+            if target.resolve(strict=False) != target:
+                raise Refused('git worktree target alias')
         return issue(host,actor,raw,command,environment,
             fields={'command':command,'repository':str(root),'operation':operation})
 
@@ -949,7 +932,7 @@ def workspace_prepare(host,actor,raw):
             raise Refused('Git proposal original executable')
         operations=(*COMMAND_SETUP,*SITE_SHARED_OPERATIONS) if fixture is not None else SITE_OPERATIONS[family]
         branch='master' if fixture is not None and fixture.init==('init',) and raw['argv'][1:3]==['update-ref','refs/heads/master'] else 'main'
-        operations=tuple(dict.fromkeys({'rollback-update':'update-parent','rollback-reset':'reset-parent'}.get(operation,operation) for operation in operations))
+        operations=tuple(dict.fromkeys({'rollback-add':'integration-add','rollback-update':'update-parent','rollback-reset':'reset-parent'}.get(operation,operation) for operation in operations))
         candidates: dict[str,Command] = {}
         for operation in operations:
             try:

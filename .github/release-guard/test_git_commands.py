@@ -5,7 +5,7 @@ import hashlib
 import pytest
 
 from content_manifest import Refused
-from git_policy import COMMAND_FIXED as FIXED, COMMAND_ROLES as ROLES
+from git_policy import COMMAND_FIXED as FIXED
 from test_git_vectors import build,FIELDS
 
 REPO = '/owned/project'
@@ -32,7 +32,7 @@ def fields(operation):
 
 @pytest.mark.parametrize('operation', tuple(FIELDS))
 def test_every_closed_operation_matches_its_literal_vector(operation):
-    cwd = LOCATIONS[ROLES[operation][0]]
+    cwd = LEASE if operation in ('stage-child','commit-child') else REPO
     result = build(operation, REPO, cwd, fields(operation), family='evolution' if operation.startswith('rollback-') else 'workspaces')
     assert result.argv[0] == 'git' and result.cwd == cwd
     if operation in FIXED:
@@ -42,13 +42,13 @@ def test_every_closed_operation_matches_its_literal_vector(operation):
 
 
 @pytest.mark.parametrize('operation', tuple(FIELDS))
-def test_location_roles_do_not_grant_commands_at_a_neighboring_tree(operation):
-    for role, cwd in LOCATIONS.items():
-        if role not in ROLES[operation]:
-            with pytest.raises(Refused, match='location role|rollback location family'):
-                build(operation, REPO, cwd, fields(operation), family='workspaces')
-    with pytest.raises(Refused, match='operation location'):
-        build(operation, REPO, REPO + '/.unrest-runtime/arbitrary', fields(operation), family='workspaces')
+def test_directory_spelling_does_not_predict_application_roles(operation):
+    family='evolution' if operation.startswith('rollback-') else 'workspaces'
+    for cwd in (*LOCATIONS.values(),REPO+'/.unrest-runtime/ordinary/deep-scratch'):
+        assert build(operation,REPO,cwd,fields(operation),family=family).cwd==cwd
+    for cwd in (REPO+'/.unrest-runtime',REPO+'/foreign',REPO+'-neighbor/.unrest-runtime/x'):
+        with pytest.raises(Refused,match='operation location'):
+            build(operation,REPO,cwd,fields(operation),family=family)
 
 
 @pytest.mark.parametrize('family,label,email', (('workspaces', 'Workspace Test', 'workspace@example.test'),
@@ -77,7 +77,7 @@ def test_promotion_and_rollback_have_retain_literal_ref_and_operand_positions():
     assert rollback.argv == ('git', 'update-ref', 'refs/heads/main', BASE, NEW)
 
 
-@pytest.mark.parametrize('mutation', ('extra', 'missing', 'bool', 'wrong-tree', 'parent-tree', 'patch-scope', 'patch-digest', 'lease-order', 'lease-duplicate'))
+@pytest.mark.parametrize('mutation', ('extra', 'missing', 'bool', 'runtime-root', 'parent-tree', 'patch-scope', 'patch-digest', 'lease-order', 'lease-duplicate'))
 def test_swapped_operands_are_refused_at_complete_vector_matching(mutation):
     operation = 'lease-add'
     data = fields(operation)
@@ -87,8 +87,8 @@ def test_swapped_operands_are_refused_at_complete_vector_matching(mutation):
         data.pop('revision')
     elif mutation == 'bool':
         data['revision'] = True
-    elif mutation == 'wrong-tree':
-        data['tree'] = INTEGRATION
+    elif mutation == 'runtime-root':
+        data['tree'] = REPO+'/.unrest-runtime'
     elif mutation == 'parent-tree':
         data['tree'] = REPO
     elif mutation.startswith('patch-'):
@@ -118,12 +118,13 @@ def test_family_is_primitive_and_rollback_forms_stay_scoped():
         build('rollback-add', REPO, REPO, fields('rollback-add'), family='workspaces')
 
 
-@pytest.mark.parametrize('operation,cwd,data', (('check-index', ROLLBACK, {}),
-    ('remove-tree', REPO, {'tree': ROLLBACK})))
-def test_rollback_execution_and_target_locations_are_evolution_only(operation, cwd, data):
-    with pytest.raises(Refused, match='rollback .*family'):
-        build(operation, REPO, cwd, data, family='workspaces')
-    assert build(operation, REPO, cwd, data, family='evolution').argv[0] == 'git'
+@pytest.mark.parametrize('operation',('lease-add','integration-add','rollback-add','remove-tree'))
+@pytest.mark.parametrize('target',(REPO,REPO+'/.unrest-runtime',REPO+'/foreign',REPO+'-neighbor/.unrest-runtime/x'))
+def test_worktree_targets_cannot_remove_repository_or_runtime_root(operation,target):
+    data=fields(operation)
+    data['tree']=target
+    with pytest.raises(Refused,match='operation location'):
+        build(operation,REPO,REPO,data,family='evolution')
 
 
 def test_owned_workspace_literal_command_derives_its_inline_digest():
