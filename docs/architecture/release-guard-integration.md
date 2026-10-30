@@ -1425,3 +1425,13 @@ fixed environment, image, cwd and one-child budget. Other Python leaf builders
 construct no query variants; they retain their existing finite bodies and child
 quotas. This removes repeated no-query branches without granting any additional
 parent, executable or command form.
+
+
+Locked dependency copies receive checked-hash CPython bytecode during trusted
+preparation, before their final inventory and read-only mount. The same pinned
+Python 3.13 runtime compiles those dependency sources; compilation executes no
+package body. Interpreter imports still validate cached code against source
+bytes, and generated cache files enter the dependency inventory. Candidate
+source, fixture scripts, launch admission, READY, original timeout assertions
+and actual wait/cleanup requirements remain unchanged. Compiler output stays
+in the encrypted private evidence directory.

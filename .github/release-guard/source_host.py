@@ -114,10 +114,15 @@ def prepare(binding, checkout, root, git=False, public=False, native=False, extr
         require(target.is_relative_to(original) and (target.is_file() or target.is_dir())
                 and not (member.is_symlink() and target.is_dir()), 'dependency alias refused')
     shutil.copytree(original, dependencies, symlinks=False, ignore=shutil.ignore_patterns('__pycache__'))
-    for member in [dependencies, *sorted(dependencies.rglob('*'))]:
-        member.chmod(0o755 if member.is_dir() or member.stat().st_mode & 0o111 else 0o644)
+    compiled=subprocess.run([binding['runtime']['path'],'-I','-S','-m','compileall','-q','-j','1',
+        '--invalidation-mode','checked-hash',str(dependencies)],capture_output=True,timeout=60,check=False)
+    log=Path(binding['profiles']).parent/('archive-private' if extracted is not None else 'source-private')/'dependency-bytecode.log'
+    log.write_bytes(compiled.stdout+compiled.stderr)
+    require(compiled.returncode==0,'dependency bytecode preparation failed; private log retained')
     if extracted is not None:
         shutil.copyfile(checkout/'tools/check_distribution.py',dependencies/'release_distribution_oracle.py')
+    for member in [dependencies, *sorted(dependencies.rglob('*'))]:
+        member.chmod(0o755 if member.is_dir() or member.stat().st_mode & 0o111 else 0o644)
     if distribution:
         from prepared_distribution import prepare as prepare_distribution
         prepare_distribution(binding,source,manifest,dependencies)
