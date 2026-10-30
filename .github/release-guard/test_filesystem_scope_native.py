@@ -63,11 +63,14 @@ def main():
                         lambda:(sealed/'member').unlink(),
                         lambda:(sealed/'member').rename(sealed/'renamed'),
                         lambda:os.link(sealed/'member',base/'owned/alias'))
-                    for operation in operations:
+                    for index,operation in enumerate(operations):
                         try:
                             operation()
                         except OSError as error:
-                            assert error.errno in (errno.EACCES,errno.EPERM,errno.EROFS)
+                            # The only source-writable hardlink destination is
+                            # on the separately bound owned mount.
+                            allowed=(errno.EACCES,errno.EPERM,errno.EROFS,*((errno.EXDEV,) if index==len(operations)-1 else ()))
+                            assert error.errno in allowed
                         else:
                             raise AssertionError('source changed an observer-sealed snapshot')
                     assert (sealed/'member').read_text()=='public sealed snapshot sentinel'
