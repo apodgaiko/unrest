@@ -47,15 +47,6 @@ def selection(case):
     return case in RECORDED, variant, role
 
 
-def module_mode(case):
-    return {'work': 'worker', 'validate': 'validator', 'terminal_reviewer': 'terminal-reviewer'}[selection(case)[2]]
-
-
-def git_completion(case):
-    recorded, _, role = selection(case)
-    return recorded and role == 'work'
-
-
 def base_path(value, owned):
     if type(value) is not str:
         raise Refused('cleanup base path type')
@@ -67,19 +58,8 @@ def base_path(value, owned):
 
 
 def scenario(case, base):
-    recorded, variant, role = selection(case)
-    if case in RUNNER:
-        return runner_scenario(case,base)
-    if case in SAVED:
-        record = {'role': role, 'progress': True, 'receipt': str(base / 'receipt'),
-                  'raw': json.dumps({'jsonrpc': '2.0', 'id': [], 'result': {}}) if variant == 'transport' else None}
-    elif not recorded:
-        record = {'role': role, 'no_handoff': True}
-    else:
-        raw = (None if variant == 'success' else '[' * 10000 + '0' + ']' * 10000 if variant == 'deep_json'
-               else json.dumps({'jsonrpc': '2.0', 'id': [] if variant == 'array_id' else {}, 'result': {}}))
-        record = {'raw': raw, 'role': role, 'receipt': str(base / 'receipt')}
-    return json.dumps(record).encode()
+    from content_manifest import read_regular
+    return runner_scenario(case,base) if case in RUNNER else read_regular(base/'scenario.json',65536,uid=20000)[0]
 
 
 def snapshot_path(directory, case):
@@ -114,8 +94,7 @@ def read_pipe(birth,descriptor):
 
 
 def expected(case, role, base, native, native_pin, checkout, root_environment, *, port=None, descriptor=None):
-    if case not in EXECUTION_CASES:
-        raise Refused('cleanup finite case')
+    recorded,_,node_role=selection(case)
     home = base / 'workspace'
     if case in RUNNER:
         from launch_policy import source_unit
@@ -131,12 +110,12 @@ def expected(case, role, base, native, native_pin, checkout, root_environment, *
     elif role == 'mcp':
         if type(port) is not int or not 0 < port <= 65535 or type(descriptor) is not int or not 3 <= descriptor <= 1024:
             raise Refused('cleanup finite listener or descriptor')
-        vector = (native, '-m', 'unrest_harness', '--mode', module_mode(case), '--transport', 'streamable-http',
+        vector = (native, '-m', 'unrest_harness', '--mode', {'work':'worker','validate':'validator','terminal_reviewer':'terminal-reviewer'}[node_role], '--transport', 'streamable-http',
                   '--host', '127.0.0.1', '--port', str(port), '--sensitive-inventory-fd', str(descriptor))
         executable, pin, kind, payload = native, native_pin, 'python-module', PINS[SERVER]
         env = environment(base, root_environment, agent=False, case=case)
         cwd = str(home)
-    elif role in ('git-init', 'git-commit', 'git-observe') and (case in (*RECORDED,*RUNNER) if role != 'git-observe' else git_completion(case)):
+    elif role in ('git-init', 'git-commit', 'git-observe') and (case in (*RECORDED,*RUNNER) if role != 'git-observe' else recorded and node_role=='work'):
         arguments = {'git-init': ('init', '-q', str(home)),
             'git-commit': ('-c', 'user.name=Controlled', '-c', 'user.email=controlled@example.invalid',
                            '-c', 'maintenance.auto=false', '-c', 'gc.auto=0', 'commit', '--allow-empty', '-qm', 'Controlled'),

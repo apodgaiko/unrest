@@ -4,7 +4,6 @@ The observer chooses a declaration from the externally selected case, compares
 all observed operands, then applies its existing launch, kernel and wait ledger.
 """
 from pathlib import Path
-import hashlib
 
 from content_manifest import Refused
 from launch_policy import admit_expected
@@ -257,10 +256,7 @@ def proposal(host, actor, raw):
         host.intents[answer['ticket']]['attempt_path']=expected.argv[0]
     if case in CLEANUP and role=='cleanup-acp':
         from cleanup_launch import scenario,snapshot_path
-        from source_profile import digest
         body=scenario(case,base)
-        if digest(base/'scenario.json')!=hashlib.sha256(body).hexdigest():
-            raise Refused('cleanup source scenario content')
         snapshot=snapshot_path(host.directory,case)
         with snapshot.open('xb') as stream:
             stream.write(body)

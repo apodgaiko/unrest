@@ -125,8 +125,9 @@ kernel exit/original-parent wait evidence. Its ceiling is 10,000 physical
 enforcement lines, counting every non-test file under `.github` and the complete
 `tools/check_distribution.py` oracle; guard tests are reported separately. The earlier
 9,999-line snapshot lacked launch families exposed by the unexcluded checkpoint.
-The integrated replacement currently exceeds the ceiling and is not certified;
-the frozen candidate must satisfy the same counter and dependency-closure review.
+The current replacement fits at 9,998 enforcement lines after retiring its
+temporary diagnostic workflow. Certification still requires the frozen candidate
+to satisfy the same counter and dependency-closure review.
 The counter does not itself prove dependency closure or release eligibility.
 See [guard integration](../architecture/release-guard-integration.md) for the
 retained boundaries and explicitly retired duplicate enforcement claims.

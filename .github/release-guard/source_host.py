@@ -395,7 +395,8 @@ def main():
     try:
         from postbuild_root import CASES as ARCHIVE_CASES
         from controlled_cases import NATIVE_MODULES
-        from fixed_inline import CONSOLE_CASE,UV_CASES
+        from console_entries import CASE as CONSOLE_CASE
+        from uv_cli import CASES as UV_CASES
         from package_cases import CASES as PACKAGE_CASES
         checkout=Path.cwd().resolve(strict=True)
         chosen=[] if archive else selection(sys.argv[2:],checkout)

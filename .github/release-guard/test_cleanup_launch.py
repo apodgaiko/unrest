@@ -8,7 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from cleanup_launch import ALL_CASES, RECORDED, SAVED, CREDENTIAL, CASES, selection, module_mode, git_completion, PINS, SCRIPT, environment, expected, scenario, snapshot_path, translated
+from test_cleanup_scenario_oracle import scenario
+from cleanup_launch import ALL_CASES, RECORDED, SAVED, CREDENTIAL, CASES, selection, PINS, SCRIPT, environment, expected, snapshot_path, translated
 import cleanup_launch
 from content_manifest import Refused
 
@@ -117,8 +118,11 @@ def test_cleanup_declaration_preserves_every_original_role_and_payload(tmp_path,
         assert body['receipt'] == str(tmp_path / 'receipt')
     else:
         assert body == {'role': role, 'no_handoff': True}
-    assert module_mode(case) == {'work': 'worker', 'validate': 'validator', 'terminal_reviewer': 'terminal-reviewer'}[role]
-    assert git_completion(case) is (recorded and role == 'work')
+    module=expected(case,'mcp',tmp_path,'/native','a'*64,tmp_path,{},port=12345,descriptor=12)
+    assert module.argv[4] == {'work': 'worker', 'validate': 'validator', 'terminal_reviewer': 'terminal-reviewer'}[role]
+    if recorded and role=='work':
+        monkeypatch.setattr('cleanup_launch.system_git',lambda:'b'*64)
+        assert expected(case,'git-observe',tmp_path,'/native','a'*64,tmp_path,{}).argv==('git','rev-parse','HEAD')
     env = environment(tmp_path, {'HOME': '/home', 'TMPDIR': '/tmp', 'PATH': '/usr/bin:/bin'}, agent=False, case=case)
     if role == 'terminal_reviewer':
         assert not {'UNREST_NODE_ID', 'UNREST_NODE_TYPE', 'UNREST_HANDOFF_PATH', 'UNREST_NODE_ASSIGNMENT'} & env.keys()
@@ -133,7 +137,7 @@ def test_cleanup_declaration_does_not_admit_adjacent_cases_or_git(tmp_path):
         with pytest.raises(Refused):
             selection(case)
     for case in ALL_CASES:
-        if not git_completion(case):
+        if not (case in RECORDED and selection(case)[2]=='work'):
             with pytest.raises(Refused, match='undeclared launch role'):
                 expected(case, 'git-observe', tmp_path, '/native', 'a' * 64, tmp_path, {})
 
@@ -201,7 +205,9 @@ def test_saved_review_scenario_and_credential_declaration(case, tmp_path, monkey
     monkeypatch.syspath_prepend(str(next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())))
     from tests.test_acp_cleanup import malformed
     _, variant, role = selection(case)
-    assert role == 'terminal_reviewer' and not git_completion(case)
+    assert role == 'terminal_reviewer'
+    with pytest.raises(Refused,match='undeclared launch role'):
+        expected(case,'git-observe',tmp_path,'/native','a'*64,tmp_path,{})
     assert json.loads(scenario(case, tmp_path)) == {'role': role, 'progress': True,
         'receipt': str(tmp_path / 'receipt'), 'raw': malformed('array_id') if variant == 'transport' else None}
     root = {'HOME': '/home', 'TMPDIR': '/tmp', 'PATH': '/usr/bin:/bin'}
@@ -210,3 +216,29 @@ def test_saved_review_scenario_and_credential_declaration(case, tmp_path, monkey
     for native_role in ('git-init', 'git-commit', 'git-observe'):
         with pytest.raises(Refused):
             expected(case, native_role, tmp_path, '/native', 'a' * 64, tmp_path, root)
+
+
+def test_ordinary_scenario_snapshot_acquires_actual_bounded_bytes_without_predicting_data(tmp_path, monkeypatch):
+    import os
+    import content_manifest
+    from cleanup_launch import scenario as acquired
+    original=content_manifest.read_regular
+    calls=[]
+    def owned(file, maximum, **kwargs):
+        calls.append((file,maximum,kwargs))
+        assert kwargs=={'uid':20000}
+        return original(file,maximum,uid=os.getuid())
+    monkeypatch.setattr(content_manifest,'read_regular',owned)
+    body=b'{"role":"work","no_handoff":true,"raw":"ordinary changed fixture data"}'
+    file=tmp_path/'scenario.json'
+    file.write_bytes(body)
+    assert acquired(CASES[0],tmp_path)==body
+    assert calls[-1][:2]==(file,65536)
+    file.write_bytes(b'x'*65537)
+    with pytest.raises(Refused,match='file_bound'):
+        acquired(CASES[0],tmp_path)
+    file.unlink()
+    file.symlink_to(tmp_path/'other')
+    (tmp_path/'other').write_bytes(body)
+    with pytest.raises(Refused):
+        acquired(CASES[0],tmp_path)

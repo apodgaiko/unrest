@@ -1258,7 +1258,7 @@ loads that authenticated SHA-bound inventory without repeating the same check.
 
 ## Candidate footprint checkpoint
 
-The replacement guard measures 9,999 physical enforcement lines after retiring
+The replacement guard measures 9,998 physical enforcement lines after retiring
 the temporary guard-simplification workflow. This includes every remaining
 non-test `.github` file and the complete distribution checker; test code remains
 separate. The full CI workflow and every original product test remain intact.
@@ -1277,3 +1277,19 @@ turn. Exact vectors, stdin restrictions, scoped paths and fixture budgets remain
 checked-out worktree creation retains its distinct helper role. Shared retained
 directory generations include the owned pytest ancestor, replacing duplicate
 repository generation records without shortening the checked ancestor chain.
+
+The two original missing-handoff/readiness-timeout diagnostics bind a root-owned
+worker MCP and, only for missing handoff, one pinned mock ACP after MCP READY.
+The authored timeout can stop MCP before READY; its sole closeout exception still
+requires admitted execution, an attributed termination signal and an actual
+original-parent reap. It grants no pre-READY effects or adapter/Git authority.
+
+Ordinary cleanup scenario values are test data, not execution authority. The
+observer acquires at most 65,536 no-alias, UID-20000-owned bytes and supplies an
+immutable snapshot to the pinned local cleanup script. It no longer predicts
+raw protocol/progress/no-handoff/receipt values. That script can affect writable
+private compartment scratch, not protected host/USER data, immutable inputs or
+observer profiles. Original receipt, report, completion and cleanup assertions
+remain mandatory. RUNNER review scenarios retain their exact inert-frame checks.
+Directory/metadata acquisition and SHA-256 syntax checks share one implementation;
+retired delegated fixed-inline entries no longer duplicate their actual routers.

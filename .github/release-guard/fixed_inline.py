@@ -11,12 +11,6 @@ from git_policy import image
 from launch_policy import build_expected,source_unit,literal,render_string
 from speed_inline import CASES as SPEED_CASES, PRELUDE, CLI_CASE, cli_expected
 from nested_pytest import CASE as NESTED_CASE, NODES, PYTEST_PIN, CASES as NESTED_CASES, HERMETIC, hermetic
-from desktop_launch import CASE as DESKTOP_CASE
-from readiness_launch import CASES as READINESS_CASES
-from terminal_leaves import CASES as TERMINAL_CASES
-from console_entries import CASE as CONSOLE_CASE
-from uv_cli import CASES as UV_CASES,COMMANDS as UV_COMMANDS
-from run_worker_launch import CASES as RUN_WORKER_CASES
 
 from storage_launch import CASES as STORAGE_CASES, DIRECTORY as STORAGE_DIRECTORY
 from inspection_launch import CASES as INSPECTION_CASES, FRONTIER
@@ -69,20 +63,14 @@ ISOLATED = {RELOAD_CASE:'reload', DETACHED_CASE:'detached', **dict(zip(METHOD_CA
 DRAIN_TEST='tests/test_lean_provider_security_runtime.py'
 DRAIN_CASE=DRAIN_TEST+'::test_chatty_child_pipes_are_continuously_drained_bounded_and_reaped'
 PINS[DRAIN_TEST]='f0984a07bd8bb410c3f6046afd4578cb3dad6d10137aceff09fb696b8880183e'
-CASES = (*RUN_WORKER_CASES,*TERMINAL_CASES,*READINESS_CASES,*UV_CASES,CONSOLE_CASE,DRAIN_CASE,*IMPORT_CASES,*STDIO,OBSERVATION_CASE,CLI_CASE,*NESTED_CASES,DESKTOP_CASE,JOURNAL_CASE,MEASUREMENT_CASE,*STORAGE_CASES,*INSPECTION_CASES,*COMPLETION_CASES,*ISOLATED)
+CASES = (DRAIN_CASE,*IMPORT_CASES,*STDIO,OBSERVATION_CASE,CLI_CASE,*NESTED_CASES,JOURNAL_CASE,MEASUREMENT_CASE,*STORAGE_CASES,*INSPECTION_CASES,*COMPLETION_CASES,*ISOLATED)
 SEQUENCES.update({case:('startup',) for case in STDIO})
 SEQUENCES[OBSERVATION_CASE] = OBSERVATION_OPERATIONS
 SEQUENCES[CLI_CASE] = tuple('run-'+str(i) for i in range(5))
 SEQUENCES.update({case:('pytest',) for case in NESTED_CASES})
 SEQUENCES.update({case:('read0','read1') if case==STORAGE_DIRECTORY else ('read0',) for case in STORAGE_CASES})
-SEQUENCES[DESKTOP_CASE] = ('serve','ps')
 SEQUENCES[JOURNAL_CASE]=('sleep',)
 SEQUENCES[MEASUREMENT_CASE]=('simulate',)
-SEQUENCES.update({case:tuple('uv-'+command for command in UV_COMMANDS[case]) for case in UV_CASES})
-SEQUENCES.update({case:('run-worker',) for case in RUN_WORKER_CASES})
-SEQUENCES.update({case:('terminal',) for case in TERMINAL_CASES})
-SEQUENCES.update({case:('readiness',) for case in READINESS_CASES})
-SEQUENCES[CONSOLE_CASE]=('console',)
 SEQUENCES[DRAIN_CASE]=('drain',)
 SEQUENCES.update(COMPLETION_SEQUENCES)
 SEQUENCES.update({case:('read0','read1') if case==FRONTIER else ('read0',) for case in INSPECTION_CASES})

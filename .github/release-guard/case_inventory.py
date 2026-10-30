@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 
-from content_manifest import Refused, read_regular
+from content_manifest import Refused, read_regular, is_sha256
 from control_transport import unique
 
 LIMIT=8*1024*1024
@@ -30,8 +30,7 @@ def environment(values,case):
 
 def document(value):
     if (type(value) is not dict or set(value)!={'cases','source','dependency'}
-            or any(type(value[name]) is not str or len(value[name])!=64
-                or any(c not in '0123456789abcdef' for c in value[name]) for name in ('source','dependency'))):
+            or any(not is_sha256(value[name]) for name in ('source','dependency'))):
         raise Refused('inventory input binding')
     rows=value['cases']
     if (type(rows) is not list or len(rows)>20000 or any(type(row) is not str or not row or len(row)>131071 for row in rows)
@@ -44,8 +43,7 @@ def document(value):
 
 def reference(value,directory):
     if (type(value) is not dict or set(value)!={'path','sha256','count'}
-            or type(value['sha256']) is not str or len(value['sha256'])!=64
-            or any(c not in '0123456789abcdef' for c in value['sha256'])
+            or not is_sha256(value['sha256'])
             or type(value['count']) is not int or not 0<=value['count']<=20000
             or value['path']!=str(directory/('cases-'+value['sha256']+'.json'))):
         raise Refused('inventory reference')

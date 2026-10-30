@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 
 from bootstrap_cases import configuration, wrapper, declaration
-from content_manifest import Refused
+from content_manifest import Refused, is_sha256
 from controlled_cases import eligible as CONTROLLED, backend_path, BACKENDS, SERVERS
 from launch_policy import build_expected
 
@@ -39,8 +39,7 @@ def expected_entry(case,checkout,home,native,native_pin,*,backend,relay=None,var
     else:
         if (type(relay) is not list or len(relay) != 4
                 or any(type(relay[i]) is not int or not 0 < relay[i] <= 65535 for i in (0,2))
-                or any(type(relay[i]) is not str or len(relay[i]) != 64
-                    or any(char not in '0123456789abcdef' for char in relay[i]) for i in (1,3))):
+                or any(not is_sha256(relay[i]) for i in (1,3))):
             raise Refused('controlled entry acquired relay')
         pin = ACP_PIN
         source = vector = (native,str(checkout/ACP),'--controlled-local-acp-v1')

@@ -12,7 +12,7 @@ from content_manifest import Refused
 ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
 
 
-@pytest.mark.parametrize('case',inventory.CASES)
+@pytest.mark.parametrize('case',inventory.INVENTORY_CASES)
 @pytest.mark.parametrize('mutation',[None,'argv','environment','cwd','stdin','parent','generation','unreaped'])
 def test_inventory_original_launches_require_exact_operands_and_owned_sequence(tmp_path,monkeypatch,case,mutation):
     original=owned_fixture.acquire

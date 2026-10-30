@@ -293,6 +293,27 @@ def local_case(case):
     return type(case) is str and '::' in case and case.split('::')[0] in FIXTURE_PINS
 
 
+def directory_custody(root,boundary):
+    identities=[]
+    for path in (root,*(parent for parent in root.parents if parent.is_relative_to(boundary))):
+        info=path.lstat()
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid!=20000 or info.st_mode&0o6022:
+            raise Refused('Git owned directory custody')
+        identities.append((str(path),info.st_dev,info.st_ino,info.st_uid))
+    return tuple(identities)
+
+
+def metadata_custody(root):
+    metadata=root/'.git'
+    if not metadata.exists() and not metadata.is_symlink():
+        return None
+    info=metadata.lstat()
+    if (not stat.S_ISDIR(info.st_mode) or metadata.resolve(strict=True)!=metadata
+            or info.st_uid!=20000 or info.st_mode&0o6022):
+        raise Refused('git declared metadata directory')
+    return info.st_dev,info.st_ino,info.st_uid
+
+
 def fixture_root(host,case,repository):
     if not local_case(case):
         raise Refused('Git exact fixture case')
@@ -307,12 +328,7 @@ def fixture_root(host,case,repository):
     generation=(str(root),info.st_dev,info.st_ino)
     if host.fixture_roots.setdefault(('git-fixture',case),generation)!=generation:
         raise Refused('Git pytest generation changed')
-    identities=[]
-    for directory in (path,*(parent for parent in path.parents if parent.is_relative_to(base)),owned):
-        info=directory.lstat()
-        if not stat.S_ISDIR(info.st_mode) or info.st_uid!=20000 or info.st_mode&0o6022:
-            raise Refused('Git owned directory custody')
-        identities.append((str(directory),info.st_dev,info.st_ino))
+    identities=directory_custody(path,owned)
     if host.fixture_roots.setdefault(('git-directory',case,repository),identities)!=identities:
         raise Refused('Git directory generation changed')
 
@@ -466,21 +482,12 @@ class Git:
         root = Path(repository)
         fixture_root(self.host,self.host.case,repository)
         key=(self.host.case,repository)
-        slot = self.repositories.get(key)
-        if slot is None:
+        if key not in self.repositories:
             if operation != 'init' or (root / '.git').exists():
                 raise Refused('git first original fixture operation')
-            slot = {'path': repository}
-            self.repositories[key] = slot
-        metadata=root/'.git'
-        if not metadata.exists() and not metadata.is_symlink():
-            if operation!='init':
-                raise Refused('git declared metadata missing')
-        else:
-            info=metadata.lstat()
-            if (not stat.S_ISDIR(info.st_mode) or metadata.resolve(strict=True)!=metadata
-                    or info.st_uid!=20000 or info.st_mode&0o6022):
-                raise Refused('git declared metadata directory')
+            self.repositories[key] = {'path': repository}
+        if metadata_custody(root) is None and operation!='init':
+            raise Refused('git declared metadata missing')
         return root
 
     def location(self, root, location):
@@ -579,7 +586,6 @@ def workspace_prepare(host,actor,raw):
     if owned:
         if case!=OWNED_CASE or slot is None or raw['stdin'] is not None or raw['cwd']!=repository+'/.unrest-runtime/workspaces/trees/process':
             raise Refused('Git proposal owned process scope')
-        operation,command='owned-process',None
         expected=build_expected(
             case,
             native, pin,
@@ -591,25 +597,23 @@ def workspace_prepare(host,actor,raw):
         host.root_only(actor)
         return host.git.owned_launch(actor,raw,repository,expected,vector)
 
+    if raw['executable']!='/usr/bin/git':
+        raise Refused('Git proposal original executable')
+    operation,command=command_match(repository,raw['cwd'],raw['argv'],raw['stdin'],raw['environment'])
+    phase=raw['environment'].get('PYTEST_CURRENT_TEST')
+    if case.split('::')[0]==CANDIDATE_TEST:
+        environment={'PATH':'/usr/bin:/bin','HOME':repository,'LC_ALL':'C',
+            'GIT_CONFIG_NOSYSTEM':'1','GIT_CONFIG_GLOBAL':'/dev/null','GIT_CONFIG_COUNT':'1',
+            'GIT_CONFIG_KEY_0':'maintenance.auto','GIT_CONFIG_VALUE_0':'false',
+            'GIT_AUTHOR_DATE':'2000-01-01T00:00:00+0000','GIT_COMMITTER_DATE':'2000-01-01T00:00:00+0000'}
     else:
-        if raw['executable']!='/usr/bin/git':
-            raise Refused('Git proposal original executable')
-        operation,command=command_match(repository,raw['cwd'],raw['argv'],raw['stdin'],raw['environment'])
-        phase=raw['environment'].get('PYTEST_CURRENT_TEST')
-        if case.split('::')[0]==CANDIDATE_TEST:
-            environment={'PATH':'/usr/bin:/bin','HOME':repository,'LC_ALL':'C',
-                'GIT_CONFIG_NOSYSTEM':'1','GIT_CONFIG_GLOBAL':'/dev/null','GIT_CONFIG_COUNT':'1',
-                'GIT_CONFIG_KEY_0':'maintenance.auto','GIT_CONFIG_VALUE_0':'false',
-                'GIT_AUTHOR_DATE':'2000-01-01T00:00:00+0000','GIT_COMMITTER_DATE':'2000-01-01T00:00:00+0000'}
-        else:
-            if phase not in (case+' (setup)',case+' (call)'):
-                raise Refused('Git current original case phase')
-            environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':phase,**dict(command.additions)}
-            if case.split('::')[0]==MEASUREMENT_TEST and 'UNREST_WORKER_ACP_COMMAND' in raw['environment']:
-                acp=native+' '+str(Path(host.meta['checkout'])/'tests/mock_measurement_acp.py')
-                environment.update(UNREST_WORKER_ACP_COMMAND=acp,UNREST_VALIDATOR_ACP_COMMAND=acp)
-        return host.git.launch(actor,operation,repository,command,raw,environment)
-
+        if phase not in (case+' (setup)',case+' (call)'):
+            raise Refused('Git current original case phase')
+        environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':phase,**dict(command.additions)}
+        if case.split('::')[0]==MEASUREMENT_TEST and 'UNREST_WORKER_ACP_COMMAND' in raw['environment']:
+            acp=native+' '+str(Path(host.meta['checkout'])/'tests/mock_measurement_acp.py')
+            environment.update(UNREST_WORKER_ACP_COMMAND=acp,UNREST_VALIDATOR_ACP_COMMAND=acp)
+    return host.git.launch(actor,operation,repository,command,raw,environment)
 
 
 # Closed native Git family used by the original controlled custody helper.
@@ -660,24 +664,14 @@ def custody_repository(cwd, owned, *, initialize):
     root = Path(cwd)
     if str(root.resolve(strict=True)) != cwd or not root.is_relative_to(owned/'pytest'):
         raise Refused('custody Git repository alias')
-    identities = []
-    base = owned/'pytest'
-    for path in (root,*(parent for parent in root.parents if parent.is_relative_to(base))):
-        info = path.lstat()
-        if not stat.S_ISDIR(info.st_mode) or info.st_uid != 20000 or info.st_mode & 0o6022:
-            raise Refused('custody Git directory custody')
-        identities.append((str(path),info.st_dev,info.st_ino,info.st_uid))
-    metadata = root/'.git'
+    identities=directory_custody(root,owned/'pytest')
+    metadata=metadata_custody(root)
     if initialize:
-        if metadata.exists() or metadata.is_symlink():
+        if metadata is not None:
             raise Refused('custody Git repeated initialization')
-        return tuple(identities),None
-    info = metadata.lstat()
-    if (not stat.S_ISDIR(info.st_mode) or metadata.resolve(strict=True) != metadata
-            or info.st_uid != 20000 or info.st_mode & 0o6022):
-        raise Refused('custody Git metadata generation')
-    metadata_identity = info.st_dev,info.st_ino,info.st_uid
-    return tuple(identities),metadata_identity
+    elif metadata is None:
+        raise Refused('git declared metadata missing')
+    return identities,metadata
 
 
 def custody_launch(host,actor,result,kind,raw):
