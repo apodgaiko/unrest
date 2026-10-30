@@ -142,14 +142,12 @@ def test_unknown_one_element_vector_is_sticky_after_exact_selector_refusal():
     assert policy.poison and calls==['guard-refusal']
 
 
-def test_host_uses_normal_preflight_selector_and_refuses_unknown(tmp_path):
-    from source_host import selection
-    tests=tmp_path/'tests'
-    tests.mkdir()
-    (tests/'test_launch_preflight.py').write_text('pass')
-    assert selection(['tests/test_launch_preflight.py'],tmp_path)==['tests/test_launch_preflight.py']
-    with pytest.raises(RuntimeError,match='canonical original test file'):
-        selection(['unknown'],tmp_path)
+def test_release_host_includes_preflight_only_through_the_unexcluded_suite():
+    from source_host import invocation
+    assert invocation([]) is None
+    for arguments in (['tests/test_launch_preflight.py'],['unknown']):
+        with pytest.raises(RuntimeError,match='unexcluded suite'):
+            invocation(arguments)
 
 
 def test_python_plan_keeps_actual_bare_executable_resolution_separate_from_translated_argv(tmp_path,monkeypatch):

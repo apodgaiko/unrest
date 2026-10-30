@@ -1483,3 +1483,10 @@ Root-owned cleanup, readiness and terminal inline leaves share one constructor
 in `inline_leaves.py`. The case catalogues, body pins, operand environments,
 stream descriptor acquisition, terminal statuses and child ceilings remain
 separate; selecting a family never grants another family's operands.
+
+The temporary selected-source diagnostic workflow is retired. Release source
+execution has one immutable command: `env -u CODEX_PATH uv run pytest -q`.
+The only alternate host invocation is `archive15` for the extracted persistence
+oracle. Full-source input preparation always includes native metadata and the
+prepared distribution; no selector can remove a source test or preparation gate.
+The original nested regression child remains a separate bounded test domain.

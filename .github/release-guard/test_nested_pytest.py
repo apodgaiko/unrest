@@ -217,9 +217,9 @@ def test_hermetic_child_seals_all_three_nodes_without_advancing_outer_case(monke
 
 
 
-def test_each_bounded_nested_frontier_uses_normal_selection():
-    from pathlib import Path
-    from nested_pytest import HERMETIC
-    from source_host import selection
-    root=next(path for path in Path(__file__).resolve().parents if (path/'pyproject.toml').is_file())
-    assert selection([CASE,HERMETIC],root)==[CASE,HERMETIC]
+def test_bounded_nested_frontiers_do_not_select_a_release_subset():
+    from nested_pytest import HERMETIC,CASES
+    from source_host import invocation
+    assert len(CASES[CASE])==2 and len(CASES[HERMETIC])==3
+    with pytest.raises(RuntimeError,match='unexcluded suite'):
+        invocation([CASE,HERMETIC])

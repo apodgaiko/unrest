@@ -18,8 +18,7 @@ METHODS = frozenset({'collection', 'body-ready', 'case-start', 'case-finish', 'r
     'self-group','approval-signal','self-probe','private-unix','custody_signal', 'resumed-signal', 'custody_close', 'self-stop', 'guard-refusal'})
 
 
-def pytest_arguments(metadata,binding):
-    return ['pytest','-q',*metadata['selection']]
+PYTEST_COMMAND=('pytest','-q')
 
 
 def case_seal(cases):

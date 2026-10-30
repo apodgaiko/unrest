@@ -285,16 +285,9 @@ def test_raising_session_hook_cannot_seal_success(collect):
     assert not any(kind in ("root-finish", "collection-finish") for kind, _ in calls)
 
 
-@pytest.mark.parametrize("selected", [[], ["tests/test_full_source.py::test_one[param space]"]])
-@pytest.mark.parametrize("collect", [False, True])
-def test_one_suffix_is_shared_by_diagnostic_and_release_console(selected, collect):
-    from source_profile import pytest_arguments
-
-    assert pytest_arguments({"selection": selected}, {"collection_only": collect}) == [
-        "pytest",
-        "-q",
-        *selected,
-    ]
+def test_release_console_has_only_the_full_unexcluded_source_command():
+    from source_profile import PYTEST_COMMAND
+    assert PYTEST_COMMAND==('pytest','-q')
 
 
 @pytest.mark.parametrize(
@@ -313,30 +306,25 @@ def test_one_suffix_is_shared_by_diagnostic_and_release_console(selected, collec
         ["tests/alias.py"],
     ],
 )
-def test_diagnostic_selection_cannot_select_flags_escapes_or_aliases(tmp_path, arguments):
-    from source_host import selection
+def test_source_invocation_cannot_select_flags_escapes_or_aliases(tmp_path, arguments):
+    from source_host import invocation
 
     tests = tmp_path / "tests"
     tests.mkdir()
     (tests / "test_one.py").write_text("pass")
     (tests / "alias.py").symlink_to(tests / "test_one.py")
     with pytest.raises(RuntimeError):
-        selection(arguments, tmp_path)
+        invocation(arguments)
 
 
-def test_selection_keeps_node_text_without_granting_launch_permission(tmp_path):
-    from source_host import selection, unexcluded
-
-    tests = tmp_path / "tests"
-    tests.mkdir()
-    (tests / "test_one.py").write_text("pass")
-    node = "tests/test_one.py::test_original[space ../literal]"
-    assert selection([node], tmp_path) == [node]
-    assert not unexcluded({"cases": {}, "selection": [node]}, {})
-    assert not unexcluded({"cases": {}}, {})
-    assert unexcluded({"cases": {}, "selection": []}, {"collection_only": True})
-    assert unexcluded({"cases": {}, "selection": []}, {"collection_only": False})
-    assert not unexcluded({"cases": ["archive"], "selection": []}, {})
+def test_only_the_full_suite_and_explicit_extracted_archive_domain_remain(tmp_path):
+    from source_host import invocation
+    assert invocation([]) is None
+    assert invocation(['archive15',str(tmp_path)])==tmp_path
+    for arguments in (['tests/test_original.py::test_one[param space]'],['--collect-only'],
+            ['archive15'],['archive15',str(tmp_path),'tests/test_one.py']):
+        with pytest.raises(RuntimeError):
+            invocation(arguments)
 
 
 def test_empty_preparation_inventory_roundtrips_through_actual_receiver(tmp_path,monkeypatch):

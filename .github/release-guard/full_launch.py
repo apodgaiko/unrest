@@ -8,7 +8,7 @@ from case_inventory import LIMIT,document,seal,identity
 from content_manifest import Refused,native_digest,read_regular
 from control_transport import unique
 from full_source import environment,child_environment
-from source_profile import pytest_arguments as arguments
+from source_profile import PYTEST_COMMAND
 
 
 def prepare_uv(metadata):
@@ -39,7 +39,7 @@ def resolve(host,pid,path,vector,env,cwd):
         return False
     process=host.ledger.process(birth)
     if (pid==host.launcher and process.generation==1 and path==str(runtime/'bin/uv')
-            and vector==['uv','run',*arguments(host.meta,host.binding)] and env==environment(host.meta)):
+            and vector==['uv','run',*PYTEST_COMMAND] and env==environment(host.meta)):
         from uv_cli import uv_digest
         pin=uv_digest(Path(path))
         if host.binding['uv']!={'path':path,'sha256':pin}:
@@ -48,11 +48,11 @@ def resolve(host,pid,path,vector,env,cwd):
             case='<full-launcher>',command_class='native-full-uv',expected_generation=2)
         return True
     if (process.parent is None or process.parent.pid!=host.launcher or process.generation!=0
-            or path!=str(runtime/'bin/pytest') or vector!=arguments(host.meta,host.binding)
+            or path!=str(runtime/'bin/pytest') or vector!=list(PYTEST_COMMAND)
             or env!=child_environment(host.meta) or native_digest(Path(path))!=host.binding['entry']['sha256']):
         return False
     host.root,host.root_birth,host.full_started=pid,birth,True
-    host.profile(pid,'root','<bootstrap>',[path,'-I','-S','-m',*arguments(host.meta,host.binding)],env,cwd,os.urandom(16).hex())
+    host.profile(pid,'root','<bootstrap>',[path,'-I','-S','-m',*PYTEST_COMMAND],env,cwd,os.urandom(16).hex())
     return True
 
 

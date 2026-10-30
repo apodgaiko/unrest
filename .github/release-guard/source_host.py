@@ -1,8 +1,7 @@
-"""Run selected original cases in a private, measured Linux generation.
+"""Run the unexcluded source suite or extracted persistence certification.
 
-This is a bounded integration checkpoint, not full source certification. The
-root driver only prepares inputs and settles its own children. Admission and
-original-parent wait joins run in the separate reduced-credential observer.
+Input preparation and own-child waits stay outside the reduced-credential
+observer that admits launches and joins actual original-parent waits.
 """
 from __future__ import annotations
 
@@ -29,21 +28,10 @@ def require(condition, message):
         raise RuntimeError(message)
 
 
-def selection(arguments,checkout):
-    require(len(arguments)<=32 and all(type(value) is str for value in arguments)
-            and sum(len(value.encode()) for value in arguments)<=16384,'bounded source selection')
-    for value in arguments:
-        file=value.split('::',1)[0]
-        relative=Path(file)
-        require(file.startswith('tests/') and relative.suffix=='.py' and str(relative)==file
-                and '..' not in relative.parts and '\0' not in value
-                and (checkout/relative).resolve()==checkout/relative and (checkout/relative).is_file(),
-                'source selector must name a canonical original test file')
-    return list(arguments)
-
-
-def unexcluded(metadata,binding):
-    return type(metadata['cases']) is dict and metadata.get('selection')==[]
+def invocation(arguments):
+    require(arguments==[] or len(arguments)==2 and arguments[0]=='archive15',
+            'source host accepts only the unexcluded suite or extracted archive15')
+    return Path(arguments[1]).resolve(strict=True) if arguments else None
 
 
 def production_binding(binding):
@@ -215,15 +203,15 @@ def worker(binding, metadata, raw_directory):
     from source_observer import Observer
     metadata = isolate(metadata, binding['support'], raw_directory)
     full=type(metadata['cases']) is dict
-    timeout=1200 if unexcluded(metadata,binding) else 170 if full else 100
+    timeout=1200 if full else 100
     start_read, start_write = os.pipe()
     ready_read, ready_write = os.pipe()
     output_read, output_write = os.pipe()
     if full:
         from full_source import environment as full_environment
-        from source_profile import pytest_arguments as arguments
+        from source_profile import PYTEST_COMMAND
         environment=full_environment(metadata)
-        vector=['/usr/bin/env','-u','CODEX_PATH','uv','run',*arguments(metadata,binding)]
+        vector=['/usr/bin/env','-u','CODEX_PATH','uv','run',*PYTEST_COMMAND]
     else:
         from console_entries import standalone_environment
         from postbuild_root import COMMAND
@@ -262,7 +250,7 @@ def worker(binding, metadata, raw_directory):
         observer = Observer(binding, metadata, child, output_read)
         allowed = [{'pid': child, 'path': vector[0], 'argv': vector, 'environment': environment,
                     'cwd': metadata['checkout'], 'sha256': hashlib.sha256(Path(vector[0]).read_bytes()).hexdigest()}]
-        trace = OwnedTrace(child, allowed, timeout, start_write=start_write, selective=True, cleanup_seconds=5, full_source=unexcluded(metadata,binding),
+        trace = OwnedTrace(child, allowed, timeout, start_write=start_write, selective=True, cleanup_seconds=5, full_source=full,
                            on_attached=lambda: observer.consume(trace), on_tick=observer.tick,on_exit=observer.before_exit,
                            resolve_exec=lambda *args: observer.resolve(trace, *args),
                            validate_wait=lambda *args: observer.validate_wait(trace, *args))
@@ -284,7 +272,7 @@ def worker(binding, metadata, raw_directory):
         raise
     finally:
         try:
-            record = {'schema': 'unrest.bootstrap-source-result.v5', 'wait_evidence': 'kernel-original-parent-terminal-wait4-and-explicit-namespace-init-wait', 'source_checkpoint_ready': bool(result is not None and result['root_parent_wait_raw']==0 and observer is not None and unexcluded(metadata,binding) and observer.finished and failure is None),
+            record = {'schema': 'unrest.bootstrap-source-result.v5', 'wait_evidence': 'kernel-original-parent-terminal-wait4-and-explicit-namespace-init-wait', 'source_checkpoint_ready': bool(result is not None and result['root_parent_wait_raw']==0 and observer is not None and full and observer.finished and failure is None),
                       'git_value_provenance_proven':False, 'release_certified': False, 'completed': [] if observer is None else observer.completed,
                       'result': result, 'failure': failure, 'metadata': metadata,
                       'kernel': [] if trace is None else trace.records,
@@ -341,7 +329,7 @@ def supervise(binding,metadata,raw_directory,archive):
                 os._exit(125)
             os._exit(0)
         closeouts={}
-        raw, deadline = None, time.monotonic() + (110 if archive else 1220 if unexcluded(metadata,binding) else 190)
+        raw, deadline = None, time.monotonic() + (110 if archive else 1220)
         try:
             while raw is None:
                 from cohort_controller import host_tick
@@ -390,30 +378,22 @@ def main():
     def interrupted(signum, frame):
         raise TimeoutError('source host outer deadline')
     signal.signal(signal.SIGTERM, interrupted)
-    archive=len(sys.argv)==4 and sys.argv[2]=='archive15'
+    extracted=invocation(sys.argv[2:])
+    archive=extracted is not None
     raw_directory = root / ('archive-private' if archive else 'source-private')
     raw_directory.mkdir(mode=0o700)
     os.chown(raw_directory, 20001, 20001)
     success = False
     try:
         from postbuild_root import CASES as ARCHIVE_CASES
-        from controlled_cases import NATIVE_MODULES
-        from console_entries import CASE as CONSOLE_CASE
-        from uv_cli import CASES as UV_CASES
-        from package_cases import CASES as PACKAGE_CASES
         checkout=Path.cwd().resolve(strict=True)
-        chosen=[] if archive else selection(sys.argv[2:],checkout)
-        modules={value.split('::',1)[0] for value in chosen}
-        native_inputs=not chosen or bool(modules & NATIVE_MODULES)
-        distribution=not chosen or 'tests/test_repository_contract.py' in modules or bool(modules & {case.split('::',1)[0] for case in (CONSOLE_CASE,*UV_CASES,*PACKAGE_CASES)})
         phase_root=root/'archive' if archive else root
         if archive:
             phase_root.mkdir(mode=0o755)
         metadata={**prepare(binding,checkout,phase_root,
-            extracted=Path(sys.argv[3]).resolve(strict=True) if archive else None,
-            git=not archive,public=not archive,native=not archive and native_inputs,
-            distribution=not archive and distribution),
-            'cases':list(ARCHIVE_CASES) if archive else [],'selection':chosen}
+            extracted=extracted,git=not archive,public=not archive,native=not archive,
+            distribution=not archive),
+            'cases':list(ARCHIVE_CASES) if archive else [],'selection':[]}
         if not archive:
             from full_launch import prepare as prepare_full
             metadata=prepare_full(binding,metadata)
