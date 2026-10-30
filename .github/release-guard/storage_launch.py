@@ -29,7 +29,7 @@ def expected(host,argv,cwd,environment,native,pin):
         root=owned/'pytest'/actual.relative_to(owned/'pytest').parts[0]
     except (ValueError,IndexError):
         raise Refused('storage owned fixture root') from None
-    root=retain(host,root,case.split('::')[-1].split('[')[0][:30],OWNER)
+    root=retain(host,root, OWNER)
     location=Path(cwd)
     if (actual.resolve()!=actual or location.resolve()!=location
             or location!=checkout and not location.is_relative_to(root)):

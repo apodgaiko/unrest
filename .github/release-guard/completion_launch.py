@@ -29,7 +29,7 @@ def expected(host,operation,argv,cwd,environment,native,pin):
     name=name.split('[')[0]
     program=literal(source_unit(checkout,path,PINS[path],(name,)),'retry' if operation=='retry' else 'script')
     root=Path(argv[3]).parents[len(Path(suffix).parts)-1]
-    root=retain(host,root,name[:30],OWNER)
+    root=retain(host,root, OWNER)
     if cwd!=str(checkout):
         raise Refused('completion changed fixture generation or cwd')
     vector=(native,'-c',program,str(root/suffix),*((phase,) if operation=='crash' and phase is not None else ()))

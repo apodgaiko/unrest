@@ -144,7 +144,7 @@ external review acceptance and does not reinterpret older records.
 Additional foundation, project, improvement and activation Git fixtures use the
 same repository admission. Exact collected case IDs declare repository slots,
 original setup argv and setup/call phase. Their complete source files are pinned;
-owned pytest directory generations cannot change between slots. Plain-init
+selected fixture paths retain current owned-directory custody. Plain-init
 fixtures permit the authored `main` or `master` reference forms; other fixtures
 retain their fixed branch forms. Observed HEAD continuity is an application-test
 responsibility. These declarations grant
@@ -364,7 +364,7 @@ only from the byte-pinned `repo` fixture. Additional writes and queries are clos
 case/parameter-selected complete vectors, with full object IDs in the two dynamic
 positions, exact environment and a finite ordinal. Canary cases admit only their
 original final configuration write: no subsequent Git command or helper launch
-is authorized. Its owned directory generation and every original parent wait remain
+is authorized. Its current owned-directory custody and every original parent wait remain
 mandatory. These are controlled fixture tests, not provider acceptance evidence.
 
 
@@ -450,10 +450,9 @@ ignored-file exclusion assertion remains a real probe in the readonly source
 suite; this generated test input is outside the candidate tracked-file binding.
 
 The release-binding CLI case admits exactly its active/wrong manifest invocations
-with script bytes, owned fixture generation, complete argv/environment and
+with script bytes, selected owned fixture path, complete argv/environment and
 expected statuses 0/1. Only those authenticated children may request the two
-readonly inventory forms in the original empty repository. Its metadata must
-retain the literal HEAD and empty objects/refs without config or aliases; no
+readonly inventory forms in the original empty repository. Mutable Git metadata remains application data under the same private namespace; no
 helper or root-level Git authority follows from the nested route.
 
 
@@ -1019,7 +1018,7 @@ owned fixture's canonical regular target. It no longer predicts expected file
 contents, nesting depth or relative-versus-absolute operand spelling. Those are
 atomic-write contracts checked by the unchanged source tests after the actual
 fresh-process read. Per-case reader counts, exact environment/image/flags and
-current fixture generation remain; this permission grants no executable body
+current fixture path custody remain; this permission grants no executable body
 from file data and no access outside the acquired fixture.
 
 Fresh inspection leaves likewise bind their original program and scoped canonical
@@ -1123,7 +1122,7 @@ contained IPC class is admitted with protocol zero; IP seqpacket remains denied.
 
 Disposable local Git fixture choreography is retired. An eligible active root
 may use the closed union of existing local Git command vectors inside its
-acquired pytest subtree, with canonical repository generations, exact image,
+acquired pytest subtree, with current canonical repository custody, exact image,
 argv/environment/cwd comparison, finite quotas and actual parent waits. The
 guard does not predict setup ordinal, fixture author identity, repository label,
 measurement repetition directory or product branch result. Setup/call metadata
@@ -1154,7 +1153,7 @@ throughout those fixed modules. The old node/slot observations remain only in
 non-production tests to verify original collection; enforcement does not import
 them. Three worker repository bindings, the one owned Python command, nested
 measurement ACP and readonly history queries retain exact separate case rights.
-All directory-generation, image/argv/environment, quota, helper and wait checks
+Current directory custody, image/argv/environment, quota, helper and wait checks
 remain; module membership grants no arbitrary Python or worker execution.
 
 
@@ -1385,3 +1384,19 @@ requests still need an independently admitted exact executable, vector,
 environment and parent; an unknown fork/exec poisons the run even if caught.
 Protected source/runtime generations, exact helper admission, READY and actual
 numeric waits remain required. Original Git result tests own data semantics.
+
+
+Mutable pytest fixture directories share one current-custody boundary: a strict
+canonical descendant of the owned pytest root, with directory type, UID and
+non-writable-by-others/non-privileged modes checked through the whole ancestor
+chain. Test-name prefixes, numeric pytest suffixes and inode continuity of these
+application-data directories are not security claims. A case still retains the
+selected path string; a later child cannot choose another scope. Closed cwd,
+argv and environment relationships remain independently reconstructed.
+
+This retirement excludes executable parents, imported executor/adapter/bootstrap
+files, sealed copied trees and mounted inputs, approval Unix socket directories,
+inherited descriptors, and process/session/adoption generations. Their actual
+identity and byte checks remain. Signal delivery also shares one audit-scoped
+finalizer that clears authorization on both return and exception; each signal
+route retains its independent observer admission.

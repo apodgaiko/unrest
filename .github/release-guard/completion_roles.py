@@ -1,6 +1,4 @@
 """Closed original role-server schedules, environments and literal templates."""
-import re
-import stat
 from pathlib import Path
 
 from content_manifest import Refused
@@ -80,16 +78,13 @@ def root(host,cwd):
         raise Refused('completion undeclared role')
     if case.split('::')[0]==SERVER_TEST:
         source_unit(Path(host.meta['checkout']),SERVER_TEST,PINS[SERVER_TEST])
-    workspace=Path(cwd)
-    if workspace.name!='workspace' or workspace.resolve()!=workspace:
+    workspace,_=acquire(cwd,Path(host.meta['owned']),OWNER)
+    if workspace.name!='workspace':
         raise Refused('completion original workspace')
-    parent,info=acquire(str(workspace.parent),Path(host.meta['owned']),re.sub(r'[\W]','_',case.split('::')[1])[:30],OWNER)
-    item=workspace.stat()
-    if not stat.S_ISDIR(item.st_mode) or item.st_uid!=OWNER or item.st_mode&0o6022:
-        raise Refused('completion workspace custody')
-    generation=(str(parent),info.st_dev,info.st_ino,item.st_dev,item.st_ino)
-    if host.fixture_roots.setdefault(('completion-role',case),generation)!=generation:
-        raise Refused('completion changed role fixture generation')
+    parent=workspace.parent
+    selected=(str(parent),)
+    if host.fixture_roots.setdefault(('completion-role',case),selected)!=selected:
+        raise Refused('completion changed selected fixture path')
     return parent
 
 

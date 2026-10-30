@@ -33,8 +33,8 @@ def test_stream_leaf_keeps_exact_program_environment_directory_and_read_pipe(
     actor = {"role": "root", "birth": birth}
     acquisitions = []
 
-    def retained(host, path, prefix, uid):
-        assert path == base and prefix == case.split("::")[1].split("[")[0][:30] and uid == 20000
+    def retained(host, path, uid):
+        assert path == base and uid == 20000
         return base
 
     def pipe(owner, fd):

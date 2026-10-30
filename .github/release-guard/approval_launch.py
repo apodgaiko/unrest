@@ -49,7 +49,7 @@ def worker(host,actor,raw):
     checkout=Path(host.meta['checkout'])
     source_unit(checkout,'tests/fixtures/approval_run_executor.py','f6e24716d1b9103035fe99fe2af9f00bf42544d31086caa94486f3e8259a4d33')
     home=Path(raw['cwd'])
-    base=retain(host,home.parent,host.case.split('::')[1].split('[')[0][:30],20000)
+    base=retain(host,home.parent, 20000)
     if home!=base/'run-home' or raw['stdin'] is not None:
         raise Refused('approval exact worker private home')
     root=base/'run-fixture'
@@ -105,7 +105,7 @@ def proposal(host,actor,raw):
     if case in RUNS and actor['role']=='root':
         return worker(host,actor,raw)
     directory=Path(raw['cwd']).parent
-    base=retain(host,directory.parent if case in RUNS else directory,case.split('::')[1].split('[')[0][:30],20000)
+    base=retain(host,directory.parent if case in RUNS else directory, 20000)
     scope=base/'run-fixture' if case in RUNS else base
     if raw['cwd']!=str(scope/'workspace'):
         raise Refused('approval original workspace')

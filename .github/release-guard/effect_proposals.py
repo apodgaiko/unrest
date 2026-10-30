@@ -123,7 +123,7 @@ def proposal(host, actor, raw):
             calls=[node for node in ast.walk(unit) if isinstance(node,ast.Call)
                    and isinstance(node.func,ast.Attribute) and node.func.attr=='create_subprocess_exec']
             body=ast.literal_eval(calls[0].args[2])
-            parent=retain(host,Path(cwd).parent,case.split('::')[-1][:30],20000)
+            parent=retain(host,Path(cwd).parent, 20000)
             if Path(cwd)!=parent/'workspace':
                 raise Refused('pipe drain original workspace generation')
             expected=build_expected(case,native,pin,(native,'-c',body),
@@ -173,7 +173,7 @@ def proposal(host, actor, raw):
             from owned_fixture import retain
             candidate=(Path(raw['environment'].get('UNREST_HANDOFF_PATH','')).parents[7]
                        if argv[0]=='sleep' else Path(cwd).parent)
-            base=retain(host,candidate,case.split('::')[1][:30],20000)
+            base=retain(host,candidate, 20000)
         role='sleep' if argv[0] in ('/bin/sleep','sleep') else 'session-invalid' if case in STARTUP_CASES else 'mock-acp'
         maximum=2 if case in BATCH_CASES or (case in CRASH_CASES and role=='sleep') else 1
         expected = ordinary_expected(case,role,cwd,checkout,native,pin,root_environment,owned,base=base,observed=raw['environment'])

@@ -3,8 +3,9 @@ from pathlib import Path
 
 from content_manifest import Refused
 from launch_policy import source_unit,build_expected,admit_expected,pinned_body
-from owned_fixture import acquire
+from owned_fixture import acquire,retain
 
+OWNER=20000
 TEST='tests/test_capability_policy.py'
 RAW=TEST+'::test_raw_acp_terminal_protocol_redacts_credential_values'
 TRANSFORM=tuple(TEST+'::test_real_terminal_create_excludes_raw_wrappers_and_preserves_transform['+profile+'-'+role+'-'+provider+']'
@@ -27,10 +28,10 @@ def proposal(host,actor,raw):
         if workspace!=checkout:
             raise Refused('terminal optional-null original checkout cwd')
     else:
-        parent,info=acquire(str(workspace.parent),owned,case.split('::')[1].split('[')[0][:30],20000)
-        generation=(str(parent),info.st_dev,info.st_ino)
-        if workspace!=parent/'workspace' or workspace.resolve()!=workspace or host.fixture_roots.setdefault(('terminal',case),generation)!=generation:
-            raise Refused('terminal original workspace generation')
+        if workspace.name!='workspace':
+            raise Refused('terminal original workspace')
+        acquire(str(workspace),owned,OWNER)
+        retain(host,workspace.parent,OWNER)
     native=host.binding['entry']['path']
     if case in OPTIONAL:
         from ordinary_acp import TEST as ACP_TEST,PINS

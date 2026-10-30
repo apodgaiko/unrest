@@ -44,7 +44,7 @@ def expected(host,argv,cwd,environment,native,pin):
         environment={**environment,'UNREST_HOME':str(home),'UNREST_PROJECTS_DIR':str(home/'projects')}
         vector=(native,'-c','from unrest_harness.cli import cli; cli()','inspect-tasks','--project',project_id)
         expected_cwd=str(root)
-    root=retain(host,root,case.split('::')[-1][:30],OWNER)
+    root=retain(host,root, OWNER)
     if (home!=root/('home' if case==RECOVERY else '.unrest') or home.resolve()!=home
             or not project_id or Path(project_id).name!=project_id or project_id in ('.','..')):
         raise Refused('inspection owned original home')

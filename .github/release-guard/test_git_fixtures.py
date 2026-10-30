@@ -1,6 +1,5 @@
 """Additional fixture rows bind original setup, slots and normal parameters."""
 import ast
-import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -10,7 +9,6 @@ from content_manifest import Refused
 from launch_policy import source_unit
 import git_policy as fixtures
 import test_git_catalogue as observed
-import owned_fixture
 
 ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
 
@@ -37,8 +35,6 @@ def test_selected_fixtures_collect_every_original_parameter_without_bodies(monke
 
 @pytest.mark.parametrize('mutation',[None,'case','slot','parent','generation','repository-generation','ancestor-generation','pytest-generation','alias'])
 def test_additional_repositories_are_bound_to_exact_owned_case_slots(tmp_path,monkeypatch,mutation):
-    acquire=owned_fixture.acquire
-    monkeypatch.setattr(fixtures,'acquire',lambda path,owned,prefix,owner:acquire(path,owned,prefix,os.getuid()))
     original_lstat=Path.lstat
     def lstat(path,*args,**kwargs):
         info=original_lstat(path,*args,**kwargs)

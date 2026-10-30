@@ -294,26 +294,12 @@ def local_case(case):
     return type(case) is str and '::' in case and case.split('::')[0] in FIXTURE_PINS
 
 
-def directory_custody(root,boundary):
-    for path in (root,*(parent for parent in root.parents if parent.is_relative_to(boundary))):
-        info=path.lstat()
-        if not stat.S_ISDIR(info.st_mode) or info.st_uid!=20000 or info.st_mode&0o6022:
-            raise Refused('Git owned directory custody')
-
-
 def fixture_root(host,case,repository):
     if not local_case(case):
         raise Refused('Git exact fixture case')
     file=case.split('::')[0]
     source_unit(Path(host.meta['checkout']),file,FIXTURE_PINS[file])
-    path=Path(repository)
-    owned=Path(host.meta['owned'])/'pytest'
-    if str(path.resolve())!=repository or path==owned or not path.is_relative_to(owned):
-        raise Refused('Git case-owned repository')
-    base=owned/path.relative_to(owned).parts[0]
-    acquire(str(base),owned.parent,re.sub(r'[\W]','_',case.split('::')[1])[:30],20000)
-    directory_custody(path,owned)
-
+    acquire(repository,Path(host.meta['owned']))
 
 
 
@@ -404,7 +390,7 @@ def history_cli_proposal(host,actor,raw):
     argv=raw['argv']
     if len(argv)!=7 or raw['stdin'] is not None:
         raise Refused('binding CLI original argument count')
-    root=retain(host,Path(argv[4]).parent,HISTORY_CLI.split('::')[1][:30],20000)
+    root=retain(host,Path(argv[4]).parent, 20000)
     repository=root/'repository'
     if repository.resolve()!=repository or (repository/'.git').resolve()!=repository/'.git':
         raise Refused('binding CLI repository alias')
@@ -648,10 +634,7 @@ def custody_command(case, argv, cwd, owned):
 
 
 def custody_repository(cwd, owned):
-    root = Path(cwd)
-    if str(root.resolve(strict=True)) != cwd or not root.is_relative_to(owned/'pytest'):
-        raise Refused('custody Git repository alias')
-    directory_custody(root,owned/'pytest')
+    acquire(cwd,owned)
 
 
 def custody_launch(host,actor,result,kind,raw):

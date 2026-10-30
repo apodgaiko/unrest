@@ -28,7 +28,7 @@ def proposal(host,actor,raw):
     if not eligible(case) or raw['stdin'] is not None:
         raise Refused('repository CLI closed case and input')
     cwd=Path(raw['cwd'])
-    base=retain(host,cwd.parent,case.split('::')[1].split('[')[0][:30],20000)
+    base=retain(host,cwd.parent, 20000)
     if cwd!=base/'repository' or cwd.resolve()!=cwd:
         raise Refused('repository CLI original owned directory')
     records=[row for row in host.intents.values() if row['case']==case]

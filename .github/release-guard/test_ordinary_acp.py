@@ -40,7 +40,7 @@ def test_original_mock_agent_bare_sleep_is_bound_to_actual_owned_fixture(tmp_pat
     import owned_fixture
     from ordinary_acp import MOCK_CASE
     original=owned_fixture.acquire
-    monkeypatch.setattr(owned_fixture,'acquire',lambda path,owned,prefix,owner:original(path,owned,prefix,os.getuid()))
+    monkeypatch.setattr(owned_fixture,'acquire',lambda path,owned,owner:original(path,owned,os.getuid()))
     monkeypatch.setattr(ordinary_acp,'system_sleep',lambda:'b'*64)
     base=tmp_path/'pytest'/(MOCK_CASE.split('::')[1][:30]+'0')
     (base/'workspace').mkdir(parents=True)
@@ -306,7 +306,7 @@ def test_startup_failure_uses_exact_original_owned_non_executable_format(tmp_pat
     import content_manifest
 
     acquire=owned_fixture.acquire
-    monkeypatch.setattr(owned_fixture,'acquire',lambda path,owned,prefix,owner:acquire(path,owned,prefix,os.getuid()))
+    monkeypatch.setattr(owned_fixture,'acquire',lambda path,owned,owner:acquire(path,owned,os.getuid()))
     read=content_manifest.read_regular
     monkeypatch.setattr(content_manifest,'read_regular',lambda path,*args,**kwargs:read(path,*args,**{**kwargs,'uid':os.getuid()}))
     base=tmp_path/'pytest'/(case.split('::')[1][:30]+'0')
@@ -368,7 +368,7 @@ def test_added_mock_launches_have_closed_identity_environment_and_quota(tmp_path
     from types import SimpleNamespace
     import owned_fixture
     acquire=owned_fixture.acquire
-    monkeypatch.setattr(owned_fixture,'acquire',lambda path,owned,prefix,uid:acquire(path,owned,prefix,os.getuid()))
+    monkeypatch.setattr(owned_fixture,'acquire',lambda path,owned,uid:acquire(path,owned,os.getuid()))
     root=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
     base=tmp_path/'pytest'/(case.split('::')[1][:30]+'0')
     cwd=base/'workspace'

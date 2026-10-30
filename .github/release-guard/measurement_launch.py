@@ -20,7 +20,7 @@ def expected(host,argv,cwd,environment,native,pin):
     for path,digest in PINS.items():
         if hashlib.sha256((checkout/path).read_bytes()).hexdigest()!=digest:
             raise Refused('simulation original input bytes')
-    root=retain(host,Path(argv[7]).parent,CASE.split('::')[1][:30],OWNER)
+    root=retain(host,Path(argv[7]).parent, OWNER)
     vector=(native,str(checkout/TOOL),'--case-manifest',str(checkout/FIXTURE),
         '--mode','simulated','--output',str(root/'flow.json'))
     if cwd!=str(checkout):

@@ -16,7 +16,7 @@ ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is
 @pytest.mark.parametrize('mutation',[None,'program','env','cwd','descendant'])
 def test_original_chatty_child_retains_both_full_pipe_writes(tmp_path,monkeypatch,mutation):
     acquire=owned_fixture.acquire
-    monkeypatch.setattr(owned_fixture,'acquire',lambda path,owned,prefix,owner:acquire(path,owned,prefix,os.getuid()))
+    monkeypatch.setattr(owned_fixture,'acquire',lambda path,owned,owner:acquire(path,owned,os.getuid()))
     workspace=tmp_path/'pytest'/(DRAIN_CASE.split('::')[-1][:30]+'0')/'workspace'
     workspace.mkdir(parents=True)
     host=SimpleNamespace(case=DRAIN_CASE,meta={'owned':str(tmp_path),'checkout':str(ROOT)},

@@ -45,7 +45,7 @@ def proposal(host,actor,raw):
     host.root_only(actor)
     checkout=Path(host.meta['checkout'])
     unit=source_unit(checkout,TEST,PIN,(NAME,))
-    root=retain(host,Path(raw['argv'][-1].split('ROOT=Path(',1)[1].split(')\n',1)[0].strip("'\"")).parent,NAME[:30],20000)
+    root=retain(host,Path(raw['argv'][-1].split('ROOT=Path(',1)[1].split(')\n',1)[0].strip("'\"")).parent, 20000)
     adapter=Path('/native/bin/codex-acp').resolve() if '/native' in host.meta['mounts'] else Path('/missing')
     boundary=host.case.rsplit('[',1)[1][:-1]
     body=('BOUNDARY='+repr(boundary)+'\nfrom pathlib import Path\nROOT=Path('+repr(str(root/'crashed'))+')\n'

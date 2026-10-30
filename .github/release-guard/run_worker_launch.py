@@ -45,7 +45,7 @@ DESCENDANTS=(DESCENDANT,REGISTERED)
 
 
 def fixture(host,home):
-    retain(host,home,host.case.split('::')[-1].split('[')[0][:30],20000)
+    retain(host,home, 20000)
     unit=source_unit(Path(host.meta['checkout']),TEST,PIN)
     body=literal(unit,'_EXECUTOR_SOURCE')
     if host.case==TEST+'::test_'+NAMES[-2]:
@@ -123,7 +123,7 @@ def proposal(host,actor,raw):
     if case==REGISTERED:
         checkout=Path(host.meta['checkout'])
         source_unit(checkout,'tests/fixtures/cancel_registered_executor.py','cb49ca5cf474491fcb395407ae0205134b2a0742195448b0f0c792f81bb41b79')
-        home=retain(host,Path(raw['cwd']),case.split('::')[1][:30],20000)
+        home=retain(host,Path(raw['cwd']), 20000)
         env={'LANG':'C.UTF-8','PATH':os.defpath,'PYTHONPATH':str(checkout)+':'+str(checkout/'src')}
         answer=admit_worker(host,actor,raw,home,'advance_project',env,1,executor='tests.fixtures.cancel_registered_executor:execute')
         return {**answer,'wait_at_case_close':True} if answer is not None else None

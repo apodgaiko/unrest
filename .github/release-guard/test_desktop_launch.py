@@ -88,13 +88,14 @@ def test_server_deviations_refuse_before_admission(tmp_path, monkeypatch, mutati
     assert not calls
 
 
-def test_replaced_fixture_generation_is_not_retained(tmp_path, monkeypatch):
+def test_mutable_fixture_replacement_keeps_path_but_not_new_launch_rights(tmp_path, monkeypatch):
     host, calls, raw, root = setup(tmp_path, monkeypatch)
     proposal(host, {"role": "root"}, raw)
     root.rename(root.with_name("old"))
     root.mkdir(mode=0o700)
-    with pytest.raises(Refused, match="generation"):
-        desktop.retained(host)
+    assert desktop.retained(host)==root
+    with pytest.raises(Refused, match="sole server"):
+        proposal(host, {"role":"root"}, raw)
     assert len(calls) == 1
 
 

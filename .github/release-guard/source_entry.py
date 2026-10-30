@@ -182,6 +182,13 @@ class Policy:
             saved = {'token': pending['token'], 'process': process, 'case': policy.case,
                      'wait_at_case_close':pending.get('wait_at_case_close') is True}
             policy.children[process.pid] = saved
+        def deliver(pid, sig, group):
+            policy.local.signal = 'os.killpg' if group else 'os.kill', (pid, sig)
+            try:
+                return (original_group if group else original_kill)(pid, sig)
+            finally:
+                policy.local.signal = None
+
         def signal(pid, sig, *, group):
             if type(sig) not in (int, signals.Signals):
                 policy.refuse('source nonnumeric signal')
@@ -194,11 +201,7 @@ class Policy:
             if self_probe:
                 if policy.client.request('self-probe',{'pid':pid})!={'ok':True}:
                     policy.refuse('source self probe response')
-                policy.local.signal='os.kill',(pid,sig)
-                try:
-                    return original_kill(pid,sig)
-                finally:
-                    policy.local.signal=None
+                return deliver(pid, sig, False)
             self_stop = policy.profile['role']=='session-adapter' and pid==os.getpid() and sig==15 and not group
             from run_worker_launch import REGISTERED
             self_group=(policy.profile['role']=='fixed-inline' and policy.case==REGISTERED
@@ -213,11 +216,7 @@ class Policy:
             if self_stop or self_group:
                 if policy.client.request('self-group' if self_group else 'self-stop', {'signal': sig}) != {'ok': True}:
                     policy.refuse('source self stop response')
-                policy.local.signal = 'os.killpg' if self_group else 'os.kill', (pid, sig)
-                try:
-                    return (original_group if self_group else original_kill)(pid, sig)
-                finally:
-                    policy.local.signal = None
+                return deliver(pid, sig, self_group)
             try:
                 answer = (policy.client.request('approval-signal' if approval else 'resumed-signal',{'pid':pid,'signal':sig,'group':group}) if resumed else
                     policy.client.request('custody_signal', {'pid': pid, 'child_token': policy.children[pid]['token'],
@@ -228,12 +227,7 @@ class Policy:
                 if answer == {'ok': True, 'live': False}:
                     raise ProcessLookupError(errno.ESRCH, 'owned process already terminal')
                 policy.refuse('source signal response')
-            event = 'os.killpg' if group else 'os.kill'
-            policy.local.signal = event, (pid, sig)
-            try:
-                return (original_group if group else original_kill)(pid, sig)
-            finally:
-                policy.local.signal = None
+            return deliver(pid, sig, group)
 
         def kill(pid, sig):
             return signal(pid, sig, group=False)

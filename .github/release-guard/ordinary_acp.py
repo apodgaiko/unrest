@@ -106,7 +106,7 @@ def expected(case, role, cwd, checkout, native, native_pin, root_environment, ow
         from owned_fixture import acquire
         from content_manifest import read_regular
         workspace=Path(cwd)
-        base,_=acquire(str(workspace.parent),owned,case.split('::')[1][:30],20000)
+        base,_=acquire(str(workspace.parent),owned, 20000)
         suffix='work' if case==STARTUP_CASES[0] else 'validate' if case==STARTUP_CASES[1] else 'reviewer'
         file=workspace/('invalid-format-'+suffix)
         body,_,pin=read_regular(file,4096,uid=20000,mode=0o700)

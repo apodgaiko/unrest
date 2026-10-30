@@ -5,7 +5,7 @@ from pathlib import Path
 
 from content_manifest import Refused
 from launch_policy import source_unit,assignment,admit_expected,build_expected,render_string
-from owned_fixture import acquire
+from owned_fixture import acquire,retain
 
 TEST='tests/contracts/test_lean_provider_security.py'
 MATRIX=TEST+'::test_copied_source_and_installed_cli_protect_precommand_credentials'
@@ -69,7 +69,7 @@ def proposal(host,actor,raw):
     if fixture is None:
         if case!=MATRIX or records:
             raise Refused('credential exact first fixture consumer')
-        identity=owned(workspace,owned_root,'candidate-distribution')
+        owned(workspace,owned_root)
         code=literal(checkout,'tests/contracts/conftest.py',None,'PROVENANCE_BODY')
         env=environment(host,case,'setup')
         env.pop('PYTHONPATH',None)
@@ -80,12 +80,11 @@ def proposal(host,actor,raw):
         answer=admit_expected(host,actor,raw,value,'archive-installed',[native,'-I','-S',*vector[2:]],
             maximum=21,fields={'security_status':0,'security_operation':'provenance'})
         if answer is not None:
-            host.fixture_roots['<installed-workspace>']=[str(workspace),identity]
+            host.fixture_roots['<installed-workspace>']=[str(workspace)]
             host.fixture_roots['<installed-provenance>']=host.intents[answer['ticket']]
         return answer
     provenance(host)
-    if fixture!=[fixture[0],owned(Path(fixture[0]),owned_root,'candidate-distribution')]:
-        raise Refused('credential retained installed workspace generation')
+    owned(Path(fixture[0]),owned_root)
     phase=[row for row in records if row.get('security_operation')!='provenance']
     limit=20 if case==MATRIX else 1
     if len(phase)>=limit:
@@ -99,15 +98,10 @@ def proposal(host,actor,raw):
         index=len(phase)
         copied=index<10
         if copied:
-            parent,info=acquire(str(workspace.parent),owned_root,case.split('::')[-1][:30],20000)
-            if workspace!=parent/'copied-candidate' or workspace.resolve()!=workspace:
+            parent=retain(host,workspace.parent)
+            acquire(str(workspace),owned_root)
+            if workspace!=parent/'copied-candidate':
                 raise Refused('credential original copied workspace')
-            current=workspace.stat()
-            if current.st_uid!=20000 or current.st_mode&0o6022:
-                raise Refused('credential copied workspace custody')
-            generation=(str(parent),info.st_dev,info.st_ino,current.st_dev,current.st_ino)
-            if host.fixture_roots.setdefault(('credential-root',case),generation)!=generation:
-                raise Refused('credential copied root changed')
             key=('credential-copy',case)
             if key not in host.fixture_roots:
                 target=host.directory/('credential-copy-'+os.urandom(16).hex())
@@ -131,7 +125,7 @@ def proposal(host,actor,raw):
     else:
         provider=case.rsplit('[',1)[1][:-1]
         target=Path(raw['argv'][-1])
-        parent,_=acquire(str(target.parent),owned_root,case.split('::')[-1].split('[')[0][:30],20000)
+        parent,_=acquire(str(target.parent),owned_root, 20000)
         if target!=parent/provider or target.resolve()!=target:
             raise Refused('credential supported provider original workspace')
         env['UNREST_HOME']=str(parent/(provider+'-home'))

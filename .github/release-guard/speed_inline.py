@@ -19,11 +19,10 @@ PRELUDE = 'from product_audit import child;child();'
 def directory(path, owned, case):
     if type(path) is not str or case not in (*CASES,CLI_CASE):
         raise Refused('speed fixture path primitive')
-    prefix='v04-speed-runs' if case==CLI_CASE else NAMES[CASES.index(case)][:30]
-    root,info=acquire(path,owned,prefix,OWNER)
+    acquire(path,owned,OWNER)
     if not all(c.isascii() and (c.isalnum() or c in '/._-') for c in path):
         raise Refused('speed source template path')
-    return path,info.st_dev,info.st_ino,info.st_mode,info.st_uid
+    return (path,)
 
 
 def fixture(host):

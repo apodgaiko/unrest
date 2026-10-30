@@ -26,7 +26,7 @@ def test_first_and_nested_stock_uv_environment_keep_all_other_values():
 @pytest.fixture
 def original(tmp_path,monkeypatch):
     acquire=owned_fixture.acquire
-    monkeypatch.setattr(owned_fixture,'acquire',lambda path,owned,prefix,owner:acquire(path,owned,prefix,os.getuid()))
+    monkeypatch.setattr(owned_fixture,'acquire',lambda path,owned,owner:acquire(path,owned,os.getuid()))
     read=uv.read_regular
     monkeypatch.setattr(uv,'read_regular',lambda path,*args,**kwargs:read(path,*args,**{**kwargs,'uid':os.getuid()}))
     monkeypatch.setattr(uv,'uv_digest',lambda path:'b'*64)

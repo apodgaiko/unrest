@@ -14,7 +14,6 @@ import pytest
 from content_manifest import Refused
 from launch_policy import source_unit,assignment,render_string
 import terminal_leaves as leaves
-import owned_fixture
 
 PIN='ed83ec28c4830354cd4ab0876d6832a0187d211982964d2cf80f449992b46bb6'
 POLICY='src/unrest_harness/capability_policy.py'
@@ -117,8 +116,7 @@ def test_program_is_identical_to_original_test_operands_without_executing_a_chil
 
 @pytest.mark.parametrize('mutation',[None,'body','env','cwd','generation','descendant'])
 def test_terminal_launch_does_not_grant_other_programs_or_fixture_generations(tmp_path,monkeypatch,mutation):
-    acquire=owned_fixture.acquire
-    monkeypatch.setattr(leaves,'acquire',lambda path,owned,prefix,owner:acquire(path,owned,prefix,os.getuid()))
+    monkeypatch.setattr(leaves,'OWNER',os.getuid())
     base=tmp_path/'pytest'/(leaves.RAW.split('::')[1][:30]+'0')
     workspace=base/'workspace'
     workspace.mkdir(parents=True)
@@ -144,7 +142,7 @@ def test_terminal_launch_does_not_grant_other_programs_or_fixture_generations(tm
     elif mutation=='cwd':
         raw['cwd']=str(base/'other')
     elif mutation=='generation':
-        host.fixture_roots[('terminal',host.case)]=('old',0,0)
+        host.fixture_roots[host.case]=('old',)
     actor={'role':'child' if mutation=='descendant' else 'root'}
     if mutation is None:
         assert leaves.proposal(host,actor,raw)['translated']==['/native','-I','-S','-c',body]

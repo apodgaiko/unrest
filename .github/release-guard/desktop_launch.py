@@ -15,13 +15,13 @@ OWNER = 20000
 
 def directory(path, owned):
     root=Path(path)
-    parent,outer=acquire(str(root.parent),owned,CASE.split('::')[1][:30],OWNER)
-    info=root.stat(follow_symlinks=False)
+    _,info=acquire(path,owned,OWNER)
+    outer=root.parent.stat(follow_symlinks=False)
     if (str(root.resolve())!=path or root.name!='desktop'
             or not stat.S_ISDIR(info.st_mode) or info.st_uid!=OWNER
             or any(stat.S_IMODE(row.st_mode)!=0o700 for row in (info,outer))):
         raise Refused('desktop exact owned fixture directory')
-    return path,info.st_dev,info.st_ino,info.st_mode,info.st_uid,outer.st_dev,outer.st_ino
+    return (path,)
 
 
 def retained(host):

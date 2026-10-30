@@ -14,11 +14,10 @@ SOURCE_UID=20000
 PREPARED_UID=0
 
 
-def owned(path,root,prefix):
-    _,info=acquire_owned(str(path),root,prefix,SOURCE_UID)
+def owned(path,root):
+    _,info=acquire_owned(str(path),root, SOURCE_UID)
     if stat.S_IMODE(info.st_mode)!=0o700:
         raise Refused('package exact owned fixture root')
-    return list(_directory_key(info))
 
 
 def snapshot(host,actor,payload):
@@ -39,7 +38,7 @@ def snapshot(host,actor,payload):
     if str(source.resolve())!=str(source) or source.name!=expected_name:
         raise Refused('archive original extracted root')
     if case in NEGATIVE:
-        owned(source.parent,Path(host.meta['owned']),case.split('::')[1][:30])
+        owned(source.parent,Path(host.meta['owned']))
     elif (source.parent.parent!=Path(host.meta['owned'])/'tmp'
             or not source.parent.name.startswith('unrest-sdist-check-')
             or source.parent.stat().st_uid!=SOURCE_UID or stat.S_IMODE(source.parent.stat().st_mode)!=0o700):
@@ -104,7 +103,7 @@ def proposal(host,actor,raw):
         host.root_only(actor)
         path=data['dist'] if case==POSITIVE else Path(raw['argv'][-1])
         if case in MUTATIONS:
-            owned(path.parent,owned_root,case.split('::')[1].split('[')[0][:30])
+            owned(path.parent,owned_root)
             if path.name!=MUTATIONS[case][0]:
                 raise Refused('archive exact original mutation directory')
         archive_inputs(path,case)
@@ -118,8 +117,8 @@ def proposal(host,actor,raw):
     elif case in (FIRST,LIFECYCLE):
         host.root_only(actor)
         workspace=Path(raw['cwd'])
-        identity=owned(workspace,owned_root,'candidate-distribution')
-        current=[str(workspace),identity]
+        owned(workspace,owned_root)
+        current=[str(workspace)]
         if host.fixture_roots.setdefault('<installed-workspace>',current)!=current:
             raise Refused('installed shared fixture generation')
         if case==LIFECYCLE:

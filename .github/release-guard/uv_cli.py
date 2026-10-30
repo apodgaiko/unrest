@@ -46,7 +46,7 @@ def proposal(host,actor,raw):
     if len(args)!=6 or args[:5]!=['uv','run','unrest',command,'--request']:
         raise Refused('stock uv exact original command')
     path=Path(args[5])
-    parent=retain(host,path.parent,case.split('::')[-1][:30],20000)
+    parent=retain(host,path.parent, 20000)
     if case==INVALID:
         home=parent/(command+'-invalid-home')
         file=parent/(command+'-invalid.json')
@@ -63,8 +63,10 @@ def proposal(host,actor,raw):
         file=parent/('project-subprocess.json' if case==PROJECT else 'improvement-subprocess.json')
         home=parent/('home-subprocess' if case==PROJECT else 'unused-improvement-home')
         document=None
+    if path!=file or path.resolve()!=path:
+        raise Refused('stock uv exact original request path')
     body,_,_=read_regular(file,65536,uid=20000)
-    if path!=file or path.resolve()!=path or (document is not None and json.loads(body,object_pairs_hook=unique)!=document) or (case!=PROJECT and home.exists()):
+    if (document is not None and json.loads(body,object_pairs_hook=unique)!=document) or (case!=PROJECT and home.exists()):
         raise Refused('stock uv original request bytes and unused home')
     if case in (PROJECT,IMPROVEMENT):
         # Requests remain application inputs: the original product test owns their

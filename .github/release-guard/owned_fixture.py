@@ -1,25 +1,28 @@
-"""One canonical acquisition of an externally declared pytest directory."""
+"""Current custody of mutable pytest data; selected paths stay case-bound."""
 from pathlib import Path
 import stat
 
 from content_manifest import Refused
 
 
-def acquire(path,owned,prefix,owner):
-    if type(path) is not str or type(prefix) is not str or not prefix or type(owner) is not int:
-        raise Refused('fixture directory primitives')
+def acquire(path,owned,owner=20000):
+    if type(path) is not str:
+        raise Refused('fixture path primitive')
     root=Path(path)
-    info=root.stat(follow_symlinks=False)
-    suffix=root.name[len(prefix):]
-    if (str(root.resolve())!=path or root.parent!=owned/'pytest' or not root.name.startswith(prefix)
-            or not suffix.isascii() or not suffix.isdigit() or not stat.S_ISDIR(info.st_mode) or info.st_uid!=owner):
-        raise Refused('fixture exact owned directory')
-    return root,info
+    boundary=owned/'pytest'
+    if (root.resolve()!=root
+            or root==boundary or not root.is_relative_to(boundary)):
+        raise Refused('fixture canonical owned directory')
+    for parent in (root,*(p for p in root.parents if p.is_relative_to(boundary))):
+        info=parent.lstat()
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid!=owner or info.st_mode&0o6022:
+            raise Refused('fixture current directory custody')
+    return root,root.lstat()
 
 
-def retain(host,path,prefix,owner):
-    root,info=acquire(str(path),Path(host.meta['owned']),prefix,owner)
-    generation=(str(root),info.st_dev,info.st_ino)
-    if host.fixture_roots.setdefault(host.case,generation)!=generation:
-        raise Refused('fixture changed directory generation')
+def retain(host,path,owner=20000):
+    root,_=acquire(str(path),Path(host.meta['owned']),owner)
+    selected=(str(root),)
+    if host.fixture_roots.setdefault(host.case,selected)!=selected:
+        raise Refused('fixture changed selected path')
     return root

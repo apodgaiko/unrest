@@ -42,7 +42,7 @@ def proposal(host,actor,raw):
     if host.case in STREAM_CASES:
         from owned_fixture import retain
         from cleanup_launch import read_pipe
-        base=retain(host,Path(raw['cwd']).parent,host.case.split('::')[1].split('[')[0][:30],20000)
+        base=retain(host,Path(raw['cwd']).parent, 20000)
         cwd=str(base/'workspace')
         env={'PATH':host.meta_environment()['PATH']}
         if host.case==STREAM_CASES[0]:

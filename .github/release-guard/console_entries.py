@@ -47,7 +47,7 @@ def proposal(host,actor,raw):
         raise Refused('console exact unrelated-workspace case')
     runtime=Path(host.meta['runtime_root'])
     cwd=Path(raw['cwd'])
-    parent=retain(host,cwd.parent,CASE.split('::')[-1][:30],20000)
+    parent=retain(host,cwd.parent, 20000)
     if cwd!=parent/'unrelated workspace' or cwd.resolve()!=cwd:
         raise Refused('console original unrelated workspace')
     ambient={**host.meta_environment(),'HOME':str(parent/'home'),'UNREST_HOME':str(parent/'.unrest'),

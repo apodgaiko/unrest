@@ -26,7 +26,7 @@ def inventory_proposal(host,actor,raw):
     if role=='git-observe' and (not actor['body_ready'] or records[-1]['birth']!=actor['birth'] or records[-1]['token']!=actor['token']):
         raise Refused('inventory actual live MCP owner')
     from owned_fixture import retain
-    base=retain(host,Path(raw['cwd']).parent,case.split('::')[1].split('[')[0][:30],20000)
+    base=retain(host,Path(raw['cwd']).parent, 20000)
     home=base/'.unrest'
     project='p-worker' if worker else 'p-terminal-reviewer'
     runtime=home/'projects'/project/'.unrest-runtime/missions/mission-001'
@@ -81,7 +81,7 @@ def proposal(host,actor,raw):
     case=host.case
     checkout=Path(host.meta['checkout'])
     source_unit(checkout,TEST,PINS[TEST])
-    base=retain(host,Path(raw['cwd']).parent,case.split('::')[1][:30],20000)
+    base=retain(host,Path(raw['cwd']).parent, 20000)
     first=case==DIAGNOSTICS[0]
     project=raw['environment'].get('UNREST_PROJECT_ID','')
     slug='missing-handoff-regression' if first else 'worker-mcp-timeout-regression'

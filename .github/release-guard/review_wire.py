@@ -116,7 +116,7 @@ def denial_proposal(host,actor,raw):
         env={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}
         cwd,role,kind,payload=str(checkout),'fixed-inline','python-command',None
     else:
-        base=retain(host,Path(raw['cwd']).parent,case.split('::')[1].split('[')[0][:30],20000)
+        base=retain(host,Path(raw['cwd']).parent, 20000)
         cwd=str(base/'workspace')
         vector=(native,str(checkout/SCRIPT),str(base/'scenario.json'))
         env=environment(host.meta_environment(),base/'home','project','w1','work','attempt-1')

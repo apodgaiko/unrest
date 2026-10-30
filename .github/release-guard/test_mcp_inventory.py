@@ -16,7 +16,7 @@ ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is
 @pytest.mark.parametrize('mutation',[None,'argv','environment','cwd','stdin','parent','generation','unreaped'])
 def test_inventory_original_launches_require_exact_operands_and_owned_sequence(tmp_path,monkeypatch,case,mutation):
     original=owned_fixture.acquire
-    monkeypatch.setattr(owned_fixture,'acquire',lambda path,owned,prefix,uid:original(path,owned,prefix,os.getuid()))
+    monkeypatch.setattr(owned_fixture,'acquire',lambda path,owned,uid:original(path,owned,os.getuid()))
     monkeypatch.setattr(cleanup_launch,'system_git',lambda:'b'*64)
     monkeypatch.setattr(cleanup_launch,'read_pipe',lambda pid,fd:[fd,1,2])
     base=tmp_path/'pytest'/(case.split('::')[1].split('[')[0][:30]+'0')
