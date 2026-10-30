@@ -80,7 +80,6 @@ def public_prepare(repository: Path, destination: Path, head: str) -> dict[str, 
     if (public_oid(public_git(destination,'rev-parse','--verify','HEAD^{commit}'))!=head
             or any(public_oid(public_git(destination,'rev-parse','--verify','refs/tags/'+name))!=oid for name,oid in PUBLIC_TAGS.items())):
         raise RuntimeError('public_git_acquired_refs')
-    public_git(destination,'merge-base','--is-ancestor',PUBLIC_FM000,head)
     return {'head':head,'historical_tags':dict(PUBLIC_TAGS),'commits':len(commits),
             'scope':'trusted public CI HEAD and six pinned tags; complete reachable history'}
 
@@ -120,7 +119,6 @@ class Command:
     stdin: str | None = None
 
 
-COMMAND_SETUP=('init','config-name','config-email','stage-base','commit-base')
 
 COMMAND_FIXED = {
     'inside': ('rev-parse', '--is-inside-work-tree'),

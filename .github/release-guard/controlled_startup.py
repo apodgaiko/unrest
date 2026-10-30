@@ -14,14 +14,9 @@ from content_manifest import Refused
 from controlled_cases import eligible as CONTROLLED, backend_path, BACKENDS, SERVERS
 from launch_policy import build_expected
 
-TEST = 'tests/test_experimental_bootstrap.py'
 ACP = 'tests/fixtures/controlled_python_acp.py'
 BACKEND_PIN = 'be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53'
 ACP_PIN = 'f5134a2d79b348b70b05a66566ff65d0049f102665200a22f3a6fcbd1c4f58be'
-CASES = tuple('tests/test_experimental_bootstrap.py::' + name for name in (
-    'test_actual_sequential_initialize_and_session_share_cutoff',
-    'test_startup_subtracts_from_actual_inference_timeout'))
-WRAPPER = 'import runpy,sys,time; p=sys.argv.pop(1); time.sleep(0.5); runpy.run_path(p,run_name="__main__")'
 def expected_entry(case,checkout,home,native,native_pin,*,backend,relay=None,variant=0,backend_pin=None):
     if type(variant) is not int or variant not in range(4):
         raise Refused('controlled finite configuration variant')

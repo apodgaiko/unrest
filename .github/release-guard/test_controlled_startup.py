@@ -18,7 +18,8 @@ import pytest
 
 from content_manifest import Refused
 from control_transport import finite, encode, REQUEST_LIMIT
-from controlled_startup import CASES, expected_entry, ACP
+from controlled_startup import expected_entry, ACP
+from test_startup_catalogue import CASES
 from launch_policy import Expected, build_expected
 from content_manifest import capture
 

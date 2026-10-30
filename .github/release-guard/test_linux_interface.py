@@ -1,4 +1,4 @@
-"""The kernel interface survives a CPython build omitting its os wrapper."""
+"""The supported CPython kernel wrapper retains exact operands and errors."""
 
 import errno
 import os
@@ -9,28 +9,22 @@ import pytest
 import linux_observation as observation
 
 
-@pytest.mark.parametrize("failure", [False, True])
-def test_missing_python_pidfd_wrapper_still_requires_actual_kernel_success(monkeypatch, failure):
-    monkeypatch.delattr(os, "pidfd_open", raising=False)
-    monkeypatch.setattr(observation.platform, "system", lambda: "Linux")
-    monkeypatch.setattr(observation.platform, "machine", lambda: "x86_64")
-    calls = []
-
-    def syscall(*args):
-        calls.append(args)
-        return -1 if failure else 29
-
-    monkeypatch.setattr(
-        observation.ctypes, "CDLL", lambda *a, **k: SimpleNamespace(syscall=syscall)
-    )
-    monkeypatch.setattr(observation.ctypes, "get_errno", lambda: errno.EPERM)
+@pytest.mark.parametrize('failure',[False,True])
+def test_supported_cpython_pidfd_wrapper_preserves_actual_kernel_result(monkeypatch,failure):
+    calls=[]
+    def acquire(pid,flags):
+        calls.append((pid,flags))
+        if failure:
+            raise OSError(errno.EPERM,'refused')
+        return 29
+    monkeypatch.setattr(os,'pidfd_open',acquire,raising=False)
     if failure:
         with pytest.raises(OSError) as error:
             observation.pidfd_open(1234)
-        assert error.value.errno == errno.EPERM
+        assert error.value.errno==errno.EPERM
     else:
-        assert observation.pidfd_open(1234) == 29
-    assert calls == [(434, 1234, 0)]
+        assert observation.pidfd_open(1234)==29
+    assert calls==[(1234,0)]
 
 
 @pytest.mark.parametrize("pid,flags", [(True, 0), (0, 0), ((1 << 32) + 1, 0), (1, True), (1, 1)])

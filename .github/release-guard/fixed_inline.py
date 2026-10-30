@@ -64,7 +64,6 @@ NETWORK_NAME = 'test_preexisting_network_socket_objects_and_descriptors_refuse_e
 NETWORK = {RELOAD_TEST+'::'+NETWORK_NAME+f'[{detached}-{family}]':(family,detached)
            for detached in (False,True) for family in (2,10)}
 DETACHED_CASE = RELOAD_TEST+'::test_detached_socket_descriptor_is_preflight_evidence'
-NETWORK_CASES = (*NETWORK,DETACHED_CASE)
 ISOLATED = {RELOAD_CASE:'reload', DETACHED_CASE:'detached', **dict(zip(METHOD_CASES,METHODS,strict=True)),
             **{case:case for case in (*NETWORK,*SPEED_CASES)}}
 DRAIN_TEST='tests/test_lean_provider_security_runtime.py'

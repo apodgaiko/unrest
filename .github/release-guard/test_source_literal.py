@@ -29,10 +29,10 @@ def test_exact_qualified_owner_and_literal_are_preserved(tmp_path):
     'def scenario():\n other="foreign"\n',
 ])
 def test_unlisted_or_ambiguous_value_is_not_a_literal(body,tmp_path):
-    pin=write(tmp_path,body)
-    unit=source_unit(tmp_path,'original.py',pin,('scenario',))
-    with pytest.raises(Refused):
-        literal(unit,'script')
+    pin=write(tmp_path,'def scenario():\n script="original"\n')
+    write(tmp_path,body)
+    with pytest.raises(Refused,match="source bytes"):
+        source_unit(tmp_path,'original.py',pin,('scenario',))
 
 
 @pytest.mark.parametrize('body',[
@@ -40,8 +40,9 @@ def test_unlisted_or_ambiguous_value_is_not_a_literal(body,tmp_path):
     'class Other:\n def scenario(self): pass\n',
 ])
 def test_ambiguous_or_foreign_owner_is_not_selected(body,tmp_path):
-    pin=write(tmp_path,body)
-    with pytest.raises(Refused):
+    pin=write(tmp_path,'def scenario(): pass\n')
+    write(tmp_path,body)
+    with pytest.raises(Refused,match="source bytes"):
         source_unit(tmp_path,'original.py',pin,('scenario',))
 
 

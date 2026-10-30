@@ -27,8 +27,8 @@ checks certify a release.
 `tools/check_distribution.py` is the retained distribution oracle. The primary
 release budget counts its complete file inside the same ceiling using
 `--support tools/check_distribution.py`; it grants no execution permission through
-its runner seam. The older `--test-support` report remains available for historical
-comparison, with the separate oracle count visible, but is not the release gate.
+its runner seam. The obsolete `--test-support` comparison mode is removed so it
+cannot accidentally exclude this mixed-purpose file from the release gate.
 
 ## Execution and cleanup
 
@@ -1228,3 +1228,18 @@ stores a second archive content/generation manifest for exec-time comparison.
 The unchanged original archive oracle checks the bytes it actually consumes;
 extracted snapshot sealing, fifteen-case provenance, installed script receipts
 and process/image/parent/wait admission remain independent requirements.
+
+The supported CPython 3.13 Linux runtime supplies `os.pidfd_open`. The guard uses
+that wrapper directly and retains operand/result/error checks. The alternate
+libc syscall path for unsupported interpreter builds is removed; a missing
+wrapper fails closed instead of selecting another ABI path.
+
+The standalone collection-only diagnostic mode is retired. Normal discovery still
+records every collected original case before running bodies, and release sealing
+requires the complete outcome cursor and successful final pytest status. Merely
+collecting cases has no completion operation. Focused original-source diagnostics
+remain distinct from the full unexcluded checkpoint.
+
+Public Git preparation retains the initial complete graph/anchor check, exact
+HEAD and tag acquisition, and acquired-ref verification; it no longer asks Git
+to prove the same immutable HEAD ancestry a second time after successful fetch.

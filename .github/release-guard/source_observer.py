@@ -349,12 +349,6 @@ class Observer:
                         retained(self,actor,row,body=False)
             self.ledger.ready(actor['birth'], kind, payload)
             actor['body_ready'] = True
-        elif kind == 'collection-finish':
-            self.root_only(actor)
-            from source_profile import case_seal
-            if not self.binding.get('collection_only') or payload!=case_seal(self.cases) or self.completed:
-                raise Refused('full collection-only completion')
-            self.finished=True
         elif kind == 'collection':
             from full_launch import collection
             return collection(self,actor,payload)

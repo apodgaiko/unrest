@@ -72,20 +72,17 @@ def source_unit(checkout: Path,path: str,pin: str,owners=()):
         raise Refused('original source bytes')
     unit=ast.parse(body)
     for name in owners:
-        rows=[node for node in unit.body if isinstance(node,(ast.ClassDef,ast.FunctionDef,ast.AsyncFunctionDef)) and node.name==name]
-        unit=rows[0]
+        unit=next(node for node in unit.body if isinstance(node,(ast.ClassDef,ast.FunctionDef,ast.AsyncFunctionDef)) and node.name==name)
     return unit
 
 
 def assignment(unit,name):
-    rows=[node.value for node in unit.body if isinstance(node,ast.Assign) and len(node.targets)==1
-          and isinstance(node.targets[0],ast.Name) and node.targets[0].id==name]
-    return rows[0]
+    return next(node.value for node in unit.body if isinstance(node,ast.Assign) and len(node.targets)==1
+                and isinstance(node.targets[0],ast.Name) and node.targets[0].id==name)
 
 
 def literal(unit,name):
-    value=assignment(unit,name)
-    return value.value
+    return assignment(unit,name).value
 
 
 def pinned_body(argv,pin):

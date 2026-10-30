@@ -29,8 +29,6 @@ def require(condition, message):
 
 
 def selection(arguments,checkout):
-    if arguments==[]:
-        return []
     require(len(arguments)<=32 and all(type(value) is str for value in arguments)
             and sum(len(value.encode()) for value in arguments)<=16384,'bounded source selection')
     for value in arguments:
@@ -44,7 +42,7 @@ def selection(arguments,checkout):
 
 
 def unexcluded(metadata,binding):
-    return type(metadata['cases']) is dict and metadata.get('selection')==[] and not binding.get('collection_only')
+    return type(metadata['cases']) is dict and metadata.get('selection')==[]
 
 
 def production_binding(binding):
@@ -214,7 +212,7 @@ def worker(binding, metadata, raw_directory):
     from source_observer import Observer
     metadata = isolate(metadata, binding['support'], raw_directory)
     full=type(metadata['cases']) is dict
-    timeout=1200 if unexcluded(metadata,binding) else 60 if binding.get('collection_only') else 170 if full else 100
+    timeout=1200 if unexcluded(metadata,binding) else 170 if full else 100
     start_read, start_write = os.pipe()
     ready_read, ready_write = os.pipe()
     output_read, output_write = os.pipe()
@@ -271,7 +269,7 @@ def worker(binding, metadata, raw_directory):
             from full_launch import finished
             finished(observer)
         require(result['root_parent_wait_raw'] == 0 and not result['poison']
-                and observer.finished and tuple(observer.completed) == (() if binding.get('collection_only') else observer.cases)
+                and observer.finished and tuple(observer.completed) == observer.cases
                 and not observer.frames
                 and all(intent['consumed'] for intent in observer.intents.values()), 'original source completion refused')
     except BaseException:
@@ -379,7 +377,6 @@ def main():
         row = binding[name]
         require(hashlib.sha256(Path(row['path']).read_bytes()).hexdigest() == row['sha256'], 'native host input drift')
     production_binding(binding)
-    binding['collection_only']=len(sys.argv)==3 and sys.argv[2]=='full-collect'
     profiles = Path(binding['profiles'])
     if not profiles.exists() and not profiles.is_symlink():
         profiles.mkdir(mode=0o755)
@@ -401,7 +398,7 @@ def main():
         from fixed_inline import CONSOLE_CASE,UV_CASES
         from package_cases import CASES as PACKAGE_CASES
         checkout=Path.cwd().resolve(strict=True)
-        chosen=[] if archive or binding['collection_only'] else selection(sys.argv[2:],checkout)
+        chosen=[] if archive else selection(sys.argv[2:],checkout)
         modules={value.split('::',1)[0] for value in chosen}
         native_inputs=not chosen or bool(modules & NATIVE_MODULES)
         distribution=not chosen or bool(modules & {case.split('::',1)[0] for case in (CONSOLE_CASE,*UV_CASES,*PACKAGE_CASES)})

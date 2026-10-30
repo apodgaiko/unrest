@@ -1,11 +1,9 @@
 """Finite real-MCP supervision fixtures; provider command strings grant no launch."""
 from pathlib import Path
-from mcp_inventory import CASES as INVENTORY
 
 from content_manifest import Refused
 from git_policy import image
 from launch_policy import admit_expected,build_expected
-from cleanup_launch import EXECUTION_CASES
 
 from completion_roles import HTTP as ROLE_HTTP,RESTART
 from composed_cases import CASES as COMPOSED,ps_limit
@@ -13,7 +11,6 @@ from composed_cases import CASES as COMPOSED,ps_limit
 SUPERVISION = tuple('tests/test_supervision_transactions.py::test_actual_role_excludes_both_diagnostic_interleavings['+state+'-'+role+']'
     for state in ('cancelled-client','held-inbox','held-recovery') for role in ('worker','validator','terminal_reviewer'))
 CASES = (*SUPERVISION, *ROLE_HTTP)
-TRANSPORT = (*EXECUTION_CASES, *CASES, *INVENTORY)
 
 
 def expected(host, actor, raw):

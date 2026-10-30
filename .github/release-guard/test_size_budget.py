@@ -60,36 +60,12 @@ def test_opaque_payload_and_duplicate_inventory_refuse(tmp_path):
         budget.measure(root, paths + paths)
 
 
-def test_reviewed_original_oracle_is_visible_as_test_support_not_hidden(tmp_path, monkeypatch):
-    root, paths = tree(
-        tmp_path,
-        {
-            ".github/release-guard/runtime.py": b"policy\n",
-            "tools/check_distribution.py": b"original oracle\nretained assertions\n",
-        },
-    )
-    monkeypatch.setattr(budget, "LIMIT", 1)
-    report = budget.measure(root, paths, test_support=["tools/check_distribution.py"])
-    assert report["enforcement_lines"] == 1 and report["within_budget"]
-    assert report["retained_test_support_lines"] == 2
-    assert report["combined_enforcement_and_test_support_lines"] == 3
-    oracle = next(row for row in report["files"] if row["path"] == "tools/check_distribution.py")
-    assert (
-        oracle["category"] == "test-support"
-        and oracle["lines"] == 2
-        and len(oracle["sha256"]) == 64
-    )
-    assert not report["dependency_closure_verified"] and not report["release_certified"]
-    with pytest.raises(budget.Refused, match="unreviewed_or_conflicting"):
-        budget.measure(
-            root,
-            paths,
-            extra_support=["tools/check_distribution.py"],
-            test_support=["tools/check_distribution.py"],
-        )
-
-
-def test_arbitrary_helpers_cannot_be_disguised_as_retained_tests(tmp_path):
-    root, paths = tree(tmp_path, {"tools/test_policy.py": b"permission enforcement\n"})
-    with pytest.raises(budget.Refused, match="unreviewed"):
-        budget.measure(root, paths, test_support=["tools/test_policy.py"])
+def test_external_distribution_oracle_always_counts_inside_release_budget(tmp_path,monkeypatch):
+    root,paths=tree(tmp_path,{'.github/release-guard/runtime.py':b'policy\n',
+                            'tools/check_distribution.py':b'original oracle\nretained assertions\n'})
+    monkeypatch.setattr(budget,'LIMIT',1)
+    report=budget.measure(root,paths,['tools/check_distribution.py'])
+    assert report['enforcement_lines']==3 and not report['within_budget']
+    assert all(row['category']=='enforcement' for row in report['files'])
+    with pytest.raises(TypeError):
+        budget.measure(root,paths,test_support=['tools/check_distribution.py'])

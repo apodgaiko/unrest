@@ -13,13 +13,13 @@ from linux_observation import credential_identity, process_identity
 from process_ledger import Birth, canonical
 from postbuild_root import CASES as ARCHIVE_CASES, COMMAND as ARCHIVE_COMMAND
 
-METHODS = frozenset({'collection-finish', 'collection', 'body-ready', 'case-start', 'case-finish', 'root-finish',
+METHODS = frozenset({'collection', 'body-ready', 'case-start', 'case-finish', 'root-finish',
     'archive-snapshot','archive-result','preselected-finish','fixture-root','multiprocess-proposal','launch-proposal',
     'custody_signal', 'resumed-signal', 'custody_close', 'self-stop', 'guard-refusal'})
 
 
 def pytest_arguments(metadata,binding):
-    return ['pytest','-q',*metadata['selection'],*(['--collect-only'] if binding.get('collection_only') else [])]
+    return ['pytest','-q',*metadata['selection']]
 
 
 def case_seal(cases):
@@ -83,10 +83,9 @@ def validate(profile: dict, event: str, arguments: tuple) -> dict:
             descriptor = int(name)
             if descriptor > 2:
                 try:
-                    os.fstat(descriptor)
+                    info = os.fstat(descriptor)
                 except OSError:
                     continue
-                info = os.fstat(descriptor)
                 seen.append(inherited_descriptor(inherited, descriptor, info,
                                                   fcntl.fcntl(descriptor, fcntl.F_GETFL), actual['uids'][0]))
         if seen != inherited:

@@ -6,14 +6,11 @@ from launch_policy import source_unit,build_expected,admit_expected,pinned_body
 from owned_fixture import acquire
 
 TEST='tests/test_capability_policy.py'
-PIN='ed83ec28c4830354cd4ab0876d6832a0187d211982964d2cf80f449992b46bb6'
 RAW=TEST+'::test_raw_acp_terminal_protocol_redacts_credential_values'
 TRANSFORM=tuple(TEST+'::test_real_terminal_create_excludes_raw_wrappers_and_preserves_transform['+profile+'-'+role+'-'+provider+']'
     for profile in ('safe','unsafe-development-unrestricted') for role in ('worker','validator','terminal_reviewer') for provider in ('claude','codex'))
 OPTIONAL=tuple('tests/test_acp_runner.py::test_terminal_create_optional_nulls_use_omission_defaults[params'+str(i)+']' for i in range(2))
 CASES=(RAW,*TRANSFORM,*OPTIONAL)
-POLICY='src/unrest_harness/capability_policy.py'
-POLICY_PIN='0aaa3eca3a1b891bcf7458832aeed92768489826fda23320ab000ce3d1df3c30'
 PROGRAMS={RAW:('f4ce4c072ea2f9aaca39a3fdfbaac6fd245f9af013575da904056ef2114e60a0',{'ZAI_API_KEY':'RAW_ACP_CREDENTIAL_79d0b1'}),
     **dict.fromkeys(TRANSFORM,('52dfcc2a3a4a04e0db1943f3b43a2791d1c3c854d7fb73a05e28bc9c8f0e6295',
         {'SSL_CERT_DIR':'MONKEY','NO_PROXY':'ordinary-equal-free-value','TMP':'dGVybWluYWwtc2VudGluZWwtMS1hbnRocm9waWNfYXV0aF90b2tlbg=='}))}

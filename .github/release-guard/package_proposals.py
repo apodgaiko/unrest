@@ -7,22 +7,16 @@ from content_manifest import Refused, read_regular, _directory_key
 from launch_policy import admit_expected,build_expected
 from package_cases import CASES as CASES, POSITIVE, NEGATIVE, MUTATIONS, FIRST, LIFECYCLE, literal, CONTRACT, SECURITY_CASES
 from archive_leaf import CHECKER_COMMAND, LEAF_COMMAND
+from prepared_distribution import observer_inputs as inputs
+from owned_fixture import acquire as acquire_owned
 
 SOURCE_UID=20000
 PREPARED_UID=0
 
 
-def inputs(host):
-    from prepared_distribution import observer_inputs
-    return observer_inputs(host)
-
-
 def owned(path,root,prefix):
-    info=path.stat(follow_symlinks=False)
-    suffix=path.name[len(prefix):]
-    if (str(path.resolve())!=str(path) or path.parent!=root/'pytest' or not path.name.startswith(prefix)
-            or not suffix.isascii() or not suffix.isdigit() or not stat.S_ISDIR(info.st_mode)
-            or info.st_uid!=SOURCE_UID or stat.S_IMODE(info.st_mode)!=0o700):
+    _,info=acquire_owned(str(path),root,prefix,SOURCE_UID)
+    if stat.S_IMODE(info.st_mode)!=0o700:
         raise Refused('package exact owned fixture root')
     return list(_directory_key(info))
 
@@ -113,9 +107,6 @@ def proposal(host,actor,raw):
             owned(path.parent,owned_root,case.split('::')[1].split('[')[0][:30])
             if path.name!=MUTATIONS[case][0]:
                 raise Refused('archive exact original mutation directory')
-        expected_names=sorted(item.name for item in data['dist'].iterdir() if item.name.endswith(('.whl','.tar.gz')))
-        if case in MUTATIONS and sorted(item.name for item in path.iterdir())!=expected_names:
-            raise Refused('archive exact original filenames')
         archive_inputs(path,case)
         env=environment(host,case,'call')
         if case==POSITIVE:

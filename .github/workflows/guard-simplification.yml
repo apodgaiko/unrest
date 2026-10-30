@@ -9,7 +9,7 @@ on:
         description: 'Exact original case group; none runs only kernel/admission controls'
         type: choice
         default: none
-        options: [none, source, archives15, full-collect, network-only]
+        options: [none, source, archives15, network-only]
       source_selectors:
         description: 'JSON list of exact original tests/*.py selectors; diagnostics only'
         type: string
@@ -55,10 +55,9 @@ jobs:
         if: github.event_name == 'push' || inputs.source_group == 'none'
         run: sudo -n env -i PATH=/usr/bin:/bin timeout --signal=TERM --kill-after=5 120 "$PWD/.venv/bin/python" -I -B "$PWD/.github/release-guard/test_native_entry_control.py" "/tmp/unrest-native-control-${{ github.run_id }}-${{ github.run_attempt }}/guard-native-control/binding.json"
       - name: Normal original-source diagnostic selection
-        if: github.event_name == 'workflow_dispatch' && (inputs.source_group == 'source' || inputs.source_group == 'full-collect')
+        if: github.event_name == 'workflow_dispatch' && inputs.source_group == 'source'
         env:
           SOURCE_SELECTORS: ${{ inputs.source_selectors }}
-          SOURCE_MODE: ${{ inputs.source_group }}
         run: |
           uv run --no-sync python - <<'PY'
           import json, os, subprocess
@@ -66,9 +65,7 @@ jobs:
           selected=json.loads(os.environ['SOURCE_SELECTORS'])
           if type(selected) is not list or any(type(value) is not str for value in selected):
               raise RuntimeError('source selector list required')
-          if os.environ['SOURCE_MODE']=='full-collect':
-              selected=['full-collect']
-          elif not selected or any(not value.startswith('tests/') for value in selected):
+          if not selected or any(not value.startswith('tests/') for value in selected):
               raise RuntimeError('diagnostic source selection must name original tests')
           root=Path('/tmp')/('unrest-native-control-'+os.environ['GITHUB_RUN_ID']+'-'+os.environ['GITHUB_RUN_ATTEMPT'])/'guard-native-control'
           subprocess.run(['sudo','-n','env','-i','PATH=/usr/bin:/bin','timeout','--signal=TERM','--kill-after=5','240',

@@ -5,7 +5,6 @@ from launch_policy import build_expected,admit_expected,pinned_body
 TEST='tests/test_acp_runner.py'
 NAME='test_readiness_attributes_local_child_and_drains'
 CASES=tuple(TEST+'::'+NAME+'['+mode+']' for mode in ('early_exit','never_ready','ready','cancel'))
-READY=CASES[2]
 PIN='558010a851595fece4c186cb30b717ff38dad4fa075705dbc316cfd8537910b4'
 
 SESSION='tests/test_experimental_session.py'

@@ -16,7 +16,6 @@ CLIENT = {TEST + '::test_client_cleanup_reaps_main_after_reader_failure': ('clie
 INFLIGHT = {TEST + f'::test_inflight_terminal_registration_before_inventory[{variant}]':
             ('inflight', variant, None) for variant in ('False', 'True')}
 DECLARATIONS = {**STARTUP, **CLIENT, **INFLIGHT}
-CLIENT_CASES = (*CLIENT, *INFLIGHT)
 
 
 def declaration(case):

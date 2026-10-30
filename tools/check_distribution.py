@@ -178,10 +178,6 @@ def _extract_sdist_safely(path: Path, destination: Path) -> Path:
     return root
 
 
-def _inside(path: Path, directory: Path) -> bool:
-    return path == directory or directory in path.parents
-
-
 def _run_extracted_restart_oracle(
     extracted_root: Path,
     *,
@@ -242,9 +238,9 @@ def _run_extracted_restart_oracle(
     if test_files != [expected_test]:
         raise RuntimeError(f"extracted sdist collected unexpected test modules {test_files}")
     provenance_paths = [module, cwd, source_path, *test_files]
-    if not all(_inside(path, extraction) for path in provenance_paths):
+    if not all(path.is_relative_to(extraction) for path in provenance_paths):
         raise RuntimeError("extracted sdist provenance escaped extraction root")
-    if any(_inside(path, checkout) for path in effective_paths):
+    if any(path.is_relative_to(checkout) for path in effective_paths):
         raise RuntimeError("extracted sdist sys.path leaked the source checkout")
     return {
         "cases": 15,
@@ -286,20 +282,14 @@ def check_archive_contents(root: Path, dist: Path) -> dict[str, object]:
         )
     wheel, metadata, entry_points, _record = _wheel_payload(wheels[0])
     sdist, sdist_source_files = _sdist_payload(sdists[0])
-    if wheel != source:
-        missing = sorted(source.keys() - wheel.keys())
-        extra = sorted(wheel.keys() - source.keys())
-        changed = sorted(name for name in source.keys() & wheel.keys() if source[name] != wheel[name])
-        raise RuntimeError(
-            f"wheel/source package mismatch: missing={missing}, extra={extra}, changed={changed}"
-        )
-    if sdist != source:
-        missing = sorted(source.keys() - sdist.keys())
-        extra = sorted(sdist.keys() - source.keys())
-        changed = sorted(name for name in source.keys() & sdist.keys() if source[name] != sdist[name])
-        raise RuntimeError(
-            f"sdist/source package mismatch: missing={missing}, extra={extra}, changed={changed}"
-        )
+    for kind, payload in (('wheel', wheel), ('sdist', sdist)):
+        if payload != source:
+            missing = sorted(source.keys() - payload.keys())
+            extra = sorted(payload.keys() - source.keys())
+            changed = sorted(name for name in source.keys() & payload.keys() if source[name] != payload[name])
+            raise RuntimeError(
+                f"{kind}/source package mismatch: missing={missing}, extra={extra}, changed={changed}"
+            )
     missing_oracle_files = sorted(SDIST_RESTART_ORACLE_FILES - sdist_source_files.keys())
     changed_oracle_files = sorted(
         name

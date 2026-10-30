@@ -13,7 +13,8 @@ import pytest
 from effect_proposals import proposal
 from test_proposal_support import operands
 from content_manifest import Refused
-from controlled_startup import BACKEND_PIN, CASES
+from controlled_startup import BACKEND_PIN
+from test_startup_catalogue import CASES
 from launch_policy import build_expected
 from process_ledger import Birth
 from source_host import inventory

@@ -23,10 +23,8 @@ def environment(metadata):
 
 
 def child_environment(metadata):
-    result=environment(metadata)
-    runtime=Path(metadata['runtime_root'])
-    return {**result,'PATH':str(runtime/'bin')+':'+result['PATH'],
-        'UV':str(runtime/'bin/uv'),'UV_RUN_RECURSION_DEPTH':'1'}
+    from uv_cli import child_environment as uv_environment
+    return uv_environment(metadata,environment(metadata))
 
 
 class FullCases(OriginalCases):
@@ -58,12 +56,6 @@ class FullCases(OriginalCases):
     def pytest_sessionfinish(self,session,exitstatus):
         yield
         exitstatus=session.exitstatus
-        if session.config.option.collectonly:
-            from source_profile import case_seal
-            if exitstatus!=0 or not self.cases or self.policy.poison or self.completed:
-                raise Refused('full normal collection failed')
-            self.policy.client.request('collection-finish',case_seal(self.cases))
-            return
         if exitstatus!=0:
             return  # Ordinary pytest failures retain normal continuation and exit.
         if self.policy.poison or tuple(self.completed)!=self.cases or not self.cases:

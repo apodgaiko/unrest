@@ -16,18 +16,22 @@ from launch_policy import source_unit,assignment,render_string
 import terminal_leaves as leaves
 import owned_fixture
 
+PIN='ed83ec28c4830354cd4ab0876d6832a0187d211982964d2cf80f449992b46bb6'
+POLICY='src/unrest_harness/capability_policy.py'
+POLICY_PIN='0aaa3eca3a1b891bcf7458832aeed92768489826fda23320ab000ce3d1df3c30'
+
 ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
 
 
 def original_program(case):
-    unit=source_unit(ROOT,leaves.TEST,leaves.PIN,(case.split('::')[1].split('[')[0],))
+    unit=source_unit(ROOT,leaves.TEST,PIN,(case.split('::')[1].split('[')[0],))
     if case==leaves.RAW:
         calls=[node for node in ast.walk(unit) if isinstance(node,ast.Dict) and any(isinstance(key,ast.Constant) and key.value=='args' for key in node.keys)]
         assert len(calls)==1
         key=next(key for key in calls[0].keys if isinstance(key,ast.Constant) and key.value=='args')
         args=ast.literal_eval(calls[0].values[calls[0].keys.index(key)])
         return args[1],{'ZAI_API_KEY':ast.literal_eval(assignment(unit,'secret'))}
-    names=ast.literal_eval(assignment(source_unit(ROOT,leaves.POLICY,leaves.POLICY_PIN),'FINITE_CREDENTIAL_NAMES'))
+    names=ast.literal_eval(assignment(source_unit(ROOT,POLICY,POLICY_PIN),'FINITE_CREDENTIAL_NAMES'))
     observed=(*names,*(f'UNRELATED_ALIAS_{i}' for i in range(len(names))),'HOME','TEMP','SSL_CERT_DIR','NO_PROXY','TMP')
     body=render_string(assignment(unit,'script'),(('observed_names',114,repr(observed)),))
     wrapped=f'terminal-sentinel-1-{names[1].lower()}'
@@ -79,9 +83,9 @@ def test_terminal_catalogue_matches_original_collection(monkeypatch):
 def test_program_is_identical_to_original_test_operands_without_executing_a_child(tmp_path,case):
     body,env=original_program(case)
     assert leaves.PROGRAMS[case]==(hashlib.sha256(body.encode()).hexdigest(),env)
-    unit=source_unit(ROOT,leaves.TEST,leaves.PIN,(case.split('::')[1].split('[')[0],))
+    unit=source_unit(ROOT,leaves.TEST,PIN,(case.split('::')[1].split('[')[0],))
     unit.decorator_list=[]
-    names=ast.literal_eval(next(node.value for node in ast.parse((ROOT/leaves.POLICY).read_bytes()).body
+    names=ast.literal_eval(next(node.value for node in ast.parse((ROOT/POLICY).read_bytes()).body
         if isinstance(node,ast.Assign) and any(isinstance(target,ast.Name) and target.id=='FINITE_CREDENTIAL_NAMES' for target in node.targets)))
     captured=[]
     class Client:
