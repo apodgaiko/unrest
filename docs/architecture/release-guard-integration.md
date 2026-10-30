@@ -1255,3 +1255,11 @@ the original historical-result tests retain their assertions. Only the same six
 pinned public histories and exact CI HEAD are fetched. Normalized discovery
 identity collisions remain refused by the observer before sealing; the client
 loads that authenticated SHA-bound inventory without repeating the same check.
+
+## Candidate footprint checkpoint
+
+The replacement guard measures 9,999 physical enforcement lines after retiring
+the temporary guard-simplification workflow. This includes every remaining
+non-test `.github` file and the complete distribution checker; test code remains
+separate. The full CI workflow and every original product test remain intact.
+Size is a footprint result, not source, package, desktop or release certification.
