@@ -354,6 +354,10 @@ class Observer:
                         retained(self,actor,row,body=False)
             self.ledger.ready(actor['birth'], kind, payload)
             actor['body_ready'] = True
+        elif kind == 'private-unix':
+            shape(payload,('event','address'))
+            from approval_fixture import unix
+            return unix(self,actor,payload['event'],payload['address'])
         elif kind == 'collection':
             from full_launch import collection
             return collection(self,actor,payload)

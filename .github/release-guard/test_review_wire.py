@@ -66,7 +66,7 @@ def test_original_wire_selection_preserves_oversized_parameter_without_large_mes
     from case_inventory import identity
 
     cases = wire.CASES
-    assert len(cases) == len(set(cases)) == 54
+    assert len(cases) == len(set(cases)) == 61
     node = (
         wire.TEST + "::test_malformed_and_oversized_wire_never_become_success[" + "x" * 70000 + "]"
     )
@@ -192,7 +192,7 @@ def test_component_collection_and_reports_keep_actual_large_pytest_item(monkeypa
     from case_inventory import identity
 
     node = next(node for node in wire.NODES if len(node) > 70000)
-    assert len(wire.NODES) == 54 and tuple(identity(node) for node in wire.NODES) == wire.CASES
+    assert len(wire.NODES) == 61 and tuple(identity(node) for node in wire.NODES) == wire.CASES
     calls = []
     policy = SimpleNamespace(
         profile={"cases": [identity(node)]},

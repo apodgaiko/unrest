@@ -33,6 +33,8 @@ NODES+=tuple(FRAMES+'::'+name for name in (
     *(f'test_prefixed_update_with_malformed_content_blocks[{registered}-{payload}]'
       for registered in ('False','True') for payload in ('None','payload1','payload2','payload3')),
 ))
+COUNT_CASE=TEST+'::test_review_count_bound_and_malformed_action'
+NODES+=(*(TEST+'::test_schema_action_variants_do_not_persist_private_payloads[action'+str(i)+']' for i in range(6)),COUNT_CASE)
 CASES=tuple(identity(node) for node in NODES)
 DOUBLE=TEST+'::test_duplicate_and_conflicting_reviews_are_monotone'
 
@@ -41,14 +43,14 @@ def count(case):
     return 2 if case==DOUBLE else 1
 
 
-def scenario(file,owned):
+def scenario(file,owned,case=None):
     if (str(file.resolve())!=str(file) or file.name!='scenario.json'
             or not file.parent.is_relative_to(owned/'pytest') or file.parent==owned/'pytest'):
         raise Refused('review-wire owned scenario path')
     body,info,_=read_regular(file,131072,uid=20000,mode=0o644)
     value=json.loads(body,object_pairs_hook=unique)
     if (len(body)!=info.st_size or type(value) is not dict or set(value)!={'events','delay','raw_frame'}
-            or type(value['events']) is not list or len(value['events'])>3
+            or type(value['events']) is not list or len(value['events'])>(65 if case==COUNT_CASE else 3)
             or type(value['delay']) is not int or value['delay'] not in (0,30)
             or value['raw_frame'] is not None and (type(value['raw_frame']) is not str or len(value['raw_frame'])>70000)
             or type(value['raw_frame']) is str and len(value['raw_frame'].encode())>131072):
@@ -95,7 +97,7 @@ def proposal(host,actor,raw):
         raise Refused('review-wire sequential finite quota')
     if case.startswith(FRAMES+'::'):
         source_unit(checkout,FRAMES,FRAMES_PIN)
-    body=scenario(Path(argv[-1]),owned)
+    body=scenario(Path(argv[-1]),owned,case)
     environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}
     value=build_expected(
         case,

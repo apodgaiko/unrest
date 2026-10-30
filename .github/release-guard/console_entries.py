@@ -35,7 +35,7 @@ CONFIG_ENV={'UNREST_ORCHESTRATOR_PROVIDER':'codex','UNREST_WORKER_PROVIDER':'cod
 
 def standalone_environment(metadata):
     owned=Path(metadata['owned'])
-    return {'HOME':str(owned/'home'),'TMPDIR':str(owned/'tmp'),
+    return {'HOME':str(owned/'home'),'TMPDIR':'/tmp',
         'PATH':'/usr/bin:/bin','PYTEST_DISABLE_PLUGIN_AUTOLOAD':'1'}
 
 

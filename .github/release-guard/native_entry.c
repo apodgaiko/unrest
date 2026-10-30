@@ -50,9 +50,6 @@ static int guard_audit(const char *event, PyObject *args, void *unused) {
                     !memcmp(PyBytes_AS_STRING(address),GUARD_CONTROL_SOCKET,strlen(GUARD_CONTROL_SOCKET))) return 0;
             }
         }
-        poisoned = 1;
-        PyErr_SetString(PyExc_RuntimeError,"private Unix address refused");
-        return -1;
     }
     int main_compile = 0;
     if (script_target != NULL && !strcmp(event,"compile") && PyTuple_Check(args) &&

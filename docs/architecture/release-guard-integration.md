@@ -1293,3 +1293,20 @@ observer profiles. Original receipt, report, completion and cleanup assertions
 remain mandatory. RUNNER review scenarios retain their exact inert-frame checks.
 Directory/metadata acquisition and SHA-256 syntax checks share one implementation;
 retired delegated fixed-inline entries no longer duplicate their actual routers.
+
+Approval source fixtures use the compartment's short `/tmp` as TMPDIR, avoiding
+Unix socket pathname overflow without changing the product or exposing host tmp.
+Named Unix IPC is delegated from the native audit hook to an authenticated
+observer decision, only for the controlled approval test module. Bind is root-only
+and limited to the two original temporary-directory prefixes, a canonical
+UID-20000/mode-0700 directory and the fixed `control` leaf. Connection requires
+the retained bind generation and a UID-20000/mode-0600 socket. Other named Unix
+effects still poison execution. This is local fixture IPC, not native provider
+approval acceptance. The original review-count regression admits 65 inert
+fixture events only for its exact case; the original 64-review assertion stays.
+
+CI mutation fixtures can separate the current three-command static-check step
+into three equivalent steps before applying their original command mutations.
+The normalization requires the complete exact grouped commands; case parameters,
+negative diagnostics and live/dynamic-guard assertions are retained. Other duty
+mutations continue to inspect the current grouped workflow directly.

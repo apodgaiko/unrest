@@ -23,7 +23,7 @@ def test_literal_sources_and_exact_call_sites_are_pinned():
                      and isinstance(call.func.value,ast.Name) and call.func.value.id == 'subprocess' and call.func.attr == 'run']
             assert len(calls) == 1
             found[function.name] = calls[0].lineno
-    assert found == {'_import_probe':549,'test_mcp_help_does_not_import_repository_modules':596}
+    assert found == {'_import_probe':573,'test_mcp_help_does_not_import_repository_modules':620}
     assert script(ROOT,'help') == script(ROOT,'check') and script(ROOT,'mcp') != script(ROOT,'help')
 
 

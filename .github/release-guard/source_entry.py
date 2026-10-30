@@ -104,6 +104,12 @@ class Policy:
                     if digest(Path(script))!=pin or data is not None and (type(data) is not bytes or hashlib.sha256(data).hexdigest()!=pin):
                         raise Refused('source declared script bytes changed')
                 return True
+            if event in ('socket.bind','socket.connect'):
+                if type(self.case) is not str or not self.case.startswith('tests/test_approval_recovery.py::'):
+                    raise Refused('source unknown private Unix endpoint')
+                if self.client.request('private-unix',{'event':event,'address':args[1]})!={'ok':True}:
+                    raise Refused('source private Unix acknowledgement')
+                return True
             if event == 'subprocess.Popen':
                 self.popen(args)
                 return True

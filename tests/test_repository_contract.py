@@ -64,6 +64,30 @@ def _error(root: Path) -> RepositoryContractError:
     return caught.value
 
 
+def _isolated_mypy_step(text: str) -> str:
+    """Keep command mutations independent of equivalent YAML step grouping."""
+    target = "        run: uv run mypy src"
+    if target in text:
+        return text
+    grouped = (
+        "      - name: Recursive static and repository checks\n"
+        "        run: |\n"
+        "          uv run ruff check .\n"
+        "          uv run mypy src\n"
+        "          uv run unrest check-repository"
+    )
+    separate = (
+        "      - name: Lint (ruff)\n"
+        "        run: uv run ruff check .\n"
+        "      - name: Type-check (mypy)\n"
+        "        run: uv run mypy src\n"
+        "      - name: Repository contract\n"
+        "        run: uv run unrest check-repository"
+    )
+    assert text.count(grouped) == 1
+    return text.replace(grouped, separate)
+
+
 def _run_repository_cli(root: Path) -> subprocess.CompletedProcess[str]:
     subprocess.run(["git", "init", "--quiet"], cwd=root, check=True)
     environment = os.environ.copy()
@@ -384,7 +408,7 @@ def test_ci_text_spoofs_and_disabled_commands_do_not_satisfy_duty(
 ) -> None:
     repository = _copy_repository(tmp_path)
     path = repository / ".github/workflows/ci.yml"
-    text = path.read_text(encoding="utf-8")
+    text = _isolated_mypy_step(path.read_text(encoding="utf-8"))
     target = "        run: uv run mypy src"
     assert text.count(target) == 1
     path.write_text(text.replace(target, replacement), encoding="utf-8")
@@ -411,13 +435,13 @@ def test_ci_constant_dead_guards_fail_through_candidate_cli(
 ) -> None:
     repository = _copy_repository(tmp_path)
     path = repository / ".github/workflows/ci.yml"
-    text = path.read_text(encoding="utf-8")
+    text = _isolated_mypy_step(path.read_text(encoding="utf-8"))
     if control == "step":
         old = "      - name: Type-check (mypy)\n        run: uv run mypy src"
         new = f"      - name: Type-check (mypy)\n        if: {condition}\n        run: uv run mypy src"
     else:
-        old = "  primary:\n    name: primary source and package gate (py3.13)"
-        new = f"  primary:\n    if: {condition}\n    name: primary source and package gate (py3.13)"
+        old = "  primary:\n    name: full source and package gate (py3.13)"
+        new = f"  primary:\n    if: {condition}\n    name: full source and package gate (py3.13)"
     assert text.count(old) == 1
     path.write_text(text.replace(old, new), encoding="utf-8")
 
@@ -446,7 +470,7 @@ def test_ci_literal_dead_shell_branches_fail_through_candidate_cli(
 ) -> None:
     repository = _copy_repository(tmp_path)
     path = repository / ".github/workflows/ci.yml"
-    text = path.read_text(encoding="utf-8")
+    text = _isolated_mypy_step(path.read_text(encoding="utf-8"))
     target = "        run: uv run mypy src"
     assert text.count(target) == 1
     path.write_text(text.replace(target, replacement), encoding="utf-8")
@@ -471,7 +495,7 @@ def test_ci_live_or_dynamic_guards_remain_accepted_through_candidate_cli(
 ) -> None:
     repository = _copy_repository(tmp_path)
     path = repository / ".github/workflows/ci.yml"
-    text = path.read_text(encoding="utf-8")
+    text = _isolated_mypy_step(path.read_text(encoding="utf-8"))
     old = "      - name: Type-check (mypy)\n        run: uv run mypy src"
     new = f"      - name: Type-check (mypy)\n        if: {condition}\n        run: uv run mypy src"
     assert text.count(old) == 1
@@ -503,7 +527,7 @@ def test_ci_dynamic_or_alternate_shell_branches_remain_accepted(
 ) -> None:
     repository = _copy_repository(tmp_path)
     path = repository / ".github/workflows/ci.yml"
-    text = path.read_text(encoding="utf-8")
+    text = _isolated_mypy_step(path.read_text(encoding="utf-8"))
     target = "        run: uv run mypy src"
     assert text.count(target) == 1
     path.write_text(text.replace(target, replacement), encoding="utf-8")

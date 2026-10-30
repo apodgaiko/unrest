@@ -352,7 +352,7 @@ HISTORY_CATALOG={
     HISTORY_V045:('test_v040_release_carriers_remain_exact_tag_bytes',),
 }
 HISTORY_CASES=(*tuple(file+'::'+name for file,names in HISTORY_CATALOG.items() for name in names),HISTORY_CLI,HISTORY_REPOSITORY)
-HISTORY_PINS={'tests/test_repository_contract.py':'f6b284b53f2c9f4f307ace30ce17c48fe4c8f33dd9035fcc36ab6edeb0623c44', 'tests/test_release_binding.py': '2db77fb31af6b7e536420a16aaa92fc237404570d0f97df37f374fed788c2d0f', 'tests/test_v021_release_records.py': '7d5f90c969295c019e515133cca6abbb2458882c53b43a7bee3c59ca44a95ee5', 'tests/test_v045_release_records.py': 'be9693d6ad6937f0080f6022d3db602ad8530c0d24f8528b85ebc3ee4c492da4'}
+HISTORY_PINS={'tests/test_repository_contract.py':'1c1fcfee0aefd633452a4515e451a0008cef5e758a47f09fbc1e16e8d988d72c', 'tests/test_release_binding.py': '2db77fb31af6b7e536420a16aaa92fc237404570d0f97df37f374fed788c2d0f', 'tests/test_v021_release_records.py': '7d5f90c969295c019e515133cca6abbb2458882c53b43a7bee3c59ca44a95ee5', 'tests/test_v045_release_records.py': 'be9693d6ad6937f0080f6022d3db602ad8530c0d24f8528b85ebc3ee4c492da4'}
 
 
 def history_commands(checkout,case):
