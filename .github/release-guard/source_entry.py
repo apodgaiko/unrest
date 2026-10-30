@@ -76,8 +76,10 @@ class Policy:
         commit_input=None
         if self.case in GIT_CASES and vector[1:2]==['commit-tree'] and vector[3:4]==['-p']:
             commit_input=getattr(self.local,'run_input',None)
-            if (type(commit_input) is not str or len(commit_input)>16384
-                    or not commit_input.startswith('Integrate Unrest workspaces\n\n')):
+            from git_policy import operand_text
+            try:
+                operand_text(commit_input,16384)
+            except Refused:
                 self.refuse('Git finite commit input')
         answer=self.client.request('launch-proposal',{'case':self.case,'executable':executable,'argv':vector,
             'cwd':cwd,'environment':environment,'stdin':commit_input})

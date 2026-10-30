@@ -225,7 +225,27 @@ def test_return_is_identity_bound_append_only_and_parent_is_unchanged(repository
     assert _git(repository, "rev-parse", "HEAD^{tree}") == parent_tree
 
 
-def test_disjoint_returns_integrate_in_deterministic_order(repository: Path) -> None:
+def test_disjoint_returns_integrate_in_deterministic_order(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original_run = subprocess.run
+    commit_inputs: list[tuple[str, dict[str, str]]] = []
+    predecessor_dates: list[str] = []
+    identity_keys = (
+        "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_AUTHOR_DATE",
+        "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL", "GIT_COMMITTER_DATE",
+    )
+
+    def observed_run(*args, **kwargs):
+        vector = tuple(args[0] if args else kwargs["args"])
+        result = original_run(*args, **kwargs)
+        if vector[:2] == ("git", "commit-tree"):
+            commit_inputs.append((kwargs["input"], {key: kwargs["env"][key] for key in identity_keys}))
+        elif vector[:4] == ("git", "show", "-s", "--format=%aI"):
+            predecessor_dates.append(result.stdout.strip())
+        return result
+
+    monkeypatch.setattr(subprocess, "run", observed_run)
     manager = _manager(repository)
     later = _lease(manager, repository, "lease:zeta", ("zeta.txt",))
     earlier = _lease(manager, repository, "lease:alpha", ("alpha.txt",))
@@ -254,6 +274,20 @@ def test_disjoint_returns_integrate_in_deterministic_order(repository: Path) -> 
     assert (repository / "alpha.txt").read_text(encoding="utf-8") == "alpha\n"
     assert (repository / "zeta.txt").read_text(encoding="utf-8") == "zeta\n"
     assert _git(repository, "rev-parse", "HEAD") == result.accepted_revision
+    assert len(commit_inputs) == len(predecessor_dates) == 1
+    message, identity = commit_inputs[0]
+    assert message == (
+        "Integrate Unrest workspaces\n\n"
+        f"lease:alpha {earlier_return.patch_digest}\nlease:zeta {later_return.patch_digest}\n"
+    )
+    assert identity == {
+        "GIT_AUTHOR_NAME": "Unrest parent integration authority",
+        "GIT_COMMITTER_NAME": "Unrest parent integration authority",
+        "GIT_AUTHOR_EMAIL": "unrest@localhost",
+        "GIT_COMMITTER_EMAIL": "unrest@localhost",
+        "GIT_AUTHOR_DATE": predecessor_dates[0],
+        "GIT_COMMITTER_DATE": predecessor_dates[0],
+    }
 
 
 def test_overlap_stale_and_validation_failure_preserve_parent(repository: Path) -> None:

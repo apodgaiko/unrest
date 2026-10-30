@@ -127,8 +127,7 @@ Git retains finite authored command forms, repository/worktree custody, exact
 argv/env/cwd and bounded stdin data, closed native/helper execution, and actual
 parent/descendant waits. Object IDs are exactly40 lowercase hex characters;
 revision expressions are only fixed authored forms. Paths retain owned slot and
-canonical-directory constraints, and integration-message/date operands retain their bounded
-formats. No generic Git option or executable permission follows.
+canonical-directory constraints; commit-content operands remain bounded data. No generic Git option or executable permission follows.
 
 The guard no longer certifies commit/tree/date semantic dependency graphs or
 original Python stdout-object continuity. Product tests certify correct refs,
@@ -1033,3 +1032,12 @@ sets, parent roles, mutable counters and helper eligibility. Shared native image
 byte acquisition and intent issuance remain single functions. This consolidation
 changes internal names and module boundaries, not launch permission or evidence
 claims; fewer files alone is not a verified startup-performance improvement.
+
+Commit-tree admission retains the exact command form and two full object IDs.
+Its stdin and six explicitly named author/committer identity/date fields are
+bounded primitive UTF-8 data; other environment additions remain forbidden.
+Calendar parsing, fixed identity values, author/committer equality and sorted
+lease-message interpretation are retired from guard admission. The original
+integration test now observes the real forwarded subprocess call and actual
+predecessor-date query, asserting the message order and all six identity values
+after successful Git execution. Actual native/helper waits remain mandatory.

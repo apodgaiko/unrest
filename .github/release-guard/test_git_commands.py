@@ -98,8 +98,12 @@ def test_swapped_operands_are_refused_at_complete_vector_matching(mutation):
         operation, data = 'commit-tree', fields('commit-tree')
         data['leases'] = tuple(reversed(data['leases'])) if mutation == 'lease-order' else (data['leases'][0],) * 2
     cwd = INTEGRATION if operation in ('apply', 'commit-tree') else REPO
-    with pytest.raises(Refused):
-        build(operation, REPO, cwd, data, family='workspaces')
+    if mutation in ('lease-order','lease-duplicate'):
+        value=build(operation,REPO,cwd,data,family='workspaces')
+        assert value.argv==('git','commit-tree',TREE,'-p',BASE) and value.stdin
+    else:
+        with pytest.raises(Refused):
+            build(operation,REPO,cwd,data,family='workspaces')
 
 
 class CallbackTrap:
@@ -130,13 +134,15 @@ def test_owned_workspace_literal_command_derives_its_inline_digest():
 
 
 
-def test_commit_input_preserves_the_per_lease_identifier_byte_bound():
-    data=fields('commit-tree')
-    data['leases']=(('lease:'+'a'*4091,'sha256:'+PATCH),)
-    with pytest.raises(Refused,match='lease identity'):
-        build('commit-tree',REPO,INTEGRATION,data,family='workspaces')
-    data['leases']=(('lease:'+'a'*4090,'sha256:'+PATCH),)
-    assert build('commit-tree',REPO,INTEGRATION,data,family='workspaces').stdin
+def test_commit_input_is_bounded_data_without_a_second_lease_parser():
+    from git_policy import command_match
+    from test_git_vectors import render
+    vector,_,environment=render('commit-tree',REPO,fields('commit-tree'),family='workspaces')
+    for message in ('ordinary message','unsorted\nrepeated\nrepeated\n','λ'*8192):
+        assert command_match('commit-tree',REPO,INTEGRATION,vector,message,environment,family='workspaces').stdin==message
+    for message in ('λ'*8193,'x'*16385,'x\0y',None,True):
+        with pytest.raises(Refused):
+            command_match('commit-tree',REPO,INTEGRATION,vector,message,environment,family='workspaces')
 
 
 def test_factored_eligibility_preserves_every_original_ordered_operation():

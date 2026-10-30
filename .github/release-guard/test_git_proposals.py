@@ -280,3 +280,30 @@ def test_proposal_update_targets_only_authored_main_or_master(monkeypatch,branch
     with pytest.raises(Refused):
         prepare(host,{},raw)
     assert len(calls)==1
+
+
+@pytest.mark.parametrize('extra',[None,'GIT_CONFIG_COUNT','GIT_EXEC_PATH','LD_PRELOAD','GIT_AUTHOR_EXTRA'])
+def test_commit_content_data_does_not_extend_the_security_environment(monkeypatch,extra):
+    import git_policy
+    monkeypatch.setattr(git_policy,'image',lambda:'a'*64)
+    case=CASES[3]
+    host=SimpleNamespace(case=case,git=SimpleNamespace(repositories={(case,REPO):{'path':REPO}}),
+        binding={'entry':{'path':'/native/python','sha256':'b'*64}},
+        meta_environment=lambda:{'PATH':'/usr/bin:/bin'})
+    calls=[]
+    wire_git(host,calls)
+    identity={name:'ordinary data' for name in ('GIT_AUTHOR_NAME','GIT_AUTHOR_EMAIL','GIT_AUTHOR_DATE',
+        'GIT_COMMITTER_NAME','GIT_COMMITTER_EMAIL','GIT_COMMITTER_DATE')}
+    identity['GIT_COMMITTER_DATE']='another data value'
+    raw={'executable':'/usr/bin/git','argv':['git','commit-tree',TREE,'-p',REV],
+        'cwd':REPO+'/.unrest-runtime/workspaces/integration-abcdefgh','stdin':'message data',
+        'environment':{**host.meta_environment(),'PYTEST_VERSION':'9.0.2',
+            'PYTEST_CURRENT_TEST':case+' (call)',**identity}}
+    if extra is not None:
+        raw['environment'][extra]='must not reach a child'
+        with pytest.raises(Refused):
+            prepare(host,{},raw)
+        assert not calls and not host.intents
+    else:
+        assert prepare(host,{},raw)['translated']==['/usr/bin/git',*raw['argv'][1:]]
+        assert {key:dict(calls[0][0].environment)[key] for key in identity}==identity

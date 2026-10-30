@@ -70,7 +70,9 @@ def render(operation,repository,data,*,family='workspaces',fixture=None,branch='
     environment={}
     if operation=='commit-tree':
         stdin='Integrate Unrest workspaces\n\n'+'\n'.join(' '.join(row) for row in data['leases'])+'\n'
-        environment['GIT_AUTHOR_DATE']=data['date']
+        environment.update(GIT_AUTHOR_NAME='Unrest parent integration authority',GIT_AUTHOR_EMAIL='unrest@localhost',
+            GIT_COMMITTER_NAME='Unrest parent integration authority',GIT_COMMITTER_EMAIL='unrest@localhost',
+            GIT_AUTHOR_DATE=data['date'],GIT_COMMITTER_DATE=data['date'])
     return vector,stdin,environment
 
 

@@ -8,7 +8,6 @@ import hashlib
 import os
 import re
 import subprocess
-from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 import ast
@@ -138,11 +137,11 @@ def public_prepare(repository: Path, destination: Path, head: str) -> dict[str, 
             'scope': 'public HEAD commit graph; HEAD/FM000/six historical trees; exact tag objects'}
 
 
-def operand_text(value):
-    if type(value) is not str or not value or len(value) > 4096 or '\0' in value:
+def operand_text(value, maximum=4096):
+    if type(value) is not str or not value or len(value) > maximum or '\0' in value:
         raise Refused('git value primitive')
     try:
-        if len(value.encode('utf-8')) > 4096:
+        if len(value.encode('utf-8')) > maximum:
             raise Refused('git value text bound')
     except UnicodeError:
         raise Refused('git value text encoding') from None
@@ -154,18 +153,6 @@ def operand_digest(value, length=40):
         raise Refused('git value digest')
     return value
 
-
-def operand_date_text(value):
-    operand_text(value)
-    try:
-        parsed = datetime.fromisoformat(value)
-    except ValueError:
-        raise Refused('git value date') from None
-    canonical = parsed.isoformat()
-    alternatives = (canonical, canonical[:-6] + 'Z') if canonical.endswith('+00:00') else (canonical,)
-    if parsed.tzinfo is None or value not in alternatives:
-        raise Refused('git value canonical date')
-    return value
 
 
 # Closed Git commands for the workspace/evolution launch families.
@@ -301,18 +288,10 @@ def command_match(operation, repository, location, argv, stdin, environment, *, 
             case ('commit-tree',('commit-tree',tree,'-p',revision)):
                 operand_digest(tree)
                 operand_digest(revision)
-                date=environment.get('GIT_AUTHOR_DATE')
-                operand_date_text(date)
-                if type(stdin) is not str or len(stdin)>16384 or not stdin.startswith('Integrate Unrest workspaces\n\n') or not stdin.endswith('\n'):
-                    raise Refused('Git finite commit input')
-                rows=stdin[len('Integrate Unrest workspaces\n\n'):-1].split('\n')
-                import re
-                if (not 0<len(rows)<=128 or rows!=sorted(rows) or len(set(row.split(' ')[0] for row in rows))!=len(rows)
-                        or any(len(row.split(' ',1)[0])>4096 or re.fullmatch(r'lease:[A-Za-z0-9_-]+ sha256:[a-f0-9]{64}',row) is None for row in rows)):
-                    raise Refused('git commit deterministic lease identity')
-                additions=tuple(sorted({'GIT_AUTHOR_NAME':'Unrest parent integration authority','GIT_AUTHOR_EMAIL':'unrest@localhost',
-                    'GIT_COMMITTER_NAME':'Unrest parent integration authority','GIT_COMMITTER_EMAIL':'unrest@localhost',
-                    'GIT_AUTHOR_DATE':date,'GIT_COMMITTER_DATE':date}.items()))
+                operand_text(stdin,16384)
+                additions=tuple(sorted((name,operand_text(environment.get(name))) for name in (
+                    'GIT_AUTHOR_NAME','GIT_AUTHOR_EMAIL','GIT_AUTHOR_DATE',
+                    'GIT_COMMITTER_NAME','GIT_COMMITTER_EMAIL','GIT_COMMITTER_DATE')))
             case _:
                 raise Refused('Git proposal does not match a template')
     if operation!='commit-tree' and stdin is not None:
