@@ -6,7 +6,7 @@ import fcntl
 import ctypes
 
 from content_manifest import Refused
-from launch_policy import build_expected
+from launch_policy import build_expected,check_expected,admit_expected
 from multiprocess_routes import ROUTES,Spawn,plan as route_plan
 
 CASES=tuple('tests/test_multiprocess_resource_ownership.py::test_original_child_status_is_preserved['+str(status)+']' for status in (0,17))
@@ -164,8 +164,7 @@ def proposal(host,actor,raw):
     environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':host.case+' (call)'}
     value,role,descriptors=expected(host.case,raw['argv'],raw['passfds'],raw['target'],native,
         host.binding['entry']['sha256'],host.meta['checkout'],environment)
-    if raw['environment']!=dict(value.environment):
-        raise Refused('spawn original environment')
+    check_expected(raw,value)
     records=[row for row in host.intents.values() if row['case']==host.case]
     spec=plan(host.case,raw['target']) if role=='mp-child' else None
     quota(records,role,raw['target'],spec.maximum if spec is not None else 1)
@@ -211,16 +210,9 @@ def proposal(host,actor,raw):
                 or len({tuple(row[1:3]) for row in (tracked,bootstrap,sentinel)})!=3):
             raise Refused('spawn distinct bootstrap reader and sentinel writer')
     vector=[native,'-I','-S',*raw['argv'][3:]]
-    answer=host.admit_launch(actor,value,role,vector,None,inherited=inherited,maximum=count(host.case)-1 if role=='mp-child' else 1)
-    if answer is None:
-        return None
-    if role=='mp-tracker':
-        host.intents[answer['ticket']]['tracker_read']=tracker_read
-    else:
-        if spec is None:
-            raise Refused('spawn child declaration absent')
-        host.intents[answer['ticket']].update(mp_target=raw['target'])
-    return {**answer,'translated':vector}
+    fields={'tracker_read':tracker_read} if role=='mp-tracker' else {'mp_target':raw['target']}
+    return admit_expected(host,actor,raw,value,role,vector,inherited=inherited,
+        maximum=count(host.case)-1 if role=='mp-child' else 1,fields=fields)
 
 
 def inherited(profile,actual):

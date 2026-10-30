@@ -119,10 +119,14 @@ def render_string(node,substitutions):
     return ''.join(result)
 
 
-def admit_expected(host,actor,raw,value,role,vector,script_pin=None,*,fields=None,**options):
-    """Finalize an independently reconstructed declaration; never infer one."""
+def check_expected(raw,value):
     if raw['argv']!=list(value.argv) or raw['environment']!=dict(value.environment) or raw['cwd']!=value.cwd:
         raise Refused('original launch operands differ from declaration')
+
+
+def admit_expected(host,actor,raw,value,role,vector,script_pin=None,*,fields=None,**options):
+    """Finalize an independently reconstructed declaration; never infer one."""
+    check_expected(raw,value)
     answer=host.admit_launch(actor,value,role,vector,script_pin,**options)
     if answer is None:
         return None

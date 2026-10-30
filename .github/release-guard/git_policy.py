@@ -880,13 +880,13 @@ class Git:
         return self.host.ledger.reaped(birth, actor['token'])
 
 
-    def owned_launch(self, actor, repository, expected, vector):
+    def owned_launch(self, actor, raw, repository, expected, vector):
         host = self.host
         if host.case != SITE_CASES[7] or self.repositories.get((host.case,repository), {}).get('path') != repository:
             raise Refused('workspace owned launch scope')
         cwd = repository + '/.unrest-runtime/workspaces/trees/process'
         self.location(Path(repository), cwd)
-        return host.admit_launch(actor,expected,'workspace-owned',vector,expected.payload_sha256)
+        return admit_expected(host,actor,raw,expected,'workspace-owned',vector,expected.payload_sha256)
 
 
 def workspace_prepare(host,actor,raw):
@@ -922,10 +922,7 @@ def workspace_prepare(host,actor,raw):
         )
         vector=[native,'-I','-S','-c',SITE_OWNED_BODY]
         host.root_only(actor)
-        if raw['environment']!=dict(expected.environment):
-            raise Refused('Git owned process environment differs')
-        answer=host.git.owned_launch(actor,repository,expected,vector)
-        return None if answer is None else {**answer,'translated':vector}
+        return host.git.owned_launch(actor,raw,repository,expected,vector)
 
     else:
         if raw['executable']!='/usr/bin/git':

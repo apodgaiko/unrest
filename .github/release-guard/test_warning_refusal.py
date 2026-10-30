@@ -41,7 +41,7 @@ def test_original_warning_environment_is_exact(tmp_path, monkeypatch, mutation):
     observer.meta={'mounts':{},'checkout':str(ROOT),'owned':str(tmp_path)}
     observer.binding={'entry':{'path':'/native/python','sha256':'a'*64}}
     observer.intents,observer.actors={},{}
-    with pytest.raises(Refused,match='differs from declaration'):
+    with pytest.raises(Refused,match='original launch operands differ from declaration'):
         proposal(observer,{'birth':observer.root_birth,'role':'root'},changed)
     assert not observer.intents
     assert proposal(observer,{'birth':observer.root_birth,'role':'root'},request)['ok'] is True

@@ -6,7 +6,7 @@ from pathlib import Path
 from case_inventory import identity
 from content_manifest import Refused, read_regular
 from control_transport import unique
-from launch_policy import build_expected,source_unit
+from launch_policy import build_expected,source_unit,admit_expected
 
 TEST='tests/test_provider_review.py'
 SCRIPT='tests/fixtures/approval_acp_process.py'
@@ -104,14 +104,12 @@ def proposal(host,actor,raw):
         tuple(sorted(environment.items())),
         str(checkout), 'python-script', PIN,
     )
-    if raw['environment']!=environment:
-        raise Refused('review-wire original environment')
     snapshot=host.directory/('review-wire-'+hashlib.sha256((case+str(len(records))).encode()).hexdigest()+'.json')
     vector=[native,'-I','-S',argv[1],str(snapshot)]
-    answer=host.admit_launch(actor,value,'review-wire',vector,PIN,maximum=count(case))
+    answer=admit_expected(host,actor,raw,value,'review-wire',vector,PIN,maximum=count(case))
     if answer is None:
         return None
     with snapshot.open('xb') as stream:
         stream.write(body)
     snapshot.chmod(0o444)
-    return {**answer,'translated':vector}
+    return answer

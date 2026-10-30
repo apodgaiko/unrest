@@ -1065,3 +1065,13 @@ add a member or hardlink the sealed files; real filesystem controls exercise
 these refusals. Detecting post-sealing mutation by the trusted observer/host is
 retired from this claim. Acquisition-race, full byte/inventory comparison and
 root-replacement refusals remain. This custody shortcut grants no launch right.
+
+Process declarations share one complete argv/environment/cwd comparison and one
+admission finalizer. Main source proposals, LaunchPlan preflight, controlled
+review-wire, workspace-owned Python and multiprocessing use that same path.
+Their classifiers, parent checks, finite quotas, native image selection, stdin
+rules, descriptor acquisition and special result fields remain separate. The
+matcher never infers an expected declaration from a request. Failed comparison
+creates no intent, and a pending admission creates no fixture snapshot or token
+binding. Existing module/native alias handling remains at ingress and exec
+admission; it is not replaced by a generic executable allowance.

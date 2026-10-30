@@ -7,6 +7,7 @@ from pathlib import Path
 import hashlib
 
 from content_manifest import Refused
+from launch_policy import admit_expected
 from plan_launch import CASES as PLANS, expected as plan_expected
 from session_launch import CASES as SESSIONS, expected as session_expected
 from fixed_inline import CASES as FIXED, SEQUENCES, NESTED_CASES, STORAGE_CASES, INSPECTION_CASES, MEASUREMENT_CASE, COMPLETION_CASES, DRAIN_CASE, expected as fixed_expected, STDIO, startup_expected, translated as fixed_translated
@@ -240,19 +241,17 @@ def proposal(host, actor, raw):
             role='delayed-backend'
     else:
         raise Refused('finite process proposal has no declaration')
-    if (tuple(argv)!=expected.argv or cwd!=expected.cwd or raw['environment']!=dict(expected.environment)):
-        raise Refused('finite process proposal differs from declaration')
     if case in PLANS:
         from plan_observer import launch
-        answer=launch(host,actor,model)
-    else:
-        answer=host.admit_launch(actor,expected,role,vector,script_pin,
-            maximum=maximum,inherited=inherited,port=port)
-    if answer is not None and case in ORDINARY and role=='session-invalid':
+        return launch(host,actor,raw,model)
+    answer=admit_expected(host,actor,raw,expected,role,vector,script_pin,
+        maximum=maximum,inherited=inherited,port=port,
+        fields={'fixed_operation':operation} if case in FIXED else None)
+    if answer is None:
+        return None
+    if case in ORDINARY and role=='session-invalid':
         host.intents[answer['ticket']]['attempt_path']=expected.argv[0]
-    if answer is not None and case in FIXED:
-        host.intents[answer['ticket']].update(fixed_operation=operation)
-    if answer is not None and case in CLEANUP and role=='cleanup-acp':
+    if case in CLEANUP and role=='cleanup-acp':
         from cleanup_launch import scenario,snapshot_path
         from source_profile import digest
         body=scenario(case,base)
@@ -262,6 +261,4 @@ def proposal(host, actor, raw):
         with snapshot.open('xb') as stream:
             stream.write(body)
         snapshot.chmod(0o444)
-    if answer is None:
-        return None
-    return {**answer,'translated':vector}
+    return answer

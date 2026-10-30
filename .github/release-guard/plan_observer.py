@@ -9,6 +9,7 @@ from pathlib import Path
 import time
 
 from content_manifest import Refused, native_digest
+from launch_policy import admit_expected
 from plan_launch import CASES, INVALID, expected
 from process_ledger import Birth
 from linux_observation import process_identity
@@ -19,9 +20,9 @@ def key(file):
     return [info.st_dev,info.st_ino,info.st_mode,info.st_uid,info.st_gid,info.st_nlink,info.st_size,info.st_mtime_ns,info.st_ctime_ns]
 
 
-def launch(host,actor,result):
+def launch(host,actor,raw,result):
     host.root_only(actor)
-    answer=host.admit_launch(actor,result.expected,result.role,list(result.vector),result.expected.payload_sha256)
+    answer=admit_expected(host,actor,raw,result.expected,result.role,list(result.vector),result.expected.payload_sha256)
     if answer is not None:
         value=host.intents[answer['ticket']]
         value['plan']=result
