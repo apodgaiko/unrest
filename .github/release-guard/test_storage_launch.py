@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from content_manifest import Refused
-import storage_launch as storage
+import fixed_leaves as storage
 from fixed_inline import SEQUENCES
 
 ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
@@ -32,10 +32,10 @@ def fixture(tmp_path,monkeypatch,case):
     return host,argv,str(directory if relative else ROOT),target
 
 
-@pytest.mark.parametrize('case',storage.CASES)
+@pytest.mark.parametrize('case',storage.STORAGE_CASES)
 def test_every_original_parameter_keeps_lexical_operand_and_input_bytes(tmp_path,monkeypatch,case):
     host,argv,cwd,target=fixture(tmp_path,monkeypatch,case)
-    value=storage.expected(host,argv,cwd,{'PATH':'/bin:/usr/bin'},argv[0],'a'*64)
+    value=storage.expected(host,None,argv,cwd,{'PATH':'/bin:/usr/bin'},argv[0],'a'*64)
     assert value.argv==tuple(argv) and value.cwd==cwd
     assert target.read_bytes() and value.argv[2]==storage.PROGRAM
     assert len(SEQUENCES[case])==(2 if case==storage.DIRECTORY else 1)
@@ -43,9 +43,9 @@ def test_every_original_parameter_keeps_lexical_operand_and_input_bytes(tmp_path
 
 @pytest.mark.parametrize('mutation',['outside','alias','hardlink','contents','cwd','path','generation','owner'])
 def test_read_declaration_never_borrows_other_file_or_fixture_generation(tmp_path,monkeypatch,mutation):
-    case=next(iter(storage.CASES))
+    case=next(iter(storage.STORAGE_CASES))
     host,argv,cwd,target=fixture(tmp_path,monkeypatch,case)
-    storage.expected(host,argv,cwd,{},argv[0],'a'*64)
+    storage.expected(host,None,argv,cwd,{},argv[0],'a'*64)
     if mutation=='outside':
         argv[3]=str(tmp_path/'other')
     elif mutation=='alias':
@@ -66,17 +66,17 @@ def test_read_declaration_never_borrows_other_file_or_fixture_generation(tmp_pat
     else:
         host.fixture_roots[case]=('foreign',1,1)
     if mutation in ('contents','path'):
-        value=storage.expected(host,argv,cwd,{},argv[0],'a'*64)
+        value=storage.expected(host,None,argv,cwd,{},argv[0],'a'*64)
         assert value.argv==tuple(argv)
     else:
         with pytest.raises((Refused,FileNotFoundError)):
-            storage.expected(host,argv,cwd,{},argv[0],'a'*64)
+            storage.expected(host,None,argv,cwd,{},argv[0],'a'*64)
 
 
 def test_fixed_reader_is_the_original_program_without_dynamic_execution():
     import ast
     from launch_policy import source_unit
-    owner=source_unit(ROOT,storage.TEST,'68418a6fac8295d675e2ca6f0849b16469a816c114c0b80a523f1b1d8797b20b',
+    owner=source_unit(ROOT,storage.STORAGE_TEST,'68418a6fac8295d675e2ca6f0849b16469a816c114c0b80a523f1b1d8797b20b',
         ('TestAtomicWriteText','_fresh_process_bytes'))
     calls=[node for node in ast.walk(owner) if isinstance(node,ast.Call)
         and isinstance(node.func,ast.Attribute) and node.func.attr=='check_output']

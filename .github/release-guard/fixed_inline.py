@@ -12,10 +12,8 @@ from launch_policy import build_expected,source_unit,literal,render_string
 from speed_inline import CASES as SPEED_CASES, PRELUDE, CLI_CASE, cli_expected
 from nested_pytest import CASE as NESTED_CASE, NODES, PYTEST_PIN, CASES as NESTED_CASES, HERMETIC, hermetic
 
-from storage_launch import CASES as STORAGE_CASES, DIRECTORY as STORAGE_DIRECTORY
-from inspection_launch import CASES as INSPECTION_CASES, FRONTIER
-from measurement_launch import CASE as MEASUREMENT_CASE
-from completion_launch import CASES as COMPLETION_CASES, SEQUENCES as COMPLETION_SEQUENCES
+from fixed_leaves import (STORAGE_CASES,DIRECTORY as STORAGE_DIRECTORY,INSPECTION_CASES,FRONTIER,
+    MEASUREMENT_CASE,COMPLETION_CASES,COMPLETION_SEQUENCES)
 
 TEST = 'tests/test_repository_contract.py'
 REMOVED = ('unrest_harness.baseline', 'unrest_harness.governance', 'unrest_harness.repository_contract')

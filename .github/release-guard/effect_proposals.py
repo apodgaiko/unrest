@@ -130,18 +130,9 @@ def proposal(host, actor, raw):
                 raise Refused('pipe drain original workspace generation')
             expected=build_expected(case,native,pin,(native,'-c',body),
                 (('PATH',root_environment['PATH']),),cwd,'python-command')
-        elif case in COMPLETION_CASES:
-            from completion_launch import expected as completion_expected
-            expected=completion_expected(host,operation,argv,cwd,environment,native,pin)
-        elif case==MEASUREMENT_CASE:
-            from measurement_launch import expected as measurement_expected
-            expected=measurement_expected(host,argv,cwd,environment,native,pin)
-        elif case in INSPECTION_CASES:
-            from inspection_launch import expected as inspection_expected
-            expected=inspection_expected(host,argv,cwd,environment,native,pin)
-        elif case in STORAGE_CASES:
-            from storage_launch import expected as storage_expected
-            expected=storage_expected(host,argv,cwd,environment,native,pin)
+        elif case in (*COMPLETION_CASES,MEASUREMENT_CASE,*INSPECTION_CASES,*STORAGE_CASES):
+            from fixed_leaves import expected as leaf_expected
+            expected=leaf_expected(host,operation,argv,cwd,environment,native,pin)
         elif case in STDIO:
             expected = startup_expected(case,native,pin,cwd,owned)
         else:

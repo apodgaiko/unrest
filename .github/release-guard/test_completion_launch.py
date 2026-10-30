@@ -8,15 +8,15 @@ import pytest
 from content_manifest import Refused
 from fixed_inline import SEQUENCES
 from source_observer import Observer
-import completion_launch as completion
+import fixed_leaves as completion
 
 ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
 
 
-@pytest.mark.parametrize('case',completion.CASES)
+@pytest.mark.parametrize('case',completion.COMPLETION_CASES)
 def test_each_primitive_keeps_original_path_phase_literal_and_quota(tmp_path,monkeypatch,case):
     monkeypatch.setattr(completion,'OWNER',os.getuid())
-    suffix,phase=completion.CASES[case]
+    suffix,phase=completion.COMPLETION_CASES[case]
     root=tmp_path/'pytest'/(case.split('::')[1].split('[')[0][:30]+'0')
     root.mkdir(parents=True)
     host=SimpleNamespace(case=case,meta={'checkout':str(ROOT),'owned':str(tmp_path)},fixture_roots={})
@@ -32,7 +32,7 @@ def test_each_primitive_keeps_original_path_phase_literal_and_quota(tmp_path,mon
 
 @pytest.mark.parametrize('operation,status,accepted',[('crash',73,True),('crash',0,True),('crash',-15,False),('retry',0,True),('retry',73,True)])
 def test_primitive_application_status_is_left_to_original_assertions(operation,status,accepted):
-    case=next(iter(completion.CASES))
+    case=next(iter(completion.COMPLETION_CASES))
     birth=object()
     host=object.__new__(Observer)
     host.ledger=SimpleNamespace(process=lambda value:SimpleNamespace(terminal=(3,status<<8,status)))

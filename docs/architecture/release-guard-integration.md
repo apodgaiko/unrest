@@ -1435,3 +1435,13 @@ bytes, and generated cache files enter the dependency inventory. Candidate
 source, fixture scripts, launch admission, READY, original timeout assertions
 and actual wait/cleanup requirements remain unchanged. Compiler output stays
 in the encrypted private evidence directory.
+
+
+Storage reads, fresh inspections, completion primitives and the simulated
+measurement command share one fixed-leaf builder. Disjoint original case groups
+select explicit branches, retaining each original arity, source pin, cwd and
+operand scope. Storage preserves lexical relative argv while independently
+checking its canonical regular input; sealed replay and measurement alone
+select their exact script pins. The existing outer sequences and no-query
+admission remain. Four duplicate wrappers are removed rather than retained
+as compatibility layers.

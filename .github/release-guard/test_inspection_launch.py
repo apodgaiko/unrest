@@ -9,7 +9,7 @@ import pytest
 
 from content_manifest import Refused
 from fixed_inline import SEQUENCES
-import inspection_launch as inspection
+import fixed_leaves as inspection
 
 ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
 
@@ -41,21 +41,21 @@ def fixture(tmp_path,monkeypatch,case):
     return host,argv,cwd,env,record
 
 
-@pytest.mark.parametrize('case',inspection.CASES)
+@pytest.mark.parametrize('case',inspection.INSPECTION_CASES)
 def test_original_byte_and_operand_parity_binds_owned_project_path(tmp_path,monkeypatch,case):
     host,argv,cwd,env,record=fixture(tmp_path,monkeypatch,case)
-    value=inspection.expected(host,argv,cwd,env,argv[0],'a'*64)
+    value=inspection.expected(host,None,argv,cwd,env,argv[0],'a'*64)
     assert value.argv==tuple(argv) and value.cwd==cwd
     assert len(SEQUENCES[case])==(2 if case==inspection.FRONTIER else 1)
     expected=env if case!=inspection.RECOVERY else {**env,'UNREST_HOME':str(record.parents[3]),'UNREST_PROJECTS_DIR':str(record.parents[2])}
     assert dict(value.environment)==expected
 
 
-@pytest.mark.parametrize('case',inspection.CASES)
+@pytest.mark.parametrize('case',inspection.INSPECTION_CASES)
 @pytest.mark.parametrize('mutation',['id','workspace','missing','alias','generation','pid-path'])
 def test_inspection_cannot_borrow_foreign_or_stale_project_input(tmp_path,monkeypatch,case,mutation):
     host,argv,cwd,env,record=fixture(tmp_path,monkeypatch,case)
-    inspection.expected(host,argv,cwd,env,argv[0],'a'*64)
+    inspection.expected(host,None,argv,cwd,env,argv[0],'a'*64)
     if mutation in ('id','workspace'):
         value=json.loads(record.read_bytes())
         value['id' if mutation=='id' else 'workspace_dir']='foreign'
@@ -70,8 +70,8 @@ def test_inspection_cannot_borrow_foreign_or_stale_project_input(tmp_path,monkey
     else:
         argv[-1]='../foreign'
     if mutation in ('id','workspace','missing'):
-        value=inspection.expected(host,argv,cwd,env,argv[0],'a'*64)
+        value=inspection.expected(host,None,argv,cwd,env,argv[0],'a'*64)
         assert value.argv==tuple(argv)
     else:
         with pytest.raises((Refused,FileNotFoundError)):
-            inspection.expected(host,argv,cwd,env,argv[0],'a'*64)
+            inspection.expected(host,None,argv,cwd,env,argv[0],'a'*64)
