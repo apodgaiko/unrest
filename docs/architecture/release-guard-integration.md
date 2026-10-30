@@ -1207,3 +1207,10 @@ No bytes are read and no descriptor flags are changed during measurement.
 The ordinary sleep fixture retains its exact `/bin` alias check and shares the
 root-to-file native custody and byte measurement used for Git and other system
 images. This removes a duplicate implementation, not an image or owner check.
+
+Console admission no longer reasserts generated project/entry-point/MCP metadata.
+The unchanged distribution and CLI tests own those result assertions. Admission
+still chooses only the fixed console names and normalized paths, pins actual
+installed script bytes against the immutable preparation receipt, and matches
+exact argv, environment, cwd, native entry and parent. Metadata cannot substitute
+another executable; the UV parent retains its independent child-script join.

@@ -1,9 +1,7 @@
 """Three exact guarded console paths; installed scripts remain actual file bodies."""
 from pathlib import Path
-import configparser
-import tomllib
 
-from content_manifest import Refused,read_regular,native_digest
+from content_manifest import Refused,native_digest
 
 REGISTRATIONS={'unrest':'unrest_harness.cli:cli','unrest-server':'unrest_harness.server:main'}
 
@@ -19,23 +17,11 @@ def normalized(runtime,dependencies,name,arguments):
 
 
 def script(host,name):
-    metadata=host.meta
     if name not in REGISTRATIONS:
         raise Refused('console undeclared installed script')
-    checkout=Path(metadata['checkout'])
-    declaration=tomllib.loads((checkout/'pyproject.toml').read_text())['project']['scripts']
-    if declaration!=REGISTRATIONS:
-        raise Refused('console current exact project registrations')
     from prepared_distribution import observer_inputs
     value=observer_inputs(host)
     root=value['installed_site']
-    names=sorted(root.glob('*.dist-info/entry_points.txt'))
-    if len(names)!=1:
-        raise Refused('console installed registration cardinality')
-    parser=configparser.RawConfigParser(strict=True)
-    parser.read_string(read_regular(names[0],65536,uid=0)[0].decode())
-    if parser.sections()!=['console_scripts'] or dict(parser['console_scripts'])!=REGISTRATIONS:
-        raise Refused('console installed registration bytes')
     path=root/'bin'/name
     pin=native_digest(path)
     if pin!=value['installed_members'].get('bin/'+name):
@@ -64,12 +50,6 @@ def proposal(host,actor,raw):
     parent=retain(host,cwd.parent,CASE.split('::')[-1][:30],20000)
     if cwd!=parent/'unrelated workspace' or cwd.resolve()!=cwd:
         raise Refused('console original unrelated workspace')
-    config=parent/'home/.codex/config.toml'
-    body,_,_=read_regular(config,65536,uid=20000)
-    registration=tomllib.loads(body.decode())['mcp_servers']['unrest']
-    if (registration['command']!='unrest-server' or registration['args']!=['--mode','orchestrator']
-            or registration['env']!=CONFIG_ENV):
-        raise Refused('console actual independently matched registration')
     ambient={**host.meta_environment(),'HOME':str(parent/'home'),'UNREST_HOME':str(parent/'.unrest'),
         'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':CASE+' (call)'}
     environment={**ambient,**CONFIG_ENV}
