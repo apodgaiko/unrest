@@ -35,6 +35,8 @@ NODES+=tuple(FRAMES+'::'+name for name in (
 ))
 COUNT_CASE=TEST+'::test_review_count_bound_and_malformed_action'
 NODES+=(*(TEST+'::test_schema_action_variants_do_not_persist_private_payloads[action'+str(i)+']' for i in range(6)),COUNT_CASE)
+DENIAL=tuple(TEST+'::test_runner_denial_overrides_handoff_and_reaps_owned_processes['+value+']' for value in ('True','False'))
+NODES+=DENIAL
 CASES=tuple(identity(node) for node in NODES)
 DOUBLE=TEST+'::test_duplicate_and_conflicting_reviews_are_monotone'
 
@@ -84,6 +86,8 @@ def runner_scenario(case,base):
 
 
 def proposal(host,actor,raw):
+    if host.case in DENIAL:
+        return denial_proposal(host,actor,raw)
     host.root_only(actor)
     case=host.case
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
@@ -114,4 +118,55 @@ def proposal(host,actor,raw):
     with snapshot.open('xb') as stream:
         stream.write(body)
     snapshot.chmod(0o444)
+    return answer
+
+
+def denial_proposal(host,actor,raw):
+    from cleanup_launch import PINS
+    from node_environment import environment
+    from owned_fixture import retain
+    host.root_only(actor)
+    case=host.case
+    checkout=Path(host.meta['checkout'])
+    source_unit(checkout,TEST,PINS[TEST])
+    native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
+    records=[row for row in host.intents.values() if row['case']==case]
+    if len(records)>1 or raw['stdin'] is not None:
+        raise Refused('denial original two-process sequence')
+    if any(not host.executed(row) or not host.actors[row['pid']]['body_ready'] for row in records):
+        return None
+    snapshot=None
+    if not records:
+        vector=(native,'-c','import time; time.sleep(30)')
+        env={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}
+        cwd,role,kind,payload=str(checkout),'fixed-inline','python-command',None
+    else:
+        base=retain(host,Path(raw['cwd']).parent,case.split('::')[1].split('[')[0][:30],20000)
+        cwd=str(base/'workspace')
+        vector=(native,str(checkout/SCRIPT),str(base/'scenario.json'))
+        env=environment(host.meta_environment(),base/'home','project','w1','work','attempt-1')
+        env.update(INITIAL_AGENT_MODE='agent',CODEX_CONFIG='{"approval_policy":"on-request","model_reasoning_effort":"medium","sandbox_mode":"workspace-write"}')
+        body,_,_=read_regular(base/'scenario.json',131072,uid=20000,mode=0o644)
+        value=json.loads(body,object_pairs_hook=unique)
+        handoff=str(base/'home/projects/project/.unrest-runtime/missions/mission-001/attempts/attempt-1__w1.json') if case==DENIAL[0] else None
+        if (type(value) is not dict or set(value)!={'events','delay','handoff'} or value['delay']!=30
+                or value['handoff']!=handoff or type(value['events']) is not list or len(value['events'])!=1):
+            raise Refused('denial inert scenario exact handoff')
+        try:
+            denied=value['events'][0]['update']['rawInput']['review']['status']=='denied'
+        except (KeyError,TypeError):
+            denied=False
+        if not denied:
+            raise Refused('denial scenario cannot approve')
+        snapshot=host.directory/('denial-'+hashlib.sha256(case.encode()).hexdigest()+'.json')
+        role,kind,payload='review-wire','python-script',PIN
+    expected=build_expected(case,native,pin,vector,tuple(sorted(env.items())),cwd,kind,payload)
+    translated=[native,'-I','-S',*vector[1:]]
+    if snapshot is not None:
+        translated[-1]=str(snapshot)
+    answer=admit_expected(host,actor,raw,expected,role,translated,payload)
+    if answer is not None and snapshot is not None:
+        with snapshot.open('xb') as stream:
+            stream.write(body)
+        snapshot.chmod(0o444)
     return answer

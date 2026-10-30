@@ -402,7 +402,7 @@ def main():
         chosen=[] if archive else selection(sys.argv[2:],checkout)
         modules={value.split('::',1)[0] for value in chosen}
         native_inputs=not chosen or bool(modules & NATIVE_MODULES)
-        distribution=not chosen or bool(modules & {case.split('::',1)[0] for case in (CONSOLE_CASE,*UV_CASES,*PACKAGE_CASES)})
+        distribution=not chosen or 'tests/test_repository_contract.py' in modules or bool(modules & {case.split('::',1)[0] for case in (CONSOLE_CASE,*UV_CASES,*PACKAGE_CASES)})
         phase_root=root/'archive' if archive else root
         if archive:
             phase_root.mkdir(mode=0o755)

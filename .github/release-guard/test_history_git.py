@@ -15,6 +15,10 @@ def test_exact_queries_are_readonly_and_bounded(case):
     assert all(not any('\0' in part or '\n' in part for part in row) for row in rows)
 
 def test_candidate_inventory_forms_and_historical_counts():
+    from git_policy import HISTORY_CROSSWALK
+    historical=commands(ROOT,HISTORY_CROSSWALK+'::test_v02_source_import_dependency_and_hard_cut_inventories_are_historical')
+    assert ('show','v0.2.0:pyproject.toml') in historical
+    assert ('show','v0.2.0:USER') not in historical
     assert commands(ROOT,BINDING+'::'+CATALOG[BINDING][0])==[
         ('ls-files','--stage','-z'),('ls-files','--others','--exclude-standard','-z')]
     assert len(commands(ROOT,BINDING+'::'+CATALOG[BINDING][3]))==5

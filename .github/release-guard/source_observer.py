@@ -354,6 +354,13 @@ class Observer:
                         retained(self,actor,row,body=False)
             self.ledger.ready(actor['birth'], kind, payload)
             actor['body_ready'] = True
+        elif kind == 'self-probe':
+            self.root_only(actor)
+            shape(payload,('pid',))
+            if (type(self.case) is not str or not self.case.startswith('tests/test_approval_recovery.py::')
+                    or not actor['body_ready'] or type(payload['pid']) is not int
+                    or payload['pid']!=actor['birth'].pid or Birth.read(process_identity(payload['pid']))!=actor['birth']):
+                raise Refused('approval exact self liveness probe')
         elif kind == 'private-unix':
             shape(payload,('event','address'))
             from approval_fixture import unix

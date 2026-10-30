@@ -50,11 +50,11 @@ def proposal(host, actor, raw):
     host.launch_owner(actor)
     argv=proposal_operands(raw,host.case)
     case=host.case
-    for name in ('mcp_inventory','package_proposals','desktop_launch','completion_server',
+    for name in ('repository_cli','mcp_inventory','package_proposals','desktop_launch','completion_server',
                  'terminal_leaves','readiness_launch','uv_cli','console_entries','http_cases'):
         module=__import__(name)
-        selected=module.CASES if hasattr(module,'CASES') else (module.CASE,)
-        if case in selected and (name!='uv_cli' or argv[0]=='uv'):
+        selected=module.eligible(case) if name=='repository_cli' else case in (module.CASES if hasattr(module,'CASES') else (module.CASE,))
+        if selected and (name!='uv_cli' or argv[0]=='uv'):
             return module.proposal(host,actor,raw)
     from run_worker_launch import ALL_CASES as RUN_WORKERS,proposal as run_proposal,descendant,DESCENDANT
     if case==DESCENDANT and actor['role']=='fixed-inline':

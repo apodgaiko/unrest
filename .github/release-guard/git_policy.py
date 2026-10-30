@@ -5,6 +5,7 @@ Families retain independent case sets, parent roles, budgets and helper rights.
 from __future__ import annotations
 
 import os
+import json
 import re
 import shlex
 import subprocess
@@ -335,6 +336,7 @@ def fixture_root(host,case,repository):
 
 
 
+HISTORY_CROSSWALK='tests/contracts/test_lean_evidence_crosswalk.py'
 HISTORY_BINDING='tests/test_release_binding.py'
 HISTORY_V021='tests/test_v021_release_records.py'
 HISTORY_V045='tests/test_v045_release_records.py'
@@ -350,14 +352,24 @@ HISTORY_CATALOG={
         'test_v045_manifest_binds_only_its_published_source'),
     HISTORY_V021:('test_fm000_proposal_artifacts_remain_exact_historical_provenance','test_v021_candidate_had_no_forbidden_v03_runtime_surface'),
     HISTORY_V045:('test_v040_release_carriers_remain_exact_tag_bytes',),
+    HISTORY_CROSSWALK:('test_v02_source_import_dependency_and_hard_cut_inventories_are_historical',
+        'test_v02_package_inventory_is_bound_to_the_v020_tag'),
 }
 HISTORY_CASES=(*tuple(file+'::'+name for file,names in HISTORY_CATALOG.items() for name in names),HISTORY_CLI,HISTORY_REPOSITORY)
-HISTORY_PINS={'tests/test_repository_contract.py':'1c1fcfee0aefd633452a4515e451a0008cef5e758a47f09fbc1e16e8d988d72c', 'tests/test_release_binding.py': '2db77fb31af6b7e536420a16aaa92fc237404570d0f97df37f374fed788c2d0f', 'tests/test_v021_release_records.py': '7d5f90c969295c019e515133cca6abbb2458882c53b43a7bee3c59ca44a95ee5', 'tests/test_v045_release_records.py': 'be9693d6ad6937f0080f6022d3db602ad8530c0d24f8528b85ebc3ee4c492da4'}
+HISTORY_PINS={HISTORY_CROSSWALK:'c1ccd829942713f030fcc928dfff1a0a9cd1e948eb6337e2f8fa65782a048c81','tests/test_repository_contract.py':'1c1fcfee0aefd633452a4515e451a0008cef5e758a47f09fbc1e16e8d988d72c', 'tests/test_release_binding.py': '2db77fb31af6b7e536420a16aaa92fc237404570d0f97df37f374fed788c2d0f', 'tests/test_v021_release_records.py': '7d5f90c969295c019e515133cca6abbb2458882c53b43a7bee3c59ca44a95ee5', 'tests/test_v045_release_records.py': 'be9693d6ad6937f0080f6022d3db602ad8530c0d24f8528b85ebc3ee4c492da4'}
 
 
 def history_commands(checkout,case):
     file,name=case.split('::')
     source_unit(checkout,file,HISTORY_PINS[file],(name,))
+    if file==HISTORY_CROSSWALK:
+        source=name==HISTORY_CATALOG[HISTORY_CROSSWALK][0]
+        roots=('src/unrest_harness','.') if source else ('src/unrest_harness/bundled','src/unrest_harness')
+        commands=[('ls-tree','-r','--name-only','v0.2.0','--',root) for root in roots]
+        if source:
+            audit=json.loads((checkout/'docs/release/lean-core-v0.2-review-audit.json').read_bytes())
+            commands.extend(('show','v0.2.0:'+path) for path in (*audit['source_inventory'],'pyproject.toml'))
+        return commands
     if case==HISTORY_REPOSITORY:
         return [('status','--short')]
     if case==HISTORY_CLI or name in HISTORY_CATALOG[HISTORY_BINDING][:3]:
