@@ -1445,3 +1445,9 @@ checking its canonical regular input; sealed replay and measurement alone
 select their exact script pins. The existing outer sequences and no-query
 admission remain. Four duplicate wrappers are removed rather than retained
 as compatibility layers.
+
+
+Private runtime/dependency inventories reuse the manifest reader's held
+no-follow directory acquisition. Their existing file/type/mode/population/byte
+bounds, relative-path order and digest encoding remain; this removes repeated
+absolute-root traversal per file without changing the input receipt format.

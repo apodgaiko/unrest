@@ -144,7 +144,7 @@ def _member(root: int, name: str, line_counts: dict[str, int] | None,
 
 
 def _capture(root: Path, paths: Sequence[str], line_counts: dict[str, int] | None,
-             file_bound: int | None = None) -> Manifest:
+             file_bound: int | None = None, *, forbidden=0o7000) -> Manifest:
     file_bound=MAX_FILE_BYTES if file_bound is None else file_bound
     names = _inventory(paths)
     try:
@@ -154,7 +154,7 @@ def _capture(root: Path, paths: Sequence[str], line_counts: dict[str, int] | Non
             files = []
             total = 0
             for name in names:
-                member = _member(fd, name, line_counts, file_bound)
+                member = _member(fd, name, line_counts, file_bound, forbidden=forbidden)
                 total += member["size"]
                 if total > MAX_TOTAL_BYTES:
                     raise Refused("total_byte_bound")

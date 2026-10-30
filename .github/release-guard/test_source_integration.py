@@ -39,6 +39,15 @@ def test_private_input_inventory_rejects_aliases_and_writeable_members(tmp_path)
         inventory(tmp_path)
 
 
+def test_input_inventory_keeps_legacy_path_order_and_hash_encoding(tmp_path):
+    (tmp_path/'a').mkdir()
+    for name,body in (('a/b.txt',b'B'),('a.txt',b'A')):
+        path=tmp_path/name
+        path.write_bytes(body)
+        path.chmod(0o644)
+    assert inventory(tmp_path)=='15072d2561fd8112985562a33760675f985e164b927d6c4e186adf48326cc670'
+
+
 def backend_request(tmp_path):
     observer = object.__new__(Observer)
     observer.full, observer.outcomes = False, []

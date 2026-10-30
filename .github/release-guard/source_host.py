@@ -54,23 +54,19 @@ def production_binding(binding):
 
 def inventory(root):
     """Measure private runtime/dependency copies, including large extension DSOs."""
-    rows, total = [], 0
+    from content_manifest import _capture
     members = sorted(root.rglob('*'))
     require(len(members) <= 20000, 'input inventory bound')
+    names=[]
     for path in members:
-        before = path.lstat()
-        require(stat.S_ISDIR(before.st_mode) or stat.S_ISREG(before.st_mode), 'input member custody')
-        require(not stat.S_IMODE(before.st_mode) & 0o6022, 'mutable or privileged input')
-        if stat.S_ISDIR(before.st_mode):
-            continue
-        require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
-                and before.st_size <= 64 * 1024 * 1024, 'input member custody')
-        total += before.st_size
-        require(total <= 512 * 1024 * 1024, 'input total byte bound')
-        from content_manifest import read_regular, _key
-        _,after,pin=read_regular(path,64*1024*1024,forbidden=0o6022,retain=False)
-        require(_key(before)==_key(after),'input measurement race')
-        rows.append([str(path.relative_to(root)), stat.S_IMODE(before.st_mode), before.st_size, pin])
+        info=path.lstat()
+        require(stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode), 'input member custody')
+        require(not stat.S_IMODE(info.st_mode) & 0o6022, 'mutable or privileged input')
+        if stat.S_ISREG(info.st_mode):
+            names.append(str(path.relative_to(root)))
+    manifest=_capture(root,names,None,64*1024*1024,forbidden=0o6022) if names else {'files':[]}
+    files={row['path']:row for row in manifest['files']}
+    rows=[[name,files[name]['mode'],files[name]['size'],files[name]['sha256']] for name in names]
     return hashlib.sha256(json.dumps(rows, separators=(',', ':')).encode()).hexdigest()
 
 
