@@ -32,6 +32,8 @@ def main():
             if child == 0:
                 try:
                     os.chdir(base)
+                    os.open(base, os.O_RDONLY | os.O_DIRECTORY)  # Deliberate old-root handle.
+                    os.open(base / 'outside', os.O_RDONLY)
                     result = enter(metadata, str(base / 'support'), base / 'output')
                     root = os.stat('/')
                     assert result['filesystem_root'] == [root.st_dev, root.st_ino]

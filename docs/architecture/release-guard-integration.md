@@ -958,9 +958,10 @@ observer's protected profiles/output; four fixed character devices; private
 shared-memory scratch; and fresh read-only procfs in its private PID namespace.
 The observer's original interpreter prefix names the same measured private copy,
 so late standard-library imports cannot reopen the original host installation.
-No containing host directory is bound to expose these children. Directory/file
-handles outside standard I/O are rejected before entering, and the old cwd is
-discarded. Actual root generation and read-only input mount identities are
+No containing host directory is bound to expose these children. The dedicated
+fork discards inherited handles beyond standard I/O before acquiring compartment
+I/O; a surviving handle refuses entry. The old cwd is discarded. Actual root
+generation and read-only input mount identities are
 recorded after entry and bound again before each source body.
 
 This containment change initially retains every existing launch, Git routing,

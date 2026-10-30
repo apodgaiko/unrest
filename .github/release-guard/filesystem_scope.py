@@ -13,6 +13,9 @@ def enter(metadata, support, output):
     if os.getuid() != 0:
         raise Refused('filesystem setup requires its trusted root')
     libc = ctypes.CDLL(None, use_errno=True)
+    # This dedicated fork needs no inherited handles beyond stdio. Discard even
+    # the interpreter's main-script handle before acquiring any compartment I/O.
+    os.closerange(3, 1 << 20)
     root = Path(metadata['owned']).parent / 'filesystem'
     root.mkdir(mode=0o755)
 
@@ -50,13 +53,12 @@ def enter(metadata, support, output):
         fd = int(name)
         if fd > 2:
             try:
-                mode = os.fstat(fd).st_mode
+                os.fstat(fd)
             except OSError as error:
                 if error.errno != errno.EBADF:
                     raise
                 continue  # The closed directory-enumeration descriptor.
-            if not stat.S_ISFIFO(mode):
-                raise Refused('filesystem outside inherited handle')
+            raise Refused('filesystem outside inherited handle')
     bind('/usr')
     for name in ('bin', 'sbin', 'lib', 'lib64'):
         source = Path('/') / name
