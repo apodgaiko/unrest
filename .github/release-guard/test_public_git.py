@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from public_git import FM000, TAGS, git, prepare, projection
+from git_policy import PUBLIC_FM000 as FM000, PUBLIC_TAGS as TAGS, public_git as git, public_prepare as prepare, public_projection as projection
 
 SUPPORT = Path(__file__).resolve().parent
 ROOT = next(p for p in SUPPORT.parents if (p/'pyproject.toml').is_file())
@@ -74,10 +74,10 @@ def test_wrong_head_cannot_create_a_projection(tmp_path):
 
 
 def test_historical_tag_drift_fails_before_writing(tmp_path, monkeypatch):
-    import public_git as module
+    import git_policy as module
     destination = tmp_path / 'source'
     destination.mkdir()
-    monkeypatch.setitem(module.TAGS, 'v0.2.0', '0' * 40)
+    monkeypatch.setitem(module.PUBLIC_TAGS, 'v0.2.0', '0' * 40)
     with pytest.raises(RuntimeError, match='historical_tag_drift'):
         prepare(ROOT, destination, git(ROOT, 'rev-parse', 'HEAD').decode().strip())
     assert not (destination / '.git').exists()
@@ -104,21 +104,21 @@ def test_aliased_destination_cannot_acquire_metadata(tmp_path):
 
 
 def test_unselected_pack_object_is_rejected(copied, tmp_path, monkeypatch):
-    import public_git as module
+    import git_policy as module
     source, head, _ = copied
     packed, = (source / '.git/objects/pack').glob('*.pack')
     body = packed.read_bytes()
     objects, tags = projection(ROOT, head)
     objects.pop(next(key for key, kind in objects.items() if kind == 'blob'))
-    original = module.git
+    original = module.public_git
 
     def calls(repository, *arguments, data=None):
         if arguments[0] == 'pack-objects':
             return body
         return original(repository, *arguments, data=data)
 
-    monkeypatch.setattr(module, 'projection', lambda *_: (objects, tags))
-    monkeypatch.setattr(module, 'git', calls)
+    monkeypatch.setattr(module, 'public_projection', lambda *_: (objects, tags))
+    monkeypatch.setattr(module, 'public_git', calls)
     destination = tmp_path / 'refused'
     destination.mkdir()
     with pytest.raises(RuntimeError, match='object_set'):
@@ -155,7 +155,7 @@ def test_all_required_release_binding_revisions_are_in_the_closed_projection():
 
 
 def test_git_owner_exception_is_one_exact_path_without_ambient_configuration(monkeypatch):
-    import public_git as module
+    import git_policy as module
     monkeypatch.setenv('GIT_CONFIG_COUNT','1')
     monkeypatch.setenv('GIT_CONFIG_KEY_0','unsafe-host-setting')
     seen = []
@@ -163,7 +163,7 @@ def test_git_owner_exception_is_one_exact_path_without_ambient_configuration(mon
         seen.append((argv,kwargs))
         return type('Result',(),dict(stdout=b'closed'))()
     monkeypatch.setattr(module.subprocess,'run',run)
-    assert module.git(ROOT,'rev-parse','HEAD') == b'closed'
+    assert module.public_git(ROOT,'rev-parse','HEAD') == b'closed'
     argv, options = seen[0]
     assert argv[:6] == ['git','--no-replace-objects','-c','safe.directory='+str(ROOT),'-C',str(ROOT)]
     assert options['env']['GIT_CONFIG_GLOBAL'] == module.os.devnull and options['env']['GIT_CONFIG_NOSYSTEM'] == '1'

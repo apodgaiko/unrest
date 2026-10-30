@@ -2,7 +2,7 @@
 from pathlib import Path
 import pytest
 from content_manifest import Refused
-from history_git import BINDING,V021,V045,CATALOG,CASES,commands,proposal,CLI
+from git_policy import HISTORY_BINDING as BINDING, HISTORY_V021 as V021, HISTORY_V045 as V045, HISTORY_CATALOG as CATALOG, HISTORY_CASES as CASES, history_commands as commands, history_proposal as proposal, HISTORY_CLI as CLI
 
 ROOT=Path(__file__).resolve().parents[2]
 

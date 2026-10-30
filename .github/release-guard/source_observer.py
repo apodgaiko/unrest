@@ -23,7 +23,7 @@ from source_profile import METHODS
 from session_launch import TIMEOUT as SESSION_TIMEOUT
 from fixed_inline import CLI_CASE, JOURNAL_CASE
 from completion_roles import CASES as ROLE_CASES,actor_slot
-from git_observer import Git
+from git_policy import Git
 from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, snapshot_path
 
 

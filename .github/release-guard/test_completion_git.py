@@ -7,10 +7,10 @@ from types import SimpleNamespace
 import pytest
 
 from content_manifest import Refused
-import completion_git as git
+import git_policy as git
 import completion_roles as roles
-from git_observer import HOME_CONFIG
-import git_observer
+from git_policy import HOME_CONFIG
+import git_policy as git_observer
 
 
 @pytest.fixture
@@ -35,7 +35,7 @@ def fixture(tmp_path,monkeypatch):
             item=metadata.stat()
             value=(item.st_dev,item.st_ino,item.st_uid)
         return ((str(root),info.st_dev,info.st_ino,info.st_uid),),value
-    monkeypatch.setattr(git,'repository',repository)
+    monkeypatch.setattr(git,'custody_repository',repository)
     parent=object()
     host=SimpleNamespace(case=case,root_birth=parent,meta={'owned':str(tmp_path)},fixture_roots={},intents={},actors={})
     host.meta_environment=lambda:{'HOME':str(home),'TMPDIR':str(tmp_path/'tmp'),'PATH':'/usr/bin:/bin'}
@@ -61,22 +61,22 @@ def fixture(tmp_path,monkeypatch):
 
 def prepare(fixture):
     host,actor,raw,wait,workspace=fixture
-    first=git.proposal(host,actor,raw(git.FIXTURE[0]))
+    first=git.completion_proposal(host,actor,raw(git.COMPLETION_FIXTURE[0]))
     metadata=workspace/'.git'
     (metadata/'refs/heads').mkdir(parents=True)
     (metadata/'HEAD').write_text('ref: refs/heads/main\n')
     (metadata/'refs/heads/main').write_text('1'*40+'\n')
     wait(first)
-    second=git.proposal(host,actor,raw(git.FIXTURE[1]))
+    second=git.completion_proposal(host,actor,raw(git.COMPLETION_FIXTURE[1]))
     wait(second)
     return host,actor,raw,wait,workspace
 
 
 def test_fixture_retains_exact_mutation_count_and_metadata_generation(fixture):
     host,actor,raw,wait,workspace=prepare(fixture)
-    assert git.ready(host,workspace) is None
+    assert git.completion_ready(host,workspace) is None
     with pytest.raises(Refused,match='root fixture sequence'):
-        git.proposal(host,actor,raw(git.FIXTURE[1]))
+        git.completion_proposal(host,actor,raw(git.COMPLETION_FIXTURE[1]))
     assert len(host.intents)==2
 
 
@@ -84,13 +84,13 @@ def test_fixture_retains_exact_mutation_count_and_metadata_generation(fixture):
 def test_foreign_or_changed_git_inputs_never_become_query_authority(fixture,mutation):
     if mutation in ('argv','env'):
         host,actor,raw,wait,workspace=fixture
-        argv=('git','status') if mutation=='argv' else git.FIXTURE[0]
+        argv=('git','status') if mutation=='argv' else git.COMPLETION_FIXTURE[0]
         with pytest.raises(Refused,match='original launch operands'):
-            git.proposal(host,actor,raw(argv,{'PATH':'foreign'} if mutation=='env' else None))
+            git.completion_proposal(host,actor,raw(argv,{'PATH':'foreign'} if mutation=='env' else None))
         assert not host.intents
         return
     host,actor,raw,wait,workspace=prepare(fixture)
-    assert git.ready(host,workspace) is None
+    assert git.completion_ready(host,workspace) is None
     if mutation=='generation':
         (workspace/'.git').rename(workspace/'.old-git')
         (workspace/'.git').mkdir()
@@ -106,10 +106,10 @@ def test_foreign_or_changed_git_inputs_never_become_query_authority(fixture,muta
         (Path(host.meta_environment()['HOME'])/'.gitconfig').write_bytes(b'foreign')
     if mutation=='generation':
         with pytest.raises(Refused):
-            git.ready(host,workspace)
+            git.completion_ready(host,workspace)
     else:
         # Product tests own Git data semantics; these bytes confer no launch right.
-        assert git.ready(host,workspace) is None
+        assert git.completion_ready(host,workspace) is None
 
 
 
@@ -125,13 +125,13 @@ def test_concurrent_servers_have_independent_queries_and_exact_parent_quota(fixt
         host.intents[3+slot]={'case':host.case,'role':'mcp','server_slot':slot,'parent':host.root_birth,
                             'consumed':True,'birth':birth,'token':token,'pid':30+slot}
         servers.append(actor)
-    first=git.proposal(host,servers[0],raw(('git','rev-parse','HEAD'),servers[0]['profile']['environment']))
-    second=git.proposal(host,servers[1],raw(('git','rev-parse','HEAD'),servers[1]['profile']['environment']))
+    first=git.completion_proposal(host,servers[0],raw(('git','rev-parse','HEAD'),servers[0]['profile']['environment']))
+    second=git.completion_proposal(host,servers[1],raw(('git','rev-parse','HEAD'),servers[1]['profile']['environment']))
     assert first['ticket']!=second['ticket']
     assert host.intents[first['ticket']]['parent'] is servers[0]['birth']
     assert host.intents[second['ticket']]['parent'] is servers[1]['birth']
     with pytest.raises(Refused,match='query quota'):
-        git.proposal(host,servers[0],raw(('git','rev-parse','HEAD'),servers[0]['profile']['environment']))
+        git.completion_proposal(host,servers[0],raw(('git','rev-parse','HEAD'),servers[0]['profile']['environment']))
     wait(first)
     with pytest.raises(Refused,match='query quota'):
-        git.proposal(host,servers[0],raw(('git','rev-parse','HEAD'),servers[0]['profile']['environment']))
+        git.completion_proposal(host,servers[0],raw(('git','rev-parse','HEAD'),servers[0]['profile']['environment']))

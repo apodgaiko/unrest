@@ -7,7 +7,7 @@ from cohort_cases import CAMPAIGNS, CASES, EXTRA, GIT_ONLY, TEST
 from content_manifest import Refused
 from controlled_cases import CASES as CONTROLLED, STANDARD
 from controlled_pairs import before_spawn
-from custody_git import PREFIX, command
+from git_policy import CUSTODY_PREFIX as PREFIX, custody_command as command
 
 
 def test_cohort_declarations_match_original_collected_cases(monkeypatch):
@@ -41,8 +41,8 @@ def test_pre_send_stops_allow_one_owned_startup_pair_but_no_second(boundary):
 
 
 def test_git_quota_remains_case_wide_without_intermediate_wait_ordering(monkeypatch):
-    import custody_git
-    import git_observer
+    import git_policy as custody_git
+    import git_policy as git_observer
     monkeypatch.setattr(git_observer,'image',lambda:'a'*64)
     from types import SimpleNamespace
     case=TEST+'::test_actual_four_arm_timing_and_model_conformance[equal-True-True]'
@@ -51,15 +51,15 @@ def test_git_quota_remains_case_wide_without_intermediate_wait_ordering(monkeypa
     host=SimpleNamespace(case=case,meta={'owned':'/owned'},intents={1:prior},root_only=lambda actor:None,
         ledger=SimpleNamespace(reaped=lambda *args:False),admit_launch=lambda *args,**kwargs:None,
         git=SimpleNamespace(custody_roots={},commands={}))
-    monkeypatch.setattr(custody_git,'repository',lambda *args,**kwargs:(((cwd,1,10,20000),),(1,20,20000)))
+    monkeypatch.setattr(custody_git,'custody_repository',lambda *args,**kwargs:(((cwd,1,10,20000),),(1,20,20000)))
     selected=command(case,(*PREFIX,'rev-parse','HEAD'),cwd,Path('/owned'))
-    assert custody_git.launch(host,None,*selected,{'executable':'/usr/bin/git','argv':list(selected[0].argv),
-        'cwd':selected[0].cwd,'stdin':None,'environment':custody_git.ENVIRONMENT}) is None
+    assert custody_git.custody_launch(host,None,*selected,{'executable':'/usr/bin/git','argv':list(selected[0].argv),
+        'cwd':selected[0].cwd,'stdin':None,'environment':custody_git.CUSTODY_ENVIRONMENT}) is None
     prior['repository']=cwd
-    assert custody_git.launch(host,None,*selected,{'executable':'/usr/bin/git','argv':list(selected[0].argv),
-        'cwd':selected[0].cwd,'stdin':None,'environment':custody_git.ENVIRONMENT}) is None
+    assert custody_git.custody_launch(host,None,*selected,{'executable':'/usr/bin/git','argv':list(selected[0].argv),
+        'cwd':selected[0].cwd,'stdin':None,'environment':custody_git.CUSTODY_ENVIRONMENT}) is None
     prior['repository']='/owned/pytest/case/first'
     host.intents={i:prior for i in range(CASES[case][1])}
     with pytest.raises(Refused,match='command bound'):
-        custody_git.launch(host,None,*selected,{'executable':'/usr/bin/git','argv':list(selected[0].argv),
-        'cwd':selected[0].cwd,'stdin':None,'environment':custody_git.ENVIRONMENT})
+        custody_git.custody_launch(host,None,*selected,{'executable':'/usr/bin/git','argv':list(selected[0].argv),
+        'cwd':selected[0].cwd,'stdin':None,'environment':custody_git.CUSTODY_ENVIRONMENT})

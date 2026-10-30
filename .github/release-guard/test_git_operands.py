@@ -2,7 +2,7 @@
 import pytest
 
 from content_manifest import Refused
-from git_operands import digest,date_text,text
+from git_policy import operand_digest as digest, operand_date_text as date_text, operand_text as text
 
 
 @pytest.mark.parametrize('value',[True,None,'A'*40,'a'*39,'a'*41,'HEAD~1','--option','a'*39+'\n'])

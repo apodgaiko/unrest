@@ -37,7 +37,7 @@ def original_program(case):
 @pytest.mark.parametrize('case',leaves.OPTIONAL)
 @pytest.mark.parametrize('mutation',[None,'cwd','env','executable'])
 def test_optional_nulls_keep_original_true_image_checkout_and_environment(monkeypatch,case,mutation):
-    import git_observer
+    import git_policy as git_observer
     monkeypatch.setattr(git_observer,'image',lambda path:'b'*64)
     calls=[]
     host=SimpleNamespace(case=case,meta={'checkout':str(ROOT),'owned':'/owned'},fixture_roots={},intents={},

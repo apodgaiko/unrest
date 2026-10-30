@@ -5,7 +5,7 @@ import pytest
 
 from content_manifest import Refused
 from controlled_cases import CASES
-from custody_git import command,repository,PREFIX
+from git_policy import custody_command as command, custody_repository as repository, CUSTODY_PREFIX as PREFIX
 
 CASE = next(case for case in CASES if 'test_ack_durability[' in case)
 
@@ -55,8 +55,8 @@ __import__('sys').addaudithook(_audit)
 
 @pytest.mark.parametrize('replacement',['repository','metadata'])
 def test_same_path_replacement_cannot_inherit_prior_repository_facts(monkeypatch,replacement):
-    import custody_git
-    import git_observer
+    import git_policy as custody_git
+    import git_policy as git_observer
     monkeypatch.setattr(git_observer,'image',lambda:'a'*64)
     from types import SimpleNamespace
     cwd = '/owned/pytest/case/cohort/base'
@@ -65,22 +65,22 @@ def test_same_path_replacement_cannot_inherit_prior_repository_facts(monkeypatch
     new = (((cwd,1,11,20000),),(1,20,20000)) if replacement == 'repository' else (directory,(1,21,20000))
     host = SimpleNamespace(case=CASE,meta={'owned':'/owned'},intents={},root_only=lambda actor:None,
         git=SimpleNamespace(custody_roots={(CASE,cwd):old}))
-    monkeypatch.setattr(custody_git,'repository',lambda *args,**kwargs:new)
+    monkeypatch.setattr(custody_git,'custody_repository',lambda *args,**kwargs:new)
     with pytest.raises(Refused,match='replaced repository generation'):
-        custody_git.launch(host,None,*custody_git.command(CASE,tuple([*PREFIX,'rev-parse','HEAD']),cwd,Path('/owned')),None)
+        custody_git.custody_launch(host,None,*custody_git.custody_command(CASE,tuple([*PREFIX,'rev-parse','HEAD']),cwd,Path('/owned')),None)
 
 
 def test_deferred_constructor_does_not_consume_a_git_command(monkeypatch):
-    import custody_git
-    import git_observer
+    import git_policy as custody_git
+    import git_policy as git_observer
     monkeypatch.setattr(git_observer,'image',lambda:'a'*64)
     from types import SimpleNamespace
     cwd = '/owned/pytest/case/cohort/base'
     host = SimpleNamespace(case=CASE,meta={'owned':'/owned'},intents={},root_only=lambda actor:None,
         admit_launch=lambda *args,**kwargs:None,
         git=SimpleNamespace(custody_roots={},commands={}))
-    monkeypatch.setattr(custody_git,'repository',lambda *args,**kwargs:(((cwd,1,10,20000),),(1,20,20000)))
-    assert custody_git.launch(host,None,*custody_git.command(CASE,tuple([*PREFIX,'rev-parse','HEAD']),cwd,Path('/owned')),
+    monkeypatch.setattr(custody_git,'custody_repository',lambda *args,**kwargs:(((cwd,1,10,20000),),(1,20,20000)))
+    assert custody_git.custody_launch(host,None,*custody_git.custody_command(CASE,tuple([*PREFIX,'rev-parse','HEAD']),cwd,Path('/owned')),
         {'executable':'/usr/bin/git','argv':[*PREFIX,'rev-parse','HEAD'],'cwd':cwd,
-         'stdin':None,'environment':custody_git.ENVIRONMENT}) is None
+         'stdin':None,'environment':custody_git.CUSTODY_ENVIRONMENT}) is None
     assert not host.intents and not host.git.commands

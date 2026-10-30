@@ -357,7 +357,7 @@ def test_empty_preparation_inventory_roundtrips_through_actual_receiver(tmp_path
 def test_queued_inquiry_fixture_requires_one_actual_parent_handle_and_success(count,status):
     from types import SimpleNamespace
     from source_root import OriginalCases
-    from git_fixtures import SERVER_INQUIRY
+    from git_policy import FIXTURE_SERVER_INQUIRY as SERVER_INQUIRY
     from content_manifest import Refused
     waits=[]
     requests=[]

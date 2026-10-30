@@ -1,5 +1,5 @@
 """Test-only literal vectors; native admission uses git_commands.match, never this renderer."""
-from git_commands import match
+from git_policy import command_match as match
 
 FIELDS = {'inside': (), 'top': (), 'head': (), 'head-tree': (), 'parent-ref': (), 'clean': (), 'inventory': (), 'stage-return': (), 'write-tree': (), 'check-index': (), 'prune': (), 'init': (), 'config-name': (), 'config-email': (), 'stage-base': (), 'commit-base': (), 'stage-advance': (), 'commit-advance': (), 'stage-child': (), 'commit-child': (), 'verify-base': ('revision',), 'lease-add': ('tree', 'revision'), 'integration-add': ('tree', 'revision'), 'rollback-add': ('tree', 'revision'), 'checkout': ('revision',), 'diff-return': ('revision',), 'apply': ('patch',), 'date': ('revision',), 'commit-tree': ('tree_id', 'revision', 'date', 'leases'), 'update-parent': ('new', 'old'), 'reset-parent': ('revision',), 'rollback-update': ('new', 'old'), 'rollback-reset': ('revision',), 'remove-tree': ('tree',)}
 

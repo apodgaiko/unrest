@@ -8,7 +8,7 @@ from pathlib import Path
 import stat
 
 from content_manifest import Refused
-from git_observer import image as system_git
+from git_policy import image as system_git
 from launch_policy import build_expected
 from ordinary_acp import PRODUCT, PINS as ACP_PINS
 from review_wire import RUNNER,runner_scenario,SCRIPT as REVIEW_SCRIPT,PIN as REVIEW_PIN,FRAMES,FRAMES_PIN

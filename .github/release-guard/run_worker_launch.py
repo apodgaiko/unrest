@@ -6,7 +6,7 @@ import re
 
 from content_manifest import Refused,read_regular,native_digest
 from control_transport import unique
-from git_fixtures import root as repository_root,SLOTS,SERVER_INQUIRY
+from git_policy import fixture_root as repository_root, FIXTURE_SLOTS as SLOTS, FIXTURE_SERVER_INQUIRY as SERVER_INQUIRY
 from launch_policy import build_expected,admit_expected,source_unit,literal
 from owned_fixture import retain
 from content_manifest import _key
@@ -114,7 +114,7 @@ def proposal(host,actor,raw):
     host.root_only(actor)
     case=host.case
     if case in (MEASUREMENT_EVOLUTION,MEASUREMENT_PROJECT):
-        from measurement_git import worker
+        from git_policy import measurement_worker as worker
         return worker(host,actor,raw)
     custom=case in WORKERS
     ordinal=sum(row['case']==case and row.get('run_worker',False) for row in host.intents.values())

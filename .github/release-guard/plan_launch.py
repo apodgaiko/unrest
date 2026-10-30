@@ -8,7 +8,7 @@ from pathlib import Path
 import stat
 
 from content_manifest import Refused
-from git_observer import image, regular
+from git_policy import image, regular
 from launch_policy import Expected, build_expected
 
 OWNER = 20000

@@ -102,7 +102,7 @@ def prepare(binding, checkout, root, git=False, public=False, native=False, extr
         probe=source/'src/unrest_harness.egg-info/PKG-INFO'
         probe.parent.mkdir(parents=True)
         probe.write_bytes(b'Ignored generated metadata exclusion probe\n')
-        from public_git import prepare as public_git
+        from git_policy import public_prepare as public_git
         from content_manifest import _capture
         public_git(checkout, source, binding['head'])
         metadata_names = sorted(path.relative_to(source).as_posix() for path in (source / '.git').rglob('*') if path.is_file())
@@ -132,7 +132,7 @@ def prepare(binding, checkout, root, git=False, public=False, native=False, extr
         directory.mkdir(mode=0o700)
         os.chown(directory, 20000, 20000)
     if git:
-        from git_observer import HOME_CONFIG
+        from git_policy import HOME_CONFIG
         os.chown(owned, 20001, 20000)
         owned.chmod(0o1770)
         home = owned / 'home'

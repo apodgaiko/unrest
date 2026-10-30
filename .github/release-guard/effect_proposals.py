@@ -63,9 +63,9 @@ def proposal(host, actor, raw):
     from cohort_controller import CASES as CRASH, proposal as crash_proposal
     if case in CRASH and argv[1:2]==['-c']:
         return crash_proposal(host,actor,raw)
-    from git_sites import CASES as GIT_CASES
+    from git_policy import SITE_CASES as GIT_CASES
     if case in GIT_CASES:
-        from git_proposals import prepare
+        from git_policy import workspace_prepare as prepare
         return prepare(host,actor,raw)
     from review_wire import CASES as REVIEW_CASES,proposal as review_proposal
     if case in REVIEW_CASES:
@@ -80,7 +80,7 @@ def proposal(host, actor, raw):
     vector, role, maximum, inherited, port = None, None, 1, [], None
     custody=case in (*CONTROLLED,*COHORT_GIT) and argv[0]=='/usr/bin/git'
     if custody:
-        from custody_git import command as custody_command,launch
+        from git_policy import custody_command, custody_launch as launch
         value,kind=custody_command(case,tuple(argv),cwd,owned)
         return launch(host,actor,value,kind,raw)
     elif case in PLANS:
@@ -96,7 +96,7 @@ def proposal(host, actor, raw):
         script_pin = expected.payload_sha256
         role='session-invalid' if case in INVALID else 'session-child' if child else 'session-inline' if expected.payload_kind=='python-command' else 'session-adapter'
         if role=='session-invalid':
-            from git_observer import regular
+            from git_policy import regular
             if regular(Path(expected.executable))!=INVALID_BYTES or Path(expected.executable).stat().st_mode&0o777!=0o700:
                 raise Refused('session exact invalid executable fixture')
         vector = list(expected.argv) if expected.payload_kind=='expected-exec-failure' else [native,'-I','-S',*expected.argv[1:]]

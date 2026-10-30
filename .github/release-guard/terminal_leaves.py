@@ -38,7 +38,7 @@ def proposal(host,actor,raw):
     if case in OPTIONAL:
         from ordinary_acp import TEST as ACP_TEST,PINS
         source_unit(checkout,ACP_TEST,PINS[ACP_TEST],('test_terminal_create_optional_nulls_use_omission_defaults',))
-        from git_observer import image
+        from git_policy import image
         executable,pin,vector,role,env='/usr/bin/true',image('/usr/bin/true'),['/usr/bin/true'],'terminal-native',{}
     else:
         body_pin,env=PROGRAMS[case]

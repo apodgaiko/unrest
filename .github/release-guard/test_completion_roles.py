@@ -66,14 +66,14 @@ def test_source_only_fixture_nodes_match_original_collection():
     'GIT_CONFIG','GIT_CONFIG_COUNT','GIT_DIR','GIT_WORK_TREE','UNREST_FOREIGN','UNREST_WORKER_PROVIDER',
     'UNREST_APPROVAL_RECOVERY','CODEX_CONFIG','ANTHROPIC_API_KEY'))
 def test_passive_git_metadata_does_not_admit_execution_or_provider_environment(key):
-    from completion_git import application_environment
+    from git_policy import completion_application_environment as application_environment
     baseline={'HOME':'/owned/home','PATH':'/usr/bin:/bin','TMPDIR':'/owned/tmp'}
     with pytest.raises(Refused):
         application_environment(baseline,{**baseline,key:'foreign'})
 
 
 def test_passive_git_metadata_is_closed_and_fully_retained():
-    from completion_git import APP_KEYS,application_environment
+    from git_policy import COMPLETION_APP_KEYS as APP_KEYS, completion_application_environment as application_environment
     assert APP_KEYS=={'UNREST_HOME','UNREST_PROJECTS_DIR','UNREST_PROJECT_ID','UNREST_MISSION_ID',
         'UNREST_NODE_ID','UNREST_NODE_TYPE','UNREST_HANDOFF_PATH','UNREST_NODE_ASSIGNMENT'}
     baseline={'HOME':'/owned/home','PATH':'/usr/bin:/bin'}
@@ -115,7 +115,7 @@ def test_added_http_families_preserve_original_nodes_and_server_topology():
 @pytest.mark.parametrize('mutation',(None,'project','workspace','attempt','state'))
 def test_substantive_defect_keeps_two_distinct_pinned_roles_and_owned_attempts(tmp_path,monkeypatch,mutation):
     import measurement_runtime
-    from completion_git import fixture
+    from git_policy import completion_fixture as fixture
     case=roles.DEFECT
     project=tmp_path/'.unrest/projects/p'
     project.mkdir(parents=True)

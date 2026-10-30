@@ -2,7 +2,7 @@
 from pathlib import Path
 
 from completion_roles import CASES,root,schedule,program,environment,mode
-from completion_git import proposal as git_proposal,ready as git_ready
+from git_policy import completion_proposal as git_proposal, completion_ready as git_ready
 from content_manifest import Refused
 from launch_policy import admit_expected,build_expected
 

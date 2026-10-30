@@ -4,7 +4,7 @@ import stat
 
 from content_manifest import Refused
 from owned_fixture import acquire
-from git_observer import image
+from git_policy import image
 from launch_policy import admit_expected,build_expected
 
 CASE = 'tests/test_v046_desktop_fixture.py::test_actual_stdio_response_binds_fixture_process_and_candidate'

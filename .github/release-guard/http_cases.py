@@ -3,7 +3,7 @@ from pathlib import Path
 from mcp_inventory import CASES as INVENTORY
 
 from content_manifest import Refused
-from git_observer import image
+from git_policy import image
 from launch_policy import admit_expected,build_expected
 from multiprocess_routes import TRANSACTIONS
 from cleanup_launch import EXECUTION_CASES

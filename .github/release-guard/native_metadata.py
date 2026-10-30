@@ -7,7 +7,7 @@ import tarfile
 import urllib.request
 
 from content_manifest import Refused
-from git_observer import regular
+from git_policy import regular
 
 INPUTS = (
     ('index.js', 'https://registry.npmjs.org/@agentclientprotocol/codex-acp/-/codex-acp-1.1.0.tgz',

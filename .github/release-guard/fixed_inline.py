@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from content_manifest import Refused
-from git_observer import image
+from git_policy import image
 from launch_policy import build_expected,source_unit,literal,render_string
 from speed_inline import CASES as SPEED_CASES, PRELUDE, CLI_CASE, cli_expected
 from nested_pytest import CASE as NESTED_CASE, NODES, PYTEST_PIN, CASES as NESTED_CASES, HERMETIC, hermetic

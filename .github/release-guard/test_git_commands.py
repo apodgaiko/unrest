@@ -5,7 +5,7 @@ import hashlib
 import pytest
 
 from content_manifest import Refused
-from git_commands import FIXED, ROLES
+from git_policy import COMMAND_FIXED as FIXED, COMMAND_ROLES as ROLES
 from test_git_vectors import build,FIELDS
 
 REPO = '/owned/project'
@@ -124,7 +124,7 @@ def test_rollback_execution_and_target_locations_are_evolution_only(operation, c
 
 def test_owned_workspace_literal_command_derives_its_inline_digest():
     import hashlib
-    from git_sites import OWNED_BODY, CASES
+    from git_policy import SITE_OWNED_BODY as OWNED_BODY, SITE_CASES as CASES
     from launch_policy import build_expected
     assert build_expected(CASES[7], '/native/python', 'a' * 64, ('/native/python', '-c', OWNED_BODY), (), REPO, 'python-command', None).payload_sha256 == hashlib.sha256(OWNED_BODY.encode()).hexdigest()
 
@@ -142,13 +142,13 @@ def test_commit_input_preserves_the_per_lease_identifier_byte_bound():
 def test_factored_eligibility_preserves_every_original_ordered_operation():
     import hashlib
     import json
-    from git_sites import OPERATIONS,SHARED_OPERATIONS
+    from git_policy import SITE_OPERATIONS as OPERATIONS, SITE_SHARED_OPERATIONS as SHARED_OPERATIONS
     pins={
         'shared':'5f417e1f13141ad81c32439cdc6958c90475b2b6efc08b0170c0a63501f4c3c5',
         'workspaces':'8da98ddc26915917729c0404c320e144347b0122f7cfdee352229296b7868e2a',
         'evolution':'5d4a2d4fc642e59600be2fa37f4bfd53e09fa389d221239a58a1848d01d0ebf7',
         'candidate':'c5e3d1b55f4ed0619e7fb061d7bbb3be3d00aec16993e44d193ed399555d5773'}
-    from measurement_git import COLD
+    from git_policy import MEASUREMENT_COLD as COLD
     assert OPERATIONS['measurement']==('init','measurement-command',*COLD)
     assert not set(COLD)&{'apply','write-tree','commit-tree','update-parent','reset-parent','rollback-add','rollback-update','rollback-reset'}
     for name,values in [('shared',SHARED_OPERATIONS),*((name,OPERATIONS[name]) for name in ('workspaces','evolution','candidate'))]:

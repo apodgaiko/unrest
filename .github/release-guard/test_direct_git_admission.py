@@ -5,16 +5,16 @@ from types import SimpleNamespace
 import pytest
 
 from content_manifest import Refused
-from git_commands import Command
-from git_observer import Git
-from git_sites import CASES
+from git_policy import Command
+from git_policy import Git
+from git_policy import SITE_CASES as CASES
 from process_ledger import Ledger
 from launch_policy import build_expected
 
 
 @pytest.mark.parametrize('failure',[None,'repository','location'])
 def test_selected_git_command_retains_repository_and_worktree_custody(failure,monkeypatch):
-    import git_observer
+    import git_policy as git_observer
     monkeypatch.setattr(git_observer,'image',lambda:'b'*64)
     calls=[]
     host=SimpleNamespace(case=CASES[0],root_only=lambda actor:None,intents={},
@@ -53,7 +53,7 @@ def test_selected_git_command_retains_repository_and_worktree_custody(failure,mo
 
 @pytest.mark.parametrize('matching',[False,True])
 def test_checkout_helper_uses_its_consumed_parent_image_pin(monkeypatch,matching):
-    import git_observer
+    import git_policy as git_observer
     from process_ledger import Birth
     parent=Birth(20,20,1,100,'boot',20000)
     child=Birth(21,21,20,101,'boot',20000)

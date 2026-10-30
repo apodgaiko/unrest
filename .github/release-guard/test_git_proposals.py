@@ -6,10 +6,10 @@ import pytest
 
 from content_manifest import Refused
 from control_transport import finite
-from git_commands import match as match_command
+from git_policy import command_match as match_command
 from test_git_vectors import build
-from git_proposals import prepare
-from git_sites import CASES
+from git_policy import workspace_prepare as prepare
+from git_policy import SITE_CASES as CASES
 
 REPO = "/owned/pytest/case/project"
 REV = "a" * 40
@@ -33,7 +33,7 @@ def host_value(**changes):
 
 def wire_git(host,calls):
     from pathlib import Path
-    from git_observer import Git
+    from git_policy import Git
     repositories=host.git.repositories
     host.git=Git(host)
     host.git.repositories=repositories
@@ -115,7 +115,7 @@ def test_complete_vector_matches_exact_template_and_bounded_operands(
 
 @pytest.mark.parametrize("mutation", ["argv", "cwd", "environment", "stdin", "family"])
 def test_proposal_mutation_never_reaches_launch(monkeypatch, mutation):
-    import git_observer
+    import git_policy as git_observer
 
     monkeypatch.setattr(git_observer, "image", lambda: "a" * 64)
     calls = []
@@ -155,7 +155,7 @@ def test_proposal_mutation_never_reaches_launch(monkeypatch, mutation):
 
 
 def test_producer_reply_is_recursively_json_finite(monkeypatch):
-    import git_observer
+    import git_policy as git_observer
 
     monkeypatch.setattr(git_observer, "image", lambda: "a" * 64)
     host = SimpleNamespace(
@@ -186,7 +186,7 @@ def test_producer_reply_is_recursively_json_finite(monkeypatch):
 
 
 def test_owned_process_refuses_undeclared_stdin_before_admission():
-    from git_sites import OWNED_BODY
+    from git_policy import SITE_OWNED_BODY as OWNED_BODY
 
     calls = []
     host = SimpleNamespace(
@@ -209,7 +209,7 @@ def test_owned_process_refuses_undeclared_stdin_before_admission():
 
 
 def test_evolution_uses_shared_workspace_query_after_its_fixture_setup(monkeypatch):
-    import git_observer
+    import git_policy as git_observer
 
     monkeypatch.setattr(git_observer, "image", lambda: "a" * 64)
     case = CASES[13]
@@ -250,7 +250,7 @@ def test_evolution_uses_shared_workspace_query_after_its_fixture_setup(monkeypat
     "operation", ["inside", "head", "parent-ref", "clean", "top", "verify-base"]
 )
 def test_shared_repository_operations_exist_for_both_product_families(family, operation):
-    from git_sites import OPERATIONS
+    from git_policy import SITE_OPERATIONS as OPERATIONS
 
     fields = {"revision": REV} if operation == "verify-base" else {}
     assert operation in OPERATIONS[family]
@@ -260,8 +260,8 @@ def test_shared_repository_operations_exist_for_both_product_families(family, op
 
 @pytest.mark.parametrize('branch',['main','master'])
 def test_proposal_update_targets_only_authored_main_or_master(monkeypatch,branch):
-    import git_observer
-    from git_fixtures import SLOTS
+    import git_policy as git_observer
+    from git_policy import FIXTURE_SLOTS as SLOTS
 
     monkeypatch.setattr(git_observer,'image',lambda:'a'*64)
     case=next(iter(SLOTS))

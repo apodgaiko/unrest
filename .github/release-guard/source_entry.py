@@ -14,7 +14,7 @@ from typing import Any, NoReturn
 
 from bootstrap_wire import Client
 from content_manifest import Refused
-from git_sites import CASES as GIT_CASES
+from git_policy import SITE_CASES as GIT_CASES
 from source_profile import digest, validate
 
 def direct_native(args, kwargs, case, role):

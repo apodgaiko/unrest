@@ -9,8 +9,8 @@ import uuid
 
 import pytest
 
-from git_observer import Git
-from git_operands import digest
+from git_policy import Git
+from git_policy import operand_digest as digest
 from types import SimpleNamespace
 from process_ledger import Birth, Ledger
 from test_process_ledger_native import trace

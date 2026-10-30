@@ -1025,3 +1025,11 @@ creating a host `/native` mount. Entry verifies that mounted native destination'
 original device/inode, root owner and mode0555, then records complete read-only
 mount IDs after chroot. Private mount propagation, network/IPC isolation, final
 root identity and the measured-runtime alias remain unchanged.
+
+Git enforcement and its host-only public-history input preparation now live in
+`git_policy.py`. The former twelve Git modules are removed, without compatibility
+facades. Family-prefixed declarations and functions keep their separate command
+sets, parent roles, mutable counters and helper eligibility. Shared native image,
+byte acquisition and intent issuance remain single functions. This consolidation
+changes internal names and module boundaries, not launch permission or evidence
+claims; fewer files alone is not a verified startup-performance improvement.

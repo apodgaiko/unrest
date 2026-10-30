@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from git_observer import Git
+from git_policy import Git
 from process_ledger import Birth,Ledger
 from test_process_ledger import identity,emit,terminal,wait4,PINS
 

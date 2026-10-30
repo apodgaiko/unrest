@@ -3,9 +3,9 @@ from types import SimpleNamespace
 
 import pytest
 
-import git_observer
+import git_policy as git_observer
 from content_manifest import Refused
-from git_commands import Command
+from git_policy import Command
 
 
 @pytest.mark.parametrize('mutation',[None,'image','stdin','argv','cwd','environment','deferred'])
