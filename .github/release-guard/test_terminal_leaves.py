@@ -13,7 +13,7 @@ import pytest
 
 from content_manifest import Refused
 from launch_policy import source_unit,assignment,render_string
-import terminal_leaves as leaves
+import inline_leaves as leaves
 
 PIN='ed83ec28c4830354cd4ab0876d6832a0187d211982964d2cf80f449992b46bb6'
 POLICY='src/unrest_harness/capability_policy.py'
@@ -23,7 +23,7 @@ ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is
 
 
 def original_program(case):
-    unit=source_unit(ROOT,leaves.TEST,PIN,(case.split('::')[1].split('[')[0],))
+    unit=source_unit(ROOT,leaves.TERMINAL_TEST,PIN,(case.split('::')[1].split('[')[0],))
     if case==leaves.RAW:
         calls=[node for node in ast.walk(unit) if isinstance(node,ast.Dict) and any(isinstance(key,ast.Constant) and key.value=='args' for key in node.keys)]
         assert len(calls)==1
@@ -74,15 +74,15 @@ def test_terminal_catalogue_matches_original_collection(monkeypatch):
     class Collected:
         def pytest_collection_finish(self,session):
             nodes.extend(item.nodeid for item in session.items)
-    assert pytest.main(['--collect-only','-q',*leaves.CASES],plugins=[Collected()])==0
-    assert tuple(nodes)==leaves.CASES
+    assert pytest.main(['--collect-only','-q',*leaves.TERMINAL_CASES],plugins=[Collected()])==0
+    assert tuple(nodes)==leaves.TERMINAL_CASES
 
 
 @pytest.mark.parametrize('case',(leaves.RAW,*leaves.TRANSFORM))
 def test_program_is_identical_to_original_test_operands_without_executing_a_child(tmp_path,case):
     body,env=original_program(case)
     assert leaves.PROGRAMS[case]==(hashlib.sha256(body.encode()).hexdigest(),env)
-    unit=source_unit(ROOT,leaves.TEST,PIN,(case.split('::')[1].split('[')[0],))
+    unit=source_unit(ROOT,leaves.TERMINAL_TEST,PIN,(case.split('::')[1].split('[')[0],))
     unit.decorator_list=[]
     names=ast.literal_eval(next(node.value for node in ast.parse((ROOT/POLICY).read_bytes()).body
         if isinstance(node,ast.Assign) and any(isinstance(target,ast.Name) and target.id=='FINITE_CREDENTIAL_NAMES' for target in node.targets)))
@@ -108,7 +108,7 @@ def test_program_is_identical_to_original_test_operands_without_executing_a_chil
         '_resolved':lambda *args,**kwargs:object(),'build_role_environment':lambda *args,**kwargs:{},
         'finite_credential_values':lambda value:{},'credential_values':lambda *args:{},'ACPClient':Client,
         'FINITE_CREDENTIAL_NAMES':names}
-    exec(compile(ast.Module(body=[unit],type_ignores=[]),leaves.TEST,'exec'),namespace)
+    exec(compile(ast.Module(body=[unit],type_ignores=[]),leaves.TERMINAL_TEST,'exec'),namespace)
     kwargs={} if case==leaves.RAW else {'provider_name':'claude','role':'worker','profile':'safe'}
     asyncio.run(namespace[unit.name](tmp_path,**kwargs))
     assert len(captured)==1 and captured[0]['args']==['-c',body]

@@ -12,7 +12,6 @@ from session_launch import CASES as SESSIONS, expected as session_expected
 from fixed_inline import CASES as FIXED, SEQUENCES, NESTED_CASES, STORAGE_CASES, INSPECTION_CASES, MEASUREMENT_CASE, COMPLETION_CASES, DRAIN_CASE, expected as fixed_expected, STDIO, startup_expected, translated as fixed_translated
 from ordinary_acp import EXECUTION_CASES as ORDINARY, expected as ordinary_expected
 from cleanup_launch import EXECUTION_CASES as CLEANUP, expected as cleanup_expected, base_path, translated as cleanup_vector
-from cleanup_inline import DECLARATIONS, INFLIGHT, expected as inline_expected
 from controlled_startup import expected_entry, ACP
 from controlled_cases import eligible as CONTROLLED
 from cohort_cases import GIT_ONLY as COHORT_GIT
@@ -21,7 +20,7 @@ from bootstrap_cases import BOOTSTRAP
 
 def proposal_operands(raw,case,native=None):
     from source_observer import shape
-    from readiness_launch import STREAM_CASES
+    from inline_leaves import STREAM_CASES
     shape(raw, ('case','executable','argv','cwd','environment','stdin')+(('inventory_fd',) if case in STREAM_CASES else ()))
     if type(raw['case']) is not str or raw['case'] != case or type(raw['executable']) is not str or type(raw['argv']) is not list:
         raise Refused('finite process proposal case or vector')
@@ -54,7 +53,7 @@ def proposal(host, actor, raw):
     argv=proposal_operands(raw,host.case,host.binding['entry']['path'] if host.case in APPROVAL else None)
     case=host.case
     for name in ('approval_launch','repository_cli','mcp_inventory','package_proposals','desktop_launch','completion_server',
-                 'terminal_leaves','readiness_launch','uv_cli','console_entries','http_cases'):
+                 'inline_leaves','uv_cli','console_entries','http_cases'):
         module=__import__(name)
         selected=module.eligible(case) if name=='repository_cli' else case in (module.CASES if hasattr(module,'CASES') else (module.CASE,))
         if selected and (name!='uv_cli' or argv[0]=='uv'):
@@ -75,7 +74,7 @@ def proposal(host, actor, raw):
     from review_wire import CASES as REVIEW_CASES,proposal as review_proposal
     if case in REVIEW_CASES:
         return review_proposal(host,actor,raw)
-    if not CONTROLLED(case) and case not in (*BOOTSTRAP,*COHORT_GIT,*ORDINARY,*CLEANUP,*DECLARATIONS,*SESSIONS,*FIXED,*PLANS):
+    if not CONTROLLED(case) and case not in (*BOOTSTRAP,*COHORT_GIT,*ORDINARY,*CLEANUP,*SESSIONS,*FIXED,*PLANS):
         raise Refused('finite process proposal has no declaration')
     if raw['stdin'] is not None:
         raise Refused('process proposal has undeclared commit input')
@@ -162,18 +161,6 @@ def proposal(host, actor, raw):
         expected = ordinary_expected(case,role,cwd,checkout,native,pin,root_environment,owned,base=base,observed=raw['environment'])
         script_pin = expected.payload_sha256
         vector = list(expected.argv) if role in ('sleep','session-invalid') else [native,'-I','-S',*expected.argv[1:]]
-    elif case in DECLARATIONS:
-        host.root_only(actor)
-        from cleanup_inline import child_count
-        records = [row for row in host.intents.values() if row['case']==case]
-        terminal = case in INFLIGHT and len(records)==2
-        if len(records)>=child_count(case):
-            raise Refused('cleanup inline original child order')
-        if any(not host.executed(row) for row in records):
-            return None
-        role,maximum='cleanup-inline',child_count(case)
-        expected = inline_expected(case,native,pin,checkout,root_environment,base=base_path(cwd,owned) if terminal else None,terminal=terminal)
-        script_pin,vector = expected.payload_sha256,[native,'-I','-S',*expected.argv[1:]]
     elif case in CLEANUP:
         port,descriptor = None,None
         if argv[0]=='git':

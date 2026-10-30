@@ -17,3 +17,13 @@ def scenario(case, base):
         record = {'raw': raw, 'role': role, 'receipt': str(base / 'receipt')}
     return json.dumps(record).encode()
 
+
+
+def inline_input(case,native,native_pin,checkout,ambient,*,base=None,terminal=False):
+    """Original operand fixture; this helper grants no process authority."""
+    from inline_leaves import STARTUP,SLEEP,EXIT
+    from launch_policy import build_expected
+    code=EXIT if case in STARTUP and STARTUP[case][1]=='exit' else SLEEP
+    env={} if terminal else {**ambient,'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}
+    return build_expected(case,native,native_pin,(native,'-c',code),tuple(sorted(env.items())),
+        str(base if terminal else checkout),'python-command')

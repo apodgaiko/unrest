@@ -9,7 +9,7 @@ import pytest
 
 from effect_proposals import proposal
 from content_manifest import Refused
-from cleanup_inline import (
+from inline_leaves import (
     DECLARATIONS,
     STARTUP,
     CLIENT,
@@ -20,6 +20,8 @@ from cleanup_inline import (
     child_count,
 )
 from cleanup_launch import TEST
+from types import SimpleNamespace
+from test_cleanup_scenario_oracle import inline_input as expected
 
 
 NO_LAUNCH = tuple(TEST + f'::test_response_correlation_keeps_numeric_identity[{variant}]'
@@ -57,10 +59,10 @@ def test_inline_parameters_keep_original_effect_counts(case):
             1 if case in STARTUP or CLIENT.get(case, (None, None))[1] == "reader" else 3
         )
     if case not in INFLIGHT:
-        from cleanup_inline import expected
+        value=expected(case,'/native','a'*64,Path('/source'),{},base=Path('/owned/pytest/case'),terminal=True)
         with pytest.raises(Refused):
-            expected(case, '/native', 'a'*64, Path('/source'), {},
-                     base=Path('/owned/pytest/case'), terminal=True)
+            invoke(value,{},prior=2)
+
 
 
 @pytest.mark.parametrize(
@@ -71,33 +73,48 @@ def test_no_generic_inline_selection(case):
         body(case)
 
 
-def test_inline_options_and_vectors_are_closed():
-    from cleanup_inline import expected
+def invoke(value,ambient,*,prior=0):
+    from inline_leaves import proposal as leaf
+    host=SimpleNamespace(case=value.case,meta={'checkout':'/source','owned':'/owned'},
+        binding={'entry':{'path':'/native','sha256':'a'*64}},seen=[],
+        root_only=lambda actor:None,meta_environment=lambda:ambient,
+        intents={index:{'case':value.case,'consumed':True} for index in range(prior)},
+        executed=lambda row:row['consumed'])
+    def admit(actor,expected,role,vector,pin,**options):
+        host.seen.append((expected,role,pin,options))
+        return {'ticket':prior+1,'token':'bound'}
+    host.admit_launch=admit
+    raw={'case':value.case,'executable':value.executable,'argv':list(value.argv),
+        'environment':dict(value.environment),'cwd':value.cwd,'stdin':None}
+    leaf(host,{'role':'root'},raw)
+    assert len(host.seen)==1
+    return host.seen[0]
 
-    root = {"HOME": "/owned/home", "TMPDIR": "/owned/tmp", "PATH": "/usr/bin:/bin"}
+
+def test_inline_options_and_vectors_are_closed(monkeypatch):
+    root={'HOME':'/owned/home','TMPDIR':'/owned/tmp','PATH':'/usr/bin:/bin'}
     for case in CASES:
+        value=expected(case,'/native','a'*64,Path('/source'),root)
         if case in NO_LAUNCH:
             with pytest.raises(Refused):
-                expected(case, "/native", "a" * 64, Path("/source"), root)
+                invoke(value,root)
             continue
-        result = expected(case, "/native", "a" * 64, Path("/source"), root)
-        assert result.argv == ("/native", "-c", body(case)) and result.cwd == "/source"
-        assert dict(result.environment) == {
-            **root,
-            "PYTEST_VERSION": "9.0.2",
-            "PYTEST_CURRENT_TEST": case + " (call)",
-        }
-    case = next(iter(INFLIGHT))
-    result = expected(
-        case,
-        "/native",
-        "a" * 64,
-        Path("/source"),
-        root,
-        base=Path("/owned/pytest/case"),
-        terminal=True,
-    )
-    assert result.cwd == "/owned/pytest/case" and result.environment == ()
+        result,role,pin,options=invoke(value,root)
+        assert result==value and role=='cleanup-inline' and pin==value.payload_sha256
+        assert result.argv==('/native','-c',body(case)) and result.cwd=='/source'
+        assert dict(result.environment)=={**root,'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}
+        assert options['maximum']==child_count(case)
+    import inline_leaves
+    observed=[]
+    def owned(path,root):
+        observed.append((path,root))
+        return Path(path)
+    monkeypatch.setattr(inline_leaves,'base_path',owned)
+    case=next(iter(INFLIGHT))
+    value=expected(case,'/native','a'*64,Path('/source'),root,base=Path('/owned/pytest/case'),terminal=True)
+    result,role,_,_=invoke(value,root,prior=2)
+    assert result.cwd=='/owned/pytest/case' and result.environment==() and role=='cleanup-inline'
+    assert observed==[('/owned/pytest/case',Path('/owned'))]
 
 
 @pytest.mark.parametrize("case", NO_LAUNCH)
@@ -113,7 +130,6 @@ def test_numeric_cases_cannot_mint_a_child_intent(tmp_path, case):
 
 @pytest.mark.parametrize("case", tuple(STARTUP))
 def test_preflight_only_command_never_matches_a_child_rule(case):
-    from cleanup_inline import expected
 
     root = {"HOME": "/owned/home", "TMPDIR": "/owned/tmp", "PATH": "/usr/bin:/bin"}
     result = expected(case, "/native", "a" * 64, Path("/source"), root)

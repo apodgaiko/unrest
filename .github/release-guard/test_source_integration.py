@@ -337,7 +337,8 @@ def test_literal_field_mutations_reach_real_observer_refusal(tmp_path, field, va
 def test_consistent_inline_body_and_hash_substitution_refuses_at_real_admission(tmp_path, body):
     import hashlib
     from pathlib import Path
-    from cleanup_inline import STARTUP, expected
+    from inline_leaves import STARTUP
+    from test_cleanup_scenario_oracle import inline_input as expected
 
     observer, actor, _ = backend_request(tmp_path)
     observer.case = next(iter(STARTUP))

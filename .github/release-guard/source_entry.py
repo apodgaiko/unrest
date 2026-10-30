@@ -15,7 +15,7 @@ from typing import NoReturn
 from bootstrap_wire import Client
 from content_manifest import Refused
 from git_policy import local_case
-from readiness_launch import STREAM_CASES
+from inline_leaves import STREAM_CASES
 from source_profile import digest, validate
 
 def direct_native(args, kwargs, case, role):

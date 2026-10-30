@@ -73,7 +73,7 @@ def validate(profile: dict, event: str, arguments: tuple) -> dict:
         from multiprocess_entry import inherited as validate_inherited
         validate_inherited(profile,actual)
     else:
-        from readiness_launch import STREAM_CASES
+        from inline_leaves import STREAM_CASES
         mcp = profile['role']=='mcp' and profile['execution']['event']=='cpython.run_module' and profile['execution']['argument']=='unrest_harness'
         from approval_launch import CASES as APPROVAL
         mcp = mcp or profile['role']=='mcp' and profile['case'] in APPROVAL

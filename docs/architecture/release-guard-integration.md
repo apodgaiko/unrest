@@ -1478,3 +1478,8 @@ ledger peer Birth. Only the existing adoption proof can update that peer; the
 actor's original Birth, original parent and wait lineage remain unchanged.
 Pipe acquisition still checks that exact current Birth before and after the
 pidfd copy, along with descriptor ownership, flags and inode identity.
+
+Root-owned cleanup, readiness and terminal inline leaves share one constructor
+in `inline_leaves.py`. The case catalogues, body pins, operand environments,
+stream descriptor acquisition, terminal statuses and child ceilings remain
+separate; selecting a family never grants another family's operands.

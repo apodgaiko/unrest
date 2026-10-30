@@ -7,18 +7,18 @@ import pytest
 
 from content_manifest import Refused
 from launch_policy import source_unit
-import readiness_launch as readiness
+import inline_leaves as readiness
 
 ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
 
 
-@pytest.mark.parametrize('case',readiness.CASES[:4])
+@pytest.mark.parametrize('case',readiness.READINESS_CASES[:4])
 @pytest.mark.parametrize('mutation',[None,'body','variant','args','env','cwd','descendant'])
 def test_exact_original_readiness_program_and_operands(case,mutation):
-    unit=source_unit(ROOT,readiness.TEST,readiness.PIN,(readiness.NAME,'exercise'))
+    unit=source_unit(ROOT,readiness.READINESS_TEST,readiness.PIN,(readiness.NAME,'exercise'))
     bodies=[ast.literal_eval(node.value) for node in ast.walk(unit) if isinstance(node,ast.Assign)
             and any(isinstance(target,ast.Name) and target.id=='body' for target in node.targets)]
-    body=bodies[0 if case==readiness.CASES[2] else 1 if case==readiness.CASES[0] else 2]
+    body=bodies[0 if case==readiness.READINESS_CASES[2] else 1 if case==readiness.READINESS_CASES[0] else 2]
     host=SimpleNamespace(case=case,meta={'checkout':str(ROOT)},
         binding={'entry':{'path':'/native','sha256':'a'*64}},intents={})
     def root_only(actor):
@@ -34,7 +34,7 @@ def test_exact_original_readiness_program_and_operands(case,mutation):
     if mutation=='body':
         raw['argv'][2]='print("different")'
     elif mutation=='variant':
-        raw['argv'][2]=bodies[1 if case==readiness.CASES[2] else 0]
+        raw['argv'][2]=bodies[1 if case==readiness.READINESS_CASES[2] else 0]
     elif mutation=='args':
         raw['argv'].append('foreign')
     elif mutation=='env':
@@ -57,7 +57,7 @@ def test_exact_original_readiness_program_and_operands(case,mutation):
 def test_real_child_terminal_status_and_authorized_cleanup_required(status,signals,expected):
     from source_observer import Observer
     from types import SimpleNamespace
-    actor={'birth':1,'role':'fixed-inline','case':readiness.CASES[2],'body_ready':True,'signals':signals,'token':'owned'}
+    actor={'birth':1,'role':'fixed-inline','case':readiness.READINESS_CASES[2],'body_ready':True,'signals':signals,'token':'owned'}
     row={'ticket':1,'birth':1,'role':actor['role'],'case':actor['case'],'consumed':True,'token':'owned'}
     actor['intent']=row
     host=SimpleNamespace(intents={1:row},ledger=SimpleNamespace(process=lambda birth:SimpleNamespace(terminal=(1,0,status))))

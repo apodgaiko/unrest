@@ -8,7 +8,7 @@ import pytest
 
 from content_manifest import Refused
 from process_ledger import Birth
-from readiness_launch import STREAM_CASES, PROGRAM_PINS, proposal
+from inline_leaves import STREAM_CASES, PROGRAM_PINS, proposal
 from source_entry import Policy
 from effect_proposals import proposal_operands
 
@@ -24,7 +24,7 @@ def test_stream_leaf_keeps_exact_program_environment_directory_and_read_pipe(
     tmp_path, monkeypatch, case, mutation
 ):
     import cleanup_launch
-    import owned_fixture
+    import inline_leaves
 
     assert hashlib.sha256(BODY.encode()).hexdigest() == PROGRAM_PINS[case]
     base = tmp_path / "case"
@@ -43,7 +43,7 @@ def test_stream_leaf_keeps_exact_program_environment_directory_and_read_pipe(
         acquisitions.append((owner, fd))
         return [fd, 1, 2]
 
-    monkeypatch.setattr(owned_fixture, "retain", retained)
+    monkeypatch.setattr(inline_leaves, "retain", retained)
     monkeypatch.setattr(cleanup_launch, "read_pipe", pipe)
     calls = []
     host = SimpleNamespace(
