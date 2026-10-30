@@ -397,13 +397,13 @@ def main():
     success = False
     try:
         from postbuild_root import CASES as ARCHIVE_CASES
-        from controlled_cases import ADMISSION,NOTIFICATION_STARTUP,NOTIFICATION_SIGNALS,ROOT_HTTP
+        from controlled_cases import NATIVE_MODULES
         from fixed_inline import CONSOLE_CASE,UV_CASES
         from package_cases import CASES as PACKAGE_CASES
         checkout=Path.cwd().resolve(strict=True)
         chosen=[] if archive or binding['collection_only'] else selection(sys.argv[2:],checkout)
         modules={value.split('::',1)[0] for value in chosen}
-        native_inputs=not chosen or bool(modules & {case.split('::',1)[0] for case in (*ADMISSION,*NOTIFICATION_STARTUP,*NOTIFICATION_SIGNALS,*ROOT_HTTP)})
+        native_inputs=not chosen or bool(modules & NATIVE_MODULES)
         distribution=not chosen or bool(modules & {case.split('::',1)[0] for case in (CONSOLE_CASE,*UV_CASES,*PACKAGE_CASES)})
         phase_root=root/'archive' if archive else root
         if archive:

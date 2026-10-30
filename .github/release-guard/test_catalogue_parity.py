@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-import controlled_cases as catalogue
+import test_controlled_catalogue as catalogue
 
 # Frozen before factoring expanded parameter products. Hash the ordered item
 # sequence: sorting here would hide a changed execution frontier or case seal.

@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from content_manifest import Refused
-from controlled_cases import CASES
+from test_controlled_catalogue import CASES
 from controlled_pairs import before_spawn, limits, scope
 
 

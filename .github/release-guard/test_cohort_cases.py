@@ -5,7 +5,7 @@ import pytest
 
 from cohort_cases import CAMPAIGNS, CASES, EXTRA, GIT_ONLY, TEST
 from content_manifest import Refused
-from controlled_cases import CASES as CONTROLLED, STANDARD
+from test_controlled_catalogue import CASES as CONTROLLED, STANDARD
 from controlled_pairs import before_spawn
 from git_policy import CUSTODY_PREFIX as PREFIX, custody_command as command
 

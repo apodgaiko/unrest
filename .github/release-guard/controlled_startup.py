@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import json
 
-from bootstrap_cases import configuration, wrapper
+from bootstrap_cases import configuration, wrapper, declaration
 from content_manifest import Refused
-from controlled_cases import CASES as CONTROLLED, backend as controlled_backend, backend_path, configuration_items, configured as is_configured
+from controlled_cases import eligible as CONTROLLED, backend_path, BACKENDS, SERVERS
 from launch_policy import build_expected
 
 TEST = 'tests/test_experimental_bootstrap.py'
@@ -22,18 +22,23 @@ CASES = tuple('tests/test_experimental_bootstrap.py::' + name for name in (
     'test_actual_sequential_initialize_and_session_share_cutoff',
     'test_startup_subtracts_from_actual_inference_timeout'))
 WRAPPER = 'import runpy,sys,time; p=sys.argv.pop(1); time.sleep(0.5); runpy.run_path(p,run_name="__main__")'
-def expected_entry(case,checkout,home,native,native_pin,*,backend,relay=None):
-    configured = is_configured(case)
-    servers,skills = configuration_items(case,home)
+def expected_entry(case,checkout,home,native,native_pin,*,backend,relay=None,variant=0,backend_pin=None):
+    if type(variant) is not int or variant not in range(4):
+        raise Refused('controlled finite configuration variant')
+    configured=variant!=0 if CONTROLLED(case) else declaration(case).configured
+    servers=SERVERS if variant>=2 else ()
+    skills=(str(home.parent.parent.parent/'subscription/skills/example/SKILL.md'),) if variant==3 else ()
     options,config = configuration(checkout,home,servers=servers,skills=skills) if configured else ([],None)
     environment = {'HOME':str(home),'CODEX_HOME':str(home/'codex'),'TMPDIR':str(home/'tmp'),'PATH':'/usr/bin:/bin'}
     if config is not None:
         environment.update(CODEX_HOME=str(home.parent.parent.parent/'subscription'),CODEX_CONFIG=config)
     if backend:
-        script = backend_path(case,home.parent) if case in CONTROLLED else home.parent/'fake-app-server'
-        pin = controlled_backend(case)[0] if case in CONTROLLED else BACKEND_PIN
+        script = backend_path(case,home.parent) if CONTROLLED(case) else home.parent/'fake-app-server'
+        pin = backend_pin if CONTROLLED(case) else BACKEND_PIN
+        if CONTROLLED(case) and BACKENDS.get(pin)!=script.name:
+            raise Refused('controlled independent backend pin')
         source = (native,str(script),*options,'app-server')
-        delay = None if case in CONTROLLED else wrapper(case)
+        delay = None if CONTROLLED(case) else wrapper(case)
         vector = (native,'-c',delay,*source[1:]) if delay is not None else source
         kind,reference = ('python-command',None) if delay is not None else ('python-script',pin)
     else:

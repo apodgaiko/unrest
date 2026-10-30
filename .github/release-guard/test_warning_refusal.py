@@ -21,7 +21,10 @@ def test_original_warning_environment_is_exact(tmp_path, monkeypatch, mutation):
     case = next(iter(WARNING_REFUSALS))
     home = tmp_path / "pytest/campaign/owner/worker"
     home.mkdir(parents=True)
-    expected, _, _ = expected_entry(case, ROOT, home, "/native/python", "a" * 64, backend=True)
+    from test_controlled_catalogue import backend as original_backend
+    import controlled_cases
+    monkeypatch.setattr(controlled_cases,'acquire_backend',lambda case,home:original_backend(case)[0])
+    expected, _, _ = expected_entry(case, ROOT, home, "/native/python", "a" * 64, backend=True,variant=2,backend_pin=original_backend(case)[0])
     request = operands(expected)
     changed = deepcopy(request)
     environment = changed["environment"]

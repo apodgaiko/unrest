@@ -103,6 +103,7 @@ class OperandModel:
 
     def __init__(self, owner, checkout, role="worker"):
         self.owner, self.checkout, self.home = owner, checkout, owner.root / role
+        self.records=[]
 
     def select(self, case, observed):
         native = str(Path(sys.executable).resolve())
@@ -127,15 +128,19 @@ class OperandModel:
                 value.lifetime.server.sockets[0].getsockname()[1],
                 value.lifetime.nonce,
             ]
-        expected, _, pin = expected_entry(
-            case,
-            self.checkout,
-            self.home,
-            native,
-            hashlib.sha256(Path(native).read_bytes()).hexdigest(),
-            backend=backend,
-            relay=relay,
-        )
+        import controlled_cases
+        if controlled_cases.eligible(case):
+            from unittest.mock import patch
+            import os
+            raw={'argv':list(observed.argv),'environment':dict(observed.environment),'cwd':observed.cwd}
+            with patch.object(controlled_cases,'SOURCE_UID',os.getuid()):
+                (expected,_,pin),variant=controlled_cases.select_entry(case,self.checkout,self.home,native,
+                    hashlib.sha256(Path(native).read_bytes()).hexdigest(),raw,backend=backend,relay=relay,records=self.records)
+            if backend:
+                self.records.append({'cwd':str(self.home),'role':'backend','controlled_variant':variant})
+        else:
+            expected,_,pin=expected_entry(case,self.checkout,self.home,native,
+                hashlib.sha256(Path(native).read_bytes()).hexdigest(),backend=backend,relay=relay)
         if (type(observed.payload_sha256) is not str or observed.payload_sha256!=expected.payload_sha256
                 or build_expected(case, observed.executable, observed.executable_sha256, observed.argv, observed.environment, observed.cwd, observed.payload_kind, None if observed.payload_kind=='python-command' else observed.payload_sha256) != expected):
             raise Refused('test model operand mismatch')
@@ -393,7 +398,7 @@ def test_live_context_refuses_callback_objects_without_invoking_them(context, fi
     ],
 )
 def test_finite_unconfigured_owner_selection_uses_actual_backend_bytes(tmp_path, monkeypatch, case):
-    from controlled_cases import CASES as CONTROLLED
+    from test_controlled_catalogue import CASES as CONTROLLED
     from tests.test_experimental_finite_orders import CompletionBarriers
 
     if "ack_durability" in case:

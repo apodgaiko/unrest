@@ -16,7 +16,7 @@ from content_manifest import Refused, native_digest
 from http_cases import CASES as HTTP_CASES
 from plan_launch import CASES as PLAN_CASES, INVALID as PLAN_INVALID, PYTHON as PLAN_PYTHON
 from control_transport import Admission, Frame, REQUEST_LIMIT, cancelled_empty, reply
-from controlled_cases import CASES as CONTROLLED, backend_path, WARNING_REFUSALS, NOTIFICATION_SIGNALS
+from controlled_cases import eligible as CONTROLLED, backend_path, WARNING_REFUSALS, NOTIFICATION_SIGNALS
 from linux_observation import process_identity
 from process_ledger import Birth, Ledger, canonical
 from source_profile import METHODS
@@ -84,7 +84,7 @@ class Observer:
         actual = process_identity(pid)
         parent = Birth.read(process_identity(actual['ppid']))
         script=(vector[3] if vector[3] not in ('-c','-m') else
-                str(backend_path(case,Path(cwd).parent) if case in CONTROLLED else Path(cwd).parent/'fake-app-server')
+                str(backend_path(case,Path(cwd).parent) if CONTROLLED(case) else Path(cwd).parent/'fake-app-server')
                 if role=='delayed-backend' else None)
         source = {'schema': 'unrest.bootstrap-source.v1', 'role': role, 'case': case,
             'identity': canonical(actual), 'parent': canonical(process_identity(parent.pid)),
@@ -279,7 +279,7 @@ class Observer:
     def admit_launch(self, actor, expected, role, vector, script_pin,
                      *, maximum=1, environment=None, inherited=(), port=None):
         if (expected.case != self.case or sum(value['case'] == self.case and value['role'] == role
-                       and (self.case not in CONTROLLED or value['cwd'] == expected.cwd)
+                       and (role not in ('backend','acp') or not CONTROLLED(self.case) or value['cwd'] == expected.cwd)
                        for value in self.intents.values()) >= maximum):
             raise Refused('source independent launch reconstruction')
         # Hold the next constructor until the prior child passes exact exec

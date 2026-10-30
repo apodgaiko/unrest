@@ -15,7 +15,7 @@ from ordinary_acp import EXECUTION_CASES as ORDINARY, expected as ordinary_expec
 from cleanup_launch import EXECUTION_CASES as CLEANUP, expected as cleanup_expected, base_path, translated as cleanup_vector
 from cleanup_inline import DECLARATIONS, INFLIGHT, expected as inline_expected
 from controlled_startup import expected_entry, ACP
-from controlled_cases import CASES as CONTROLLED
+from controlled_cases import eligible as CONTROLLED
 from cohort_cases import GIT_ONLY as COHORT_GIT
 from bootstrap_cases import BOOTSTRAP
 
@@ -72,15 +72,15 @@ def proposal(host, actor, raw):
     from review_wire import CASES as REVIEW_CASES,proposal as review_proposal
     if case in REVIEW_CASES:
         return review_proposal(host,actor,raw)
-    if case not in (*BOOTSTRAP,*CONTROLLED,*COHORT_GIT,*ORDINARY,*CLEANUP,*DECLARATIONS,*SESSIONS,*FIXED,*PLANS):
+    if not CONTROLLED(case) and case not in (*BOOTSTRAP,*COHORT_GIT,*ORDINARY,*CLEANUP,*DECLARATIONS,*SESSIONS,*FIXED,*PLANS):
         raise Refused('finite process proposal has no declaration')
     if raw['stdin'] is not None:
         raise Refused('process proposal has undeclared commit input')
     checkout, owned = Path(host.meta['checkout']), Path(host.meta['owned'])
     native, pin = host.binding['entry']['path'], host.binding['entry']['sha256']
     cwd, root_environment = raw['cwd'], host.meta_environment()
-    vector, role, maximum, inherited, port = None, None, 1, [], None
-    custody=case in (*CONTROLLED,*COHORT_GIT) and argv[0]=='/usr/bin/git'
+    vector, role, maximum, inherited, port, variant = None, None, 1, [], None, None
+    custody=(CONTROLLED(case) or case in COHORT_GIT) and argv[0]=='/usr/bin/git'
     if custody:
         from git_policy import custody_command, custody_launch as launch
         value,kind=custody_command(case,tuple(argv),cwd,owned)
@@ -208,11 +208,11 @@ def proposal(host, actor, raw):
             inherited=[read_pipe(actor['birth'].pid,descriptor)]
         expected = cleanup_expected(case,role,base,native,pin,checkout,root_environment,port=port,descriptor=descriptor)
         script_pin,vector = expected.payload_sha256,list(cleanup_vector(expected,host.directory,role))
-    elif case in (*BOOTSTRAP,*CONTROLLED):
+    elif (case in BOOTSTRAP or CONTROLLED(case)):
         from cohort_controller import parent
         parent(host,actor)
         from controlled_pairs import scope,before_spawn
-        if case in CONTROLLED:
+        if CONTROLLED(case):
             scope(case,'bridge',cwd,owned)
         elif (str(Path(cwd).resolve())!=cwd or not Path(cwd).is_relative_to(owned)
                 or Path(cwd).name!='worker' or Path(cwd).parent.name!='owner'):
@@ -220,7 +220,7 @@ def proposal(host, actor, raw):
         backend = argv[1:2]!=[str(checkout/ACP)]
         role='backend' if backend else 'acp'
         records=[row for row in host.intents.values() if row['case']==case]
-        if case in CONTROLLED:
+        if CONTROLLED(case):
             if not before_spawn(case,cwd,role,records,host.executed):
                 return None
         elif not backend:
@@ -236,7 +236,11 @@ def proposal(host, actor, raw):
             relay=json.loads(raw['environment'].get('SYNTHETIC_RELAY','null'),object_pairs_hook=unique)
             if type(relay) is not list or len(relay)!=4:
                 raise Refused('controlled original relay tuple')
-        expected,_,script_pin = expected_entry(case,checkout,Path(cwd),native,pin,backend=backend,relay=relay)
+        if CONTROLLED(case):
+            from controlled_cases import select_entry
+            (expected,_,script_pin),variant=select_entry(case,checkout,Path(cwd),native,pin,raw,backend=backend,relay=relay,records=records)
+        else:
+            expected,_,script_pin = expected_entry(case,checkout,Path(cwd),native,pin,backend=backend,relay=relay)
         vector = [native,'-I','-S',*expected.argv[1:]]
         if backend and expected.payload_kind=='python-command':
             role='delayed-backend'
@@ -247,7 +251,7 @@ def proposal(host, actor, raw):
         return launch(host,actor,raw,model)
     answer=admit_expected(host,actor,raw,expected,role,vector,script_pin,
         maximum=maximum,inherited=inherited,port=port,
-        fields={'fixed_operation':operation} if case in FIXED else None)
+        fields={'fixed_operation':operation} if case in FIXED else {'controlled_variant':variant} if variant is not None else None)
     if answer is None:
         return None
     if case in ORDINARY and role=='session-invalid':

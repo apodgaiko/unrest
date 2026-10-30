@@ -106,18 +106,18 @@ def test_populated_fixture_renderer_disables_exact_servers_and_skills_without_au
     assert encoded.count('mcp_servers') == 1
 
 
-@pytest.mark.parametrize('case', __import__('controlled_cases').FRESH)
+@pytest.mark.parametrize('case', __import__('test_controlled_catalogue').FRESH)
 def test_original_fresh_probe_configuration_binding_and_render(fresh, case):
     from controlled_startup import expected_entry
     binding, config, root, home = fresh
-    value, _, _ = expected_entry(case, binding.checkout, home, '/pinned/python', 'a'*64, backend=True)
+    value, _, _ = expected_entry(case, binding.checkout, home, '/pinned/python', 'a'*64, backend=True,variant=1,backend_pin=__import__('test_controlled_catalogue').backend(case)[0])
     assert value.argv[1:] == tuple(config.argv(root/'fake-app-server', home))
     assert dict(value.environment)['CODEX_HOME'] == str(config.codex_home)
     assert dict(value.environment)['CODEX_CONFIG'] == json.dumps(config.thread_config(home), sort_keys=True)
 
 
 def test_fresh_configuration_case_is_closed_and_callback_free():
-    from controlled_cases import configured, STARTUP_FAILURE
+    from test_controlled_catalogue import configured, STARTUP_FAILURE
     class Trap:
         def __hash__(self):
             pytest.fail('case hashing callback')
@@ -127,11 +127,11 @@ def test_fresh_configuration_case_is_closed_and_callback_free():
             configured(case)
 
 
-@pytest.mark.parametrize('case', __import__('controlled_cases').POPULATED)
+@pytest.mark.parametrize('case', __import__('test_controlled_catalogue').POPULATED)
 def test_exact_populated_configuration_binds_inputs_without_reading_auth(tmp_path, monkeypatch, case):
     monkeypatch.syspath_prepend(str(next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())))
     from tests.test_experimental_provider_config import configuration as original
-    from controlled_cases import configuration_items
+    from test_controlled_catalogue import configuration_items
     from controlled_startup import expected_entry
     config = original(tmp_path)
     if case.split('[')[1].startswith('True-'):
@@ -149,7 +149,7 @@ def test_exact_populated_configuration_binds_inputs_without_reading_auth(tmp_pat
         assert path.name != 'auth.json'
         return read(path,*args,**kwargs)
     monkeypatch.setattr(Path,'open',opening)
-    value,_,_ = expected_entry(case,binding.checkout,home,'/pinned/python','a'*64,backend=True)
+    value,_,_ = expected_entry(case,binding.checkout,home,'/pinned/python','a'*64,backend=True,variant=3 if case.split('[')[1].startswith('True-') else 2,backend_pin=__import__('test_controlled_catalogue').backend(case)[0])
     assert value.argv[1:] == tuple(config.argv(root/'fake-app-server',home))
     assert json.dumps(config.thread_config(home),sort_keys=True) == dict(value.environment)['CODEX_CONFIG']
     assert configuration_items(case,home)[0] == tuple(sorted(config.servers))

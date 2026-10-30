@@ -14,7 +14,7 @@ import stat
 from launch_policy import source_unit, build_expected, admit_expected
 from owned_fixture import acquire, retain
 from content_manifest import Refused, native_digest, read_regular
-from controlled_cases import CASES as CONTROLLED_CASES
+from controlled_cases import eligible as CONTROLLED_CASES
 from cohort_cases import CASES as COHORT_CASES, EXTRA as COHORT_EXTRA
 from completion_roles import CASES as ROLE_CASES, SOURCE as ROLE_SOURCE, ROOT_QUERIES, DEFECT as ROLE_DEFECT, schedule as role_schedule, root as role_root, actor_slot
 from composed_cases import CASES as COMPOSED_CASES, queries as composed_queries
@@ -676,7 +676,7 @@ CUSTODY_FIXED = (
 
 
 def custody_command(case, argv, cwd, owned):
-    if type(case) is not str or case not in (*CONTROLLED_CASES,*COHORT_CASES) or type(argv) is not tuple or any(type(v) is not str for v in argv):
+    if type(case) is not str or not (CONTROLLED_CASES(case) or case in COHORT_CASES) or type(argv) is not tuple or any(type(v) is not str for v in argv):
         raise Refused('custody Git finite command primitives')
     if type(cwd) is not str or str(Path(cwd).resolve()) != cwd or not Path(cwd).is_relative_to(owned/'pytest'):
         raise Refused('custody Git owned repository')

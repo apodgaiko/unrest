@@ -1168,3 +1168,21 @@ second network-topology quota is removed. Controlled custody Git retains its
 existing eligible cases and closed commands under the shared local ceiling of
 128; cohort/crash Git budgets are unchanged. Neither fixture matching nor these
 resource bounds select controlled transport or admit native/provider execution.
+
+
+Ordinary controlled fixture admission now selects from 27 independent literal
+backend hash/filename pairs and four fully reconstructed local configuration
+variants. Test-module eligibility no longer predicts which known body or variant
+each test should use. No caller-supplied digest or arbitrary configuration enters
+a declaration. A backend's selected variant is retained on its intent, and its
+unique paired ACP must match it. Script acquisition remains bounded, no-alias
+and UID-bound; native prebody validation checks the selected bytes again.
+Cohort/crash cases remain on their exact catalogue, standard backend, variant 0,
+parent rights, quotas and wait dispositions. Warning signal/replay sets and
+startup-failure's no-ACP rule are unchanged. Matching these fixtures does not
+select controlled transport, redirect native construction, or admit an adapter,
+model/provider launch or review override. The ordinary controlled modules also
+share the existing closed custody-Git forms and environment inside their owned
+repositories, under the separate finite ceiling; no remote or arbitrary Git
+command is introduced. Retired case associations remain only as test observations
+and are excluded from native enforcement support.

@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from content_manifest import Refused
-from controlled_cases import CASES
+from test_controlled_catalogue import CASES
 from git_policy import custody_command as command, custody_repository as repository, CUSTODY_PREFIX as PREFIX
 
 CASE = next(case for case in CASES if 'test_ack_durability[' in case)
