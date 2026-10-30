@@ -56,3 +56,20 @@ def test_canonical_git_resolution_does_not_change_the_requested_vector():
     routed,options=direct_native(args,{},CASES[0],'fixed-inline')
     assert routed==args and options=={'executable':'/usr/bin/git'}
     assert direct_native(args,{},CLI,'session-child')==(args,{})
+
+
+def test_readonly_owner_exception_is_only_the_exact_checkout(monkeypatch):
+    from types import SimpleNamespace
+    import git_policy
+    from git_policy import Command,issue
+    monkeypatch.setattr(git_policy,'image',lambda:'a'*64)
+    host=SimpleNamespace(case=CASES[0],meta={'checkout':'/sealed/source'},intents={},
+        admit_launch=lambda *args,**kwargs:{'ticket':1,'token':'child'})
+    for role,cwd,expected in (('git-custody','/sealed/source',['-c','safe.directory=/sealed/source']),
+                              ('git-custody','/owned/repository',[]),('git-command','/sealed/source',[])):
+        argv=['git','status','--short']
+        command=Command(tuple(argv),cwd)
+        raw={'executable':'/usr/bin/git','argv':argv,'environment':{},'cwd':cwd,'stdin':None}
+        result=issue(host,{},raw,command,{},role=role)
+        assert result['translated']==['/usr/bin/git',*expected,'status','--short']
+        assert argv==['git','status','--short'] and raw['environment']=={}

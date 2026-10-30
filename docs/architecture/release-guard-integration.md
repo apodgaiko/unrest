@@ -1149,3 +1149,10 @@ them. Three worker repository bindings, the one owned Python command, nested
 measurement ACP and readonly history queries retain exact separate case rights.
 All directory-generation, image/argv/environment, quota, helper and wait checks
 remain; module membership grants no arbitrary Python or worker execution.
+
+
+Historical Git query translation adds one command-scoped `safe.directory` for
+exactly the sealed source cwd, whose root ownership intentionally differs from
+the source process UID. Raw original argv/environment still match the declared
+query; only its measured translated vector contains that exact exception. It is
+not a wildcard, global config change, mutable-fixture exception or extra command.

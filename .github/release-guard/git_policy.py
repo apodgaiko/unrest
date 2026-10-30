@@ -469,6 +469,8 @@ def issue(host,actor,raw,command,environment,*,role='git-command',maximum=128,fi
     expected=build_expected(host.case,'/usr/bin/git',image(),command.argv,
         tuple(sorted(environment.items())),command.cwd,'native')
     vector=['/usr/bin/git',*command.argv[1:]]
+    if role=='git-custody' and command.cwd==host.meta.get('checkout'):
+        vector[1:1]=['-c','safe.directory='+command.cwd]
     answer=admit_expected(host,actor,raw,expected,role,vector,maximum=maximum,fields=fields)
     if answer is not None and fields is not None:
         host.git.commands[answer['token']]=host.intents[answer['ticket']]
