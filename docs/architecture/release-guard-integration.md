@@ -1464,6 +1464,11 @@ numeric parent wait.
 
 Completion role constructors use the same bounded project, mission, node and
 output-path scope as other node launches. Those application names do not select
-execution rights. Server ordinal, mode, fixed provider/command settings, exact
-script templates, per-parent Git quotas, intentional crash status, readiness and
-actual wait joins retain their separate admission checks.
+execution rights. Mode, fixed provider/command settings, exact script templates, intentional
+crash status, readiness and actual wait joins retain separate admission checks.
+Ordinary server construction order and the distribution of read-only HEAD
+queries are application behavior. Admission matches complete joint profiles,
+preserves the original case-wide server/query ceilings, and bounds each READY
+worker parent by the largest original per-parent query allowance. Setup literal
+indices and crash slot zero remain exact; actual constructor ordinals still bind
+composed adoption and resumed-signal generations.

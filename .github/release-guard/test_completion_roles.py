@@ -6,7 +6,7 @@ import pytest
 
 from content_manifest import Refused
 import completion_roles as roles
-from test_role_data_oracle import completion_environment,completion_attempt
+from test_role_data_oracle import completion_environment,completion_attempt,completion_schedule
 
 ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
 
@@ -27,7 +27,7 @@ def test_all_literals_and_environment_bind_closed_role_and_attempt(case,tmp_path
     parent=tmp_path/'quote\'s-root'
     ambient={'HOME':'/owned/home','PATH':'/usr/bin:/bin','UNREST_FOREIGN':'must be stripped for stdio'}
     family,role,_=roles.CASES[case]
-    for ordinal,(kind,attempt,quota) in enumerate(roles.schedule(case)):
+    for ordinal,(kind,attempt,quota) in enumerate(completion_schedule(case)):
         observed=completion_environment(ROOT,parent,case,ordinal,ambient)
         environment=roles.environment(ROOT,parent,case,ordinal,ambient,observed=observed)
         body=roles.program(ROOT,parent,case,ordinal,environment)
@@ -130,7 +130,7 @@ def test_substantive_defect_keeps_two_distinct_pinned_roles_and_owned_attempts(t
         for index,role in enumerate(('work','validate'))}}
     monkeypatch.setattr(measurement_runtime,'record',lambda path:document if path.name=='project.json' else state)
     assert len(fixture(case))==3 and fixture(case)[1]==('git','add','product.txt')
-    assert roles.schedule(case)==(('inline','',1),('inline','',0))
+    assert roles.schedule(case)==(('inline','worker',1),('inline','validator',0))
     bodies=[roles.program(ROOT,tmp_path,case,index) for index in (0,1)]
     assert bodies[0]==bodies[1] and 'independent validator found the defect' in bodies[1]
     ast.parse(bodies[0])

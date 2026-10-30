@@ -52,25 +52,26 @@ def schedule(case):
     if type(case) is not str or case not in CASES:
         raise Refused('completion closed role case')
     family,role,scenario=CASES[case]
+    mode='validator' if role=='validate' else 'worker'
     if family=='composed':
-        return (('http','',0),)*COMPOSED_HTTP[case]
+        return (('http','orchestrator',0),)*COMPOSED_HTTP[case]
     if family=='source':
         return ()
     if family=='defect':
-        return (('inline','',1),('inline','',0))
+        return (('inline','worker',1),('inline','validator',0))
     if family=='restart':
-        return (('http','same-process-attempt',2 if role=='work' else 0),('http','',0),('http','',0))
+        return (('http',mode,2 if role=='work' else 0),('http','orchestrator',0),('http','orchestrator',0))
     if family=='targetless':
-        return (('http','attempt',1),('http','attempt',0))
+        return (('http',mode,1),('http',mode,0))
     if family=='binding':
-        return (('http','attempt',int(role=='work')),)
+        return (('http',mode,int(role=='work')),)
     work=role=='work'
     if family=='ownership':
-        return (('http','attempt',2 if work and scenario=='exhausted' else int(work)),
-            ('http','attempt',int(work)),('http','attempt',0),('http','other',int(work)))
+        return (('http',mode,2 if work and scenario=='exhausted' else int(work)),
+            ('http',mode,int(work)),('http',mode,0),('http',mode,int(work)))
     if family=='crash':
-        return (('stdio','attempt',int(work)),('http','attempt',int(work and scenario=='before')))
-    return (('stdio','attempt',int(work)),('stdio','other' if scenario=='distinct' else 'attempt',int(work)))
+        return (('stdio',mode,int(work)),('http',mode,int(work and scenario=='before')))
+    return (('stdio',mode,int(work)),)*2
 
 
 def root(host,cwd):
@@ -113,12 +114,7 @@ def program(checkout,parent,case,ordinal,environment=None):
 
 
 def mode(case,ordinal):
-    family,role,_=CASES[case]
-    if family=='composed':
-        return 'orchestrator'
-    if family=='defect':
-        return 'worker' if ordinal==0 else 'validator'
-    return 'orchestrator' if family=='restart' and ordinal>0 else 'validator' if role=='validate' else 'worker'
+    return schedule(case)[ordinal][1]
 
 
 def environment(checkout,parent,case,ordinal,ambient,*,native=None,observed=None):
@@ -132,7 +128,7 @@ def environment(checkout,parent,case,ordinal,ambient,*,native=None,observed=None
         result['PYTHONPATH']=str(checkout/'src')
         for name in ('WORKER','VALIDATOR','TERMINAL_REVIEWER'):
             result['UNREST_'+name+'_PROVIDER']='claude'
-            result['UNREST_'+name+'_ACP_COMMAND']=str(parent/'workspace/.forbidden-child-trap') if family=='restart' and ordinal==0 else '/bin/true'
+            result['UNREST_'+name+'_ACP_COMMAND']=str(parent/'workspace/.forbidden-child-trap') if family=='restart' and mode(case,ordinal)!='orchestrator' else '/bin/true'
     if family=='composed':
         if native is None:
             raise Refused('composed original native command binding')
@@ -158,7 +154,7 @@ def actor_slot(host,actor):
     slot=row.get('server_slot')
     if type(slot) is not int or not 0<=slot<len(schedule(host.case)):
         raise Refused('completion finite server slot')
-    kind=schedule(host.case)[slot][0]
+    kind=row['server_kind']
     if row['role']!=actor['role'] or actor['role']!=('mcp' if kind=='http' else 'fixed-inline'):
         raise Refused('completion server role generation')
     return row

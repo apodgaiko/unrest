@@ -62,7 +62,7 @@ def test_each_concurrent_http_constructor_consumes_one_exact_authored_slot(host)
     for slot in (0,1):
         command=raw(host,parent,slot,12345+slot)
         changed={**command,'environment':{**command['environment'],'FOREIGN':'not admitted'}}
-        with pytest.raises(Refused,match='exact security environment'):
+        with pytest.raises(Refused,match='joint launch variant'):
             server.proposal(host,actor,changed)
         answer=server.proposal(host,actor,command)
         consumed(host,answer)
@@ -80,7 +80,7 @@ def test_setup_slot_one_may_construct_first_but_neither_slot_may_repeat(host):
         answer=server.proposal(host,actor,raw(host,parent,slot))
         assert host.intents[answer['ticket']]['server_slot']==slot
         consumed(host,answer)
-    with pytest.raises(Refused,match='original server sequence'):
+    with pytest.raises(Refused,match='quota exhausted'):
         server.proposal(host,actor,raw(host,parent,1))
     assert not host.retired
 
@@ -133,3 +133,40 @@ def test_completion_git_head_keeps_success_at_shared_final_join(code,admitted,ac
     actor={'case':'case','role':'git-command','birth':birth,'token':'git','intent':intent,'kernel_admitted':admitted}
     host=SimpleNamespace(intents={1:intent},ledger=SimpleNamespace(process=lambda value:SimpleNamespace(terminal=(3,code<<8,code))))
     assert Observer.completed_child(host,actor) is accepted
+
+
+def test_restart_profiles_are_joint_variants_without_an_application_order_oracle(host):
+    value,actor,parent=host
+    value.case=next(iter(roles.RESTART))
+    value.fixture_roots={('completion-role',value.case):(str(parent),)}
+    # An orchestrator's /bin/true profile and a worker's forbidden trap remain
+    # separate complete profiles even when the application constructs them later.
+    orchestrator=raw(value,parent,1)
+    orchestrator['argv'][4]='orchestrator'
+    changed={**orchestrator,'environment':{**orchestrator['environment'],
+        'UNREST_WORKER_ACP_COMMAND':str(parent/'workspace/.forbidden-child-trap')}}
+    with pytest.raises(Refused,match='joint launch variant'):
+        server.proposal(value,actor,changed)
+    first=server.proposal(value,actor,orchestrator)
+    assert value.intents[first['ticket']]['server_slot']==0
+    consumed(value,first)
+    worker=raw(value,parent,0)
+    second=server.proposal(value,actor,worker)
+    assert value.intents[second['ticket']]['server_slot']==1
+    consumed(value,second)
+    third=server.proposal(value,actor,orchestrator)
+    consumed(value,third)
+    with pytest.raises(Refused,match='quota exhausted'):
+        server.proposal(value,actor,worker)
+
+
+def test_crash_literal_slot_cannot_be_replaced_by_the_http_profile(host):
+    value,actor,parent=host
+    value.case=next(case for case,row in roles.CASES.items() if row==('crash','work','before'))
+    value.fixture_roots={('completion-role',value.case):(str(parent),)}
+    with pytest.raises(Refused,match='joint launch variant'):
+        server.proposal(value,actor,raw(value,parent,1))
+    first=server.proposal(value,actor,raw(value,parent,0))
+    assert value.intents[first['ticket']]['server_kind']=='stdio'
+    consumed(value,first)
+    assert server.proposal(value,actor,raw(value,parent,1))['ticket']==2

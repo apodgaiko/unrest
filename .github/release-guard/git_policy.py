@@ -704,8 +704,8 @@ def completion_proposal(host,actor,raw):
             from composed_runtime import query_quota
             quota=query_quota(host,actor)
         else:
-            server=actor_slot(host,actor)
-            quota=role_schedule(case)[server['server_slot']][2]
+            actor_slot(host,actor)
+            quota=max(row[2] for row in role_schedule(case)) if actor['profile']['environment'].get('UNREST_NODE_TYPE')=='work' else 0
         if len(records)>=quota:
             raise Refused('completion server-owned Git query quota')
         completion_ready(host,workspace)

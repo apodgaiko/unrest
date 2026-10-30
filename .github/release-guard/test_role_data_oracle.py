@@ -2,7 +2,7 @@
 from ordinary_acp import EXECUTION_CASES, STARTUP_CASES, TEMPLATE_CASES, BATCH_CASES, MOCK_CASE
 from content_manifest import Refused
 from completion_roles import CASES, schedule, mode
-from composed_cases import DIRECT,UNDELIVERABLE
+from composed_cases import DIRECT,UNDELIVERABLE,HTTP as COMPOSED_HTTP
 
 
 def ordinary_environment(case, base, root_environment, ordinal=0):
@@ -44,7 +44,7 @@ def ordinary_environment(case, base, root_environment, ordinal=0):
 
 def completion_attempt(parent,case,ordinal):
     family,_,_=CASES[case]
-    return parent/'.unrest/projects'/family/'.unrest-runtime/missions/mission-001/attempts'/(schedule(case)[ordinal][1]+'__node.json')
+    return parent/'.unrest/projects'/family/'.unrest-runtime/missions/mission-001/attempts'/(completion_schedule(case)[ordinal][1]+'__node.json')
 
 def completion_environment(checkout,parent,case,ordinal,ambient,*,native=None,observed=None):
     family,role,scenario=CASES[case]
@@ -75,7 +75,32 @@ def completion_environment(checkout,parent,case,ordinal,ambient,*,native=None,ob
     project=f'real-restart-{role}-{scenario=="repair"}' if family=='restart' else family
     node=role+'-node' if family=='restart' else 'work' if family=='targetless' else 'node'
     path=(parent/'.unrest/projects'/project/'.unrest-runtime/missions/mission-001/attempts'/
-          (schedule(case)[ordinal][1]+'__'+node+'.json') if family in ('restart','targetless','binding') else completion_attempt(parent,case,ordinal))
+          (completion_schedule(case)[ordinal][1]+'__'+node+'.json') if family in ('restart','targetless','binding') else completion_attempt(parent,case,ordinal))
     result.update(UNREST_PROJECT_ID=project,UNREST_MISSION_ID='mission-001',UNREST_NODE_ID=node,
         UNREST_NODE_TYPE=role,UNREST_HANDOFF_PATH=str(path))
     return result
+
+
+def completion_schedule(case):
+    if type(case) is not str or case not in CASES:
+        raise Refused('completion closed role case')
+    family,role,scenario=CASES[case]
+    if family=='composed':
+        return (('http','',0),)*COMPOSED_HTTP[case]
+    if family=='source':
+        return ()
+    if family=='defect':
+        return (('inline','',1),('inline','',0))
+    if family=='restart':
+        return (('http','same-process-attempt',2 if role=='work' else 0),('http','',0),('http','',0))
+    if family=='targetless':
+        return (('http','attempt',1),('http','attempt',0))
+    if family=='binding':
+        return (('http','attempt',int(role=='work')),)
+    work=role=='work'
+    if family=='ownership':
+        return (('http','attempt',2 if work and scenario=='exhausted' else int(work)),
+            ('http','attempt',int(work)),('http','attempt',0),('http','other',int(work)))
+    if family=='crash':
+        return (('stdio','attempt',int(work)),('http','attempt',int(work and scenario=='before')))
+    return (('stdio','attempt',int(work)),('stdio','other' if scenario=='distinct' else 'attempt',int(work)))

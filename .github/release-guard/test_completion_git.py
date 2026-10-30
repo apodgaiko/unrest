@@ -107,10 +107,10 @@ def test_concurrent_servers_have_independent_queries_and_exact_parent_quota(fixt
     for slot in (0,1):
         birth=object()
         token=f'server-{slot}'
-        environment={'HOME':str(workspace.parent/'.unrest'),'PATH':'/usr/bin:/bin','SERVER':str(slot)}
+        environment={'HOME':str(workspace.parent/'.unrest'),'PATH':'/usr/bin:/bin','SERVER':str(slot),'UNREST_NODE_TYPE':'work'}
         actor={'role':'mcp','case':host.case,'birth':birth,'token':token,'body_ready':True,
                'profile':{'environment':environment}}
-        host.intents[3+slot]={'ticket':3+slot,'case':host.case,'role':'mcp','server_slot':slot,'parent':host.root_birth,
+        host.intents[3+slot]={'ticket':3+slot,'case':host.case,'role':'mcp','server_slot':slot,'server_kind':'http','parent':host.root_birth,
                             'consumed':True,'birth':birth,'token':token,'pid':30+slot}
         actor['intent']=host.intents[3+slot]
         servers.append(actor)

@@ -4,18 +4,8 @@ from pathlib import Path
 from completion_roles import CASES,root,schedule,program,environment,mode
 from git_policy import completion_proposal as git_proposal, completion_ready as git_ready
 from content_manifest import Refused
-from launch_policy import admit_expected,build_expected
+from launch_policy import admit_expected,build_expected,check_expected
 
-
-def rows(host):
-    found={}
-    for row in host.intents.values():
-        if row['case']==host.case and 'server_slot' in row:
-            slot=row['server_slot']
-            if type(slot) is not int or slot in found or not 0<=slot<len(schedule(host.case)):
-                raise Refused('completion unique authored server slot')
-            found[slot]=row
-    return found
 
 
 def status(host,actor,slot):
@@ -27,22 +17,6 @@ def status(host,actor,slot):
         return terminal[2]==73
     return terminal[2]==0 or terminal[2] in (-9,-15) and -terminal[2] in actor['signals']
 
-
-def before(host,slot):
-    existing=rows(host)
-    family,_,_=CASES[host.case]
-    key=('completion-role',host.case)
-    value=host.fixture_roots.get(key)
-    if value is None:
-        raise Refused('completion server before fixture Git')
-    parent=Path(value[0])
-    root(host,str(parent/'workspace'))
-    git_ready(host,parent/'workspace')
-    if slot in existing or family!='setup' and slot!=len(existing):
-        raise Refused('completion original server sequence')
-    if any(not host.executed(row) for row in existing.values()):
-        return None
-    return parent
 
 
 def proposal(host,actor,raw):
@@ -62,35 +36,44 @@ def proposal(host,actor,raw):
     if raw['stdin'] is not None:
         raise Refused('completion server undeclared constructor input')
     case=host.case
-    existing=rows(host)
-    family,role,_=CASES[case]
+    existing=[row for row in host.intents.values() if row['case']==case and 'server_slot' in row]
+    family,_,_=CASES[case]
+    profiles=schedule(case)
     slot=(int(raw['argv'][3]) if family=='setup' and len(raw['argv'])==6 and raw['argv'][3] in ('0','1')
           else len(existing))
-    if slot>=len(schedule(case)):
+    if slot>=len(profiles) or any(row['server_slot']==slot for row in existing):
         raise Refused('completion server quota exhausted')
-    parent=before(host,slot)
-    if parent is None:
+    selected=host.fixture_roots.get(('completion-role',case))
+    if selected is None:
+        raise Refused('completion server before fixture Git')
+    parent=root(host,str(Path(selected[0])/'workspace'))
+    git_ready(host,parent/'workspace')
+    if any(not host.executed(row) for row in existing):
         return None
-    kind=schedule(case)[slot][0]
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
     checkout=Path(host.meta['checkout'])
-    selected_mode=mode(case,slot)
     ambient={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}
-    env=environment(checkout,parent,case,slot,ambient,native=native,observed=raw['environment'])
-    body=program(checkout,parent,case,slot,env)
-    port=None
-    if kind=='http':
-        from network_scope import port_argument
-        port=port_argument(raw['argv'][-1])
-        vector=(native,'-c',body,'--mode',selected_mode,'--transport','streamable-http','--host','127.0.0.1','--port',str(port))
-    else:
-        vector=(native,'-c',body,*((str(slot),) if family=='setup' else ()),*(('--mode',selected_mode) if kind=='stdio' else ()))
-    value=build_expected(case,native,pin,vector,
-        tuple(sorted(env.items())),str(parent/'workspace'),'python-command')
-    translated=[native,'-I','-S',*vector[1:]]
-    from composed_runtime import bootstrap
-    answer=admit_expected(host,actor,raw,value,'mcp' if kind=='http' else 'fixed-inline',translated,
-        fields={'server_slot':slot,
-            'execution_fixture':bootstrap(host,parent) if case in COMPOSED else None},
-        maximum=len(schedule(case))+(len(roles(case)) if case in COMPOSED else 0),port=port)
-    return answer
+    for variant in ((slot,) if family in ('setup','crash') else range(len(profiles))):
+        kind=profiles[variant][0]
+        try:
+            env=environment(checkout,parent,case,variant,ambient,native=native,observed=raw['environment'])
+            body=program(checkout,parent,case,variant,env)
+            port=None
+            if kind=='http':
+                from network_scope import port_argument
+                if len(raw['argv'])!=11:
+                    raise Refused('completion HTTP constructor arity')
+                port=port_argument(raw['argv'][-1])
+                vector=(native,'-c',body,'--mode',mode(case,variant),'--transport','streamable-http','--host','127.0.0.1','--port',str(port))
+            else:
+                vector=(native,'-c',body,*((str(slot),) if family=='setup' else ()),*(('--mode',mode(case,variant)) if kind=='stdio' else ()))
+            value=build_expected(case,native,pin,vector,tuple(sorted(env.items())),str(parent/'workspace'),'python-command')
+            check_expected(raw,value)
+        except Refused:
+            continue
+        from composed_runtime import bootstrap
+        return admit_expected(host,actor,raw,value,'mcp' if kind=='http' else 'fixed-inline',[native,'-I','-S',*vector[1:]],
+            fields={'server_slot':slot,'server_kind':kind,
+                'execution_fixture':bootstrap(host,parent) if case in COMPOSED else None},
+            maximum=len(profiles)+(len(roles(case)) if case in COMPOSED else 0),port=port)
+    raise Refused('completion joint launch variant')
