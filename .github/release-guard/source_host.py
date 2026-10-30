@@ -21,6 +21,7 @@ import sys
 import tarfile
 import time
 import traceback
+import tomllib
 
 
 def require(condition, message):
@@ -96,7 +97,8 @@ def prepare(binding, checkout, root, git=False, public=False, native=False, extr
     if public:
         probe=source/'src/unrest_harness.egg-info/PKG-INFO'
         probe.parent.mkdir(parents=True)
-        probe.write_bytes(b'Ignored generated metadata exclusion probe\n')
+        project=tomllib.loads((source/'pyproject.toml').read_text())['project']
+        probe.write_text(f"Metadata-Version: 2.1\nName: {project['name']}\nVersion: {project['version']}\n\nIgnored generated metadata exclusion probe\n")
         from git_policy import public_prepare as public_git
         from content_manifest import _capture
         public_git(checkout, source, binding['head'])

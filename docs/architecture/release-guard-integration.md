@@ -447,7 +447,9 @@ exact image/environment/cwd binding, one consumed intent and its actual original
 parent wait before the next command. Historical cases use their own closed readonly command inventory.
 The private source copy includes a fixed ignored egg-info marker so the existing
 ignored-file exclusion assertion remains a real probe in the readonly source
-suite; this generated test input is outside the candidate tracked-file binding.
+suite. The marker carries valid Name/Version metadata from the frozen project,
+so distribution discovery remains functional; it is outside the candidate
+tracked-file binding.
 
 The release-binding CLI case admits exactly its active/wrong manifest invocations
 with script bytes, selected owned fixture path, complete argv/environment and
