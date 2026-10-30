@@ -33,11 +33,11 @@ def test_filter_keeps_only_namespace_contained_socket_classes_and_route_queries(
                 for flags in (0,0x800,0x80000,0x80800,0x100):
                     for protocol in (0,1,6,17,31):
                         allowed=(family in (2,10) and kind in (1,2) and protocol in (0,6,17)
-                            or family==1 and kind in (1,2) and protocol==0
+                            or family==1 and kind in (1,2,5) and protocol==0
                             or family==16 and kind==3 and protocol==0)
                         # Kernel socket arguments are int-sized, like BPF's low words.
                         if family==0x100000001:
-                            allowed=kind in (1,2) and protocol==0
+                            allowed=kind in (1,2,5) and protocol==0
                         allowed=allowed and flags!=0x100
                         assert action(number,family,kind|flags,protocol)==(0x7FFF0000 if allowed else 0x7FF00000)
 

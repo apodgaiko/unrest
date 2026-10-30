@@ -47,6 +47,9 @@ with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as receiver:
 left,right=socket.socketpair()
 with left,right:
     left.sendall(b'pair');assert right.recv(4)==b'pair'
+left,right=socket.socketpair(socket.AF_UNIX,socket.SOCK_SEQPACKET)
+with left,right:
+    left.sendall(b'packet');assert right.recv(6)==b'packet'
 control=os.fsencode(Path(sys.executable).parents[2]/'profiles/control.sock')
 sys.audit('socket.connect',object(),control)
 print('NATIVE_BODY_OK',flush=True)

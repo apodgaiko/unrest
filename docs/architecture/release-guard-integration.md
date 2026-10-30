@@ -70,7 +70,7 @@ admitted child, consumed intents, actual statuses and original-parent joins.
 
 The network boundary is the verified private loopback-only namespace, not
 per-role Python socket wrappers. Kernel admission permits contained IP stream
-and datagram sockets, anonymous Unix pairs and route-netlink queries; excluded
+and datagram sockets, anonymous Unix stream/datagram/seqpacket IPC and route-netlink queries; excluded
 families, raw IP and io_uring calls fail sticky. Python Unix pathname/abstract
 bind and connect remain refused except the exact authenticated control connect.
 Resolver calls use the actual system implementation inside this namespace.
@@ -1109,3 +1109,6 @@ The Python socket monkeypatch layer is removed. Guard-only tests of its retired
 per-role IPv6, literal resolver and wrapper call restrictions are replaced by
 actual native caught-refusal, kernel family/protocol, ordinary descriptor/IO and
 private namespace controls. No original product test is removed or weakened.
+
+The pinned `uv` startup uses an anonymous Unix `SOCK_SEQPACKET` pair. This
+contained IPC class is admitted with protocol zero; IP seqpacket remains denied.
