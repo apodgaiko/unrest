@@ -142,6 +142,7 @@ def worker(case):
         os.close(ready_read)
         credentials(20000, ())
         if case == 'memory':
+            prctl(4, 0)  # Do not inherit the runner's fs.suid_dumpable setting.
             assert trace.LIBC.prctl(3, 0, 0, 0, 0) == 0  # PR_GET_DUMPABLE.
             assert trace.LIBC.munmap(ctypes.c_void_p(edge_address + 4096), 4096) == 0
         os.write(ready_write, b'R')
