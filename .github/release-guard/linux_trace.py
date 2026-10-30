@@ -83,13 +83,21 @@ def registers(pid: int) -> Registers:
 
 
 def read_bytes(pid: int, address: int, count: int) -> bytes:
-    if not address or not 0 <= count <= 65536:
+    if type(address) is not int or address <= 0 or type(count) is not int or not 0 <= count <= 65536:
         raise RuntimeError("invalid bounded tracee read")
-    result = bytearray()
-    for offset in range(0, count, 8):
-        word = ptrace(2, pid, address + offset)
-        result.extend((word & ((1 << 64) - 1)).to_bytes(8, "little"))
-    return bytes(result[:count])
+    if not count:
+        return b''
+    # PEEK first proves kernel attachment and a stopped task; observer privilege
+    # alone must not turn this helper into a foreign-process memory reader.
+    ptrace(2, pid, address & ~7)
+    memory = os.open(f'/proc/{pid}/mem', os.O_RDONLY | os.O_CLOEXEC)
+    try:
+        result = os.pread(memory, count, address)
+    finally:
+        os.close(memory)
+    if len(result) != count:
+        raise RuntimeError("incomplete bounded tracee read")
+    return result
 
 
 MAX_EXEC_STRING = 131071
@@ -98,17 +106,14 @@ MAX_EXEC_VECTOR_BYTES = 2 * 1024 * 1024
 
 def read_string(pid: int, address: int) -> bytes:
     result = bytearray()
-    base = address & ~7
-    first = address - base
-    for offset in range(0, MAX_EXEC_STRING + 9, 8):
-        block = read_bytes(pid, base + offset, 8)
-        if offset == 0:
-            block = block[first:]
+    while len(result) <= MAX_EXEC_STRING:
+        current = address + len(result)
+        # Do not touch the next page before finding a possible final-byte NUL.
+        size = min(4096 - current % 4096, MAX_EXEC_STRING + 1 - len(result))
+        block = read_bytes(pid, current, size)
         end = block.find(b"\0")
         result.extend(block if end < 0 else block[:end])
         if end >= 0:
-            if len(result) > MAX_EXEC_STRING:
-                raise RuntimeError("unbounded exec string")
             return bytes(result)
     raise RuntimeError("unbounded exec string")
 

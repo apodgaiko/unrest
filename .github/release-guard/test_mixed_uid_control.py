@@ -117,6 +117,18 @@ def worker(case):
     if case=='snapshot_custody':
         snapshot_custody()
         return
+    if case == 'memory':
+        import mmap
+        edge = mmap.mmap(-1, 8192)
+        edge[:4096] = b'e' * 4095 + b'\0'
+        edge_address = ctypes.addressof(ctypes.c_char.from_buffer(edge))
+        large = mmap.mmap(-1, 66 * 4096)
+        maximum = trace.MAX_EXEC_STRING
+        large[:maximum + 1] = b'm' * maximum + b'\0'
+        overflow = 33 * 4096
+        large[overflow:overflow + maximum + 1] = b'o' * (maximum + 1)
+        large_address = ctypes.addressof(ctypes.c_char.from_buffer(large))
+        four = ctypes.c_uint32(0x12345678)
     start_read, start_write = os.pipe()
     ready_read, ready_write = os.pipe()
     unrelated = os.fork()
@@ -129,6 +141,9 @@ def worker(case):
         os.close(start_write)
         os.close(ready_read)
         credentials(20000, ())
+        if case == 'memory':
+            assert trace.LIBC.prctl(3, 0, 0, 0, 0) == 0  # PR_GET_DUMPABLE.
+            assert trace.LIBC.munmap(ctypes.c_void_p(edge_address + 4096), 4096) == 0
         os.write(ready_write, b'R')
         os.close(ready_write)
         if os.read(start_read, 1) != b'1':
@@ -148,10 +163,28 @@ def worker(case):
     assert os.read(ready_read, 1) == b'R'
     os.close(ready_read)
     credentials(20001, (2, 19))
+    if case == 'memory':
+        unattached_read = True
+        try:
+            trace.read_bytes(source, ctypes.addressof(four), 4)
+        except OSError:
+            unattached_read = False
     initiating = RuntimeError('controlled observation failure')
     observed_group_stop = False
 
     def attached():
+        if case == 'memory':
+            assert not unattached_read, 'unattached foreign memory was readable'
+            assert trace.read_string(source, edge_address + 1) == b'e' * 4094
+            assert trace.read_string(source, large_address) == b'm' * maximum
+            assert trace.read_bytes(source, ctypes.addressof(four), 4) == b'\x78\x56\x34\x12'
+            try:
+                trace.read_string(source, large_address + overflow)
+            except RuntimeError as error:
+                assert str(error) == 'unbounded exec string'
+            else:
+                raise AssertionError('oversized memory string accepted')
+            raise initiating
         if case == 'attached':
             raise initiating
 
@@ -206,7 +239,7 @@ def worker(case):
 
 def main():
     assert os.getuid() == 0 and os.uname().machine == 'x86_64'
-    for case in ('attached', 'running', 'birth', 'pending_birth', 'group_stop','snapshot_custody'):
+    for case in ('attached', 'running', 'birth', 'pending_birth', 'group_stop','snapshot_custody','memory'):
         child = os.fork()
         if child == 0:
             try:

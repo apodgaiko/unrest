@@ -943,3 +943,10 @@ worker indices, operations, originating server slots and retained request/projec
 qualifications are unchanged. Original fixture-value constructors used only to
 build guard-test inputs are retained in test_role_data_oracle.py; production
 enforcement does not import that test oracle.
+
+Tracee memory is read only while the kernel holds that owned task stopped. An
+aligned PEEK proves the attachment before each read-only, CLOEXEC `/proc/TID/mem`
+handle is opened; the handle closes before resume or exec. Page-bounded reads
+replace the former eight-byte PEEK loop without changing string/vector limits,
+exact wait-status bytes, exec admission or actual-parent wait evidence. Short
+reads and access failures refuse; observer privilege grants no unattached read.
