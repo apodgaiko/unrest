@@ -72,7 +72,8 @@ The network boundary is the verified private loopback-only namespace, not
 per-role Python socket wrappers. Kernel admission permits contained IP stream
 and datagram sockets, anonymous Unix stream/datagram/seqpacket IPC and route-netlink queries; excluded
 families, raw IP and io_uring calls fail sticky. Python Unix pathname/abstract
-bind and connect remain refused except the exact authenticated control connect.
+bind and connect remain refused except the exact authenticated control connect
+and the independently acquired controlled approval endpoint described below.
 Resolver calls use the actual system implementation inside this namespace.
 The private control pathname retains its independent kernel peer authentication
 and current registration/token checks.
@@ -1256,9 +1257,9 @@ pinned public histories and exact CI HEAD are fetched. Normalized discovery
 identity collisions remain refused by the observer before sealing; the client
 loads that authenticated SHA-bound inventory without repeating the same check.
 
-## Candidate footprint checkpoint
+## Prior candidate footprint checkpoint
 
-The replacement guard measures 9,998 physical enforcement lines after retiring
+The `c8efab2` snapshot measured 9,998 physical enforcement lines after retiring
 the temporary guard-simplification workflow. This includes every remaining
 non-test `.github` file and the complete distribution checker; test code remains
 separate. The full CI workflow and every original product test remain intact.
@@ -1310,3 +1311,25 @@ into three equivalent steps before applying their original command mutations.
 The normalization requires the complete exact grouped commands; case parameters,
 negative diagnostics and live/dynamic-guard assertions are retained. Other duty
 mutations continue to inspect the current grouped workflow directly.
+
+
+The copied-repository CI mutation cases admit only initialization, the installed
+`unrest check-repository` entry and its one read-only root query. Copied source
+must equal the sealed candidate before imports normalize to those sealed bytes;
+the intentionally modified workflow/documentation and original cwd remain.
+Historical crosswalk queries remain confined to pinned public v0.2.0 paths.
+The denial runner admits its fixed idle process and inert denial-only transport;
+neither these declarations nor own-PID signal-zero probes accept a denied review.
+
+The nine controlled approval-owner subprocess cases bind one parent-lifetime MCP
+entry, one pinned synthetic ACP adapter, a reconstructed transport relay and its
+pinned synthetic backend. The generated relay has four literal operands: the
+retained private socket, bounded token, owned backend and measured backend hash.
+Backend bytes include the exact native interpreter shebang. Adapter/relay script
+execution normalizes only to that measured native image, retaining exact script
+bytes, argv, environment, cwd and actual parent. MCP READY precedes adapter launch;
+each chain parent must have its own native READY before launching a descendant.
+Root cleanup probes or SIGKILL address only independently admitted relay/backend
+births with actual bounded ancestry. Actual original-parent numeric waits remain
+mandatory. This declaration excludes the separate durable-owner crash cases and
+does not prove genuine provider acceptance or waive missing waits.

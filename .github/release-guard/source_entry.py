@@ -26,7 +26,11 @@ def direct_native(args, kwargs, case, role):
     # every case, argv, environment, image measurement and launch quota.
     name=vector[0] if type(vector) in (list,tuple) and vector and type(vector[0]) is str else None
     selected={'git':'/usr/bin/git','ps':'/usr/bin/ps','sleep':'/usr/bin/sleep'}.get(name)
-    if role in ('root','mcp','fixed-inline') and selected is not None and executable is None:
+    from approval_launch import CASES as APPROVAL
+    normalized=role in ('approval-adapter','approval-relay') and case in APPROVAL
+    if normalized:
+        selected=sys.executable
+    if (normalized or role in ('root','mcp','fixed-inline')) and selected is not None and executable is None:
         if len(args)>2:
             args=(*args[:2],selected,*args[3:])
         else:
@@ -36,7 +40,7 @@ def direct_native(args, kwargs, case, role):
 
 ACTIVE = None
 PATH_TYPE = type(Path('/'))
-PROCESS_OWNERS = ('root','mcp','session-adapter','fixed-inline','desktop','archive-checker')
+PROCESS_OWNERS = ('root','mcp','session-adapter','fixed-inline','desktop','archive-checker','approval-adapter','approval-relay')
 
 
 class Policy:
@@ -197,9 +201,11 @@ class Policy:
                     policy.local.signal=None
             self_stop = policy.profile['role']=='session-adapter' and pid==os.getpid() and sig==15 and not group
             resumed=not self_stop and type(pid) is int and pid not in policy.children
+            from approval_launch import CASES as APPROVAL
+            approval=resumed and policy.profile['role']=='root' and policy.case in APPROVAL
             if not self_stop and (type(pid) is not int or resumed):
                 from composed_cases import ADOPT
-                if not resumed or policy.profile['role']!='mcp' or policy.case not in ADOPT:
+                if not approval and (not resumed or policy.profile['role']!='mcp' or policy.case not in ADOPT):
                     policy.refuse('source signal outside owned children')
             if self_stop is True:
                 if policy.client.request('self-stop', {'signal': sig}) != {'ok': True}:
@@ -210,7 +216,7 @@ class Policy:
                 finally:
                     policy.local.signal = None
             try:
-                answer = (policy.client.request('resumed-signal',{'pid':pid,'signal':sig,'group':group}) if resumed else
+                answer = (policy.client.request('approval-signal' if approval else 'resumed-signal',{'pid':pid,'signal':sig,'group':group}) if resumed else
                     policy.client.request('custody_signal', {'pid': pid, 'child_token': policy.children[pid]['token'],
                                                               'signal': sig, 'group': group}))
             except Refused:
@@ -243,7 +249,7 @@ def activate(directory, profile, event, arguments):
     actual = validate(profile, event, arguments)
     client = Client(directory, profile)
     policy = Policy(directory, profile, actual, client)
-    if profile['role'] in ('root', 'mcp', 'cleanup-acp', 'session-adapter', 'session-child', 'fixed-inline', 'plan-python','mp-child','mp-tracker','review-wire','pytest-regression','desktop','archive-checker','archive-leaf','archive-installed'):
+    if profile['role'] in ('root', 'mcp', 'cleanup-acp', 'session-adapter', 'session-child', 'fixed-inline', 'plan-python','mp-child','mp-tracker','review-wire','pytest-regression','desktop','archive-checker','archive-leaf','archive-installed','approval-adapter','approval-relay','approval-backend'):
         if profile['role']=='archive-leaf':
             sys.path[:0]=[str(Path(profile['cwd'])/'src'),profile['dependencies'],profile['cwd']]
         elif profile['role'] in ('archive-checker','archive-installed'):

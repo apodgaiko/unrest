@@ -105,7 +105,7 @@ class Observer:
         actor = {'birth': Birth.read(actual), 'role': role, 'case': case, 'token': token,
                  'profile': source, 'intent':intent, 'body_ready': False, 'signals': set()}
         self.actors[pid] = actor
-        command_class = {'root': 'bootstrap-root', 'acp': 'controlled-acp',
+        command_class = {**dict.fromkeys(('approval-adapter','approval-relay','approval-backend'),'controlled-approval-fixture'),'root': 'bootstrap-root', 'acp': 'controlled-acp',
                          'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline','plan-python':'plan-python','mp-child':'mp-child','mp-tracker':'mp-tracker','review-wire':'review-wire','pytest-regression':'pytest-regression','desktop':'desktop',**dict.fromkeys(('archive-checker','archive-leaf','archive-installed'),'archive-python')}[role]
         from run_worker_launch import ALL_CASES as RUN_WORKERS
         new_session = role in ('backend','delayed-backend','acp','workspace-owned','session-adapter','session-inline') or role=='mcp' and case in HTTP_CASES and vector[3]=='-c' or role=='fixed-inline' and case in (*ROLE_CASES,*RUN_WORKERS)
@@ -138,7 +138,7 @@ class Observer:
                         if not value['consumed'] and value.get('parent', self.root_birth) == parent]
                     if self.full and parent is not None and parent.pid==self.launcher and not self.full_started:
                         continue
-                    if actor is None or actor['role'] not in ('root', 'mcp', 'git-command', 'session-adapter', 'fixed-inline','desktop','archive-checker','uv-cli') or len(candidates) != 1:
+                    if actor is None or actor['role'] not in ('root', 'mcp', 'git-command', 'session-adapter', 'fixed-inline','desktop','archive-checker','uv-cli','approval-adapter','approval-relay') or len(candidates) != 1:
                         raise Refused('source fork without a unique original launch intent')
             if row['kind']=='original_parent_wait4':
                 from cohort_controller import WAIVED
@@ -232,6 +232,9 @@ class Observer:
             raise Refused('source root-only operation')
 
     def launch_owner(self, actor):
+        from approval_launch import CASES as APPROVAL
+        if actor['role'] in ('approval-adapter','approval-relay') and self.case in APPROVAL and actor['case']==self.case and actor['body_ready'] and not self.finished:
+            return
         if actor['role'] == 'root':
             self.root_only(actor)
             return
@@ -466,6 +469,10 @@ class Observer:
                     or type(payload['signal']) is not int or payload['signal'] != 15 or 15 not in actor['signals']
                     or len(children) != 1 or not all(self.ledger.reaped(value['birth'], value['token']) for value in children)):
                 raise Refused('session self stop before original child wait')
+        elif kind=='approval-signal':
+            shape(payload,('pid','signal','group'))
+            from approval_launch import signal
+            return signal(self,actor,payload)
         elif kind=='resumed-signal':
             shape(payload,('pid','signal','group'))
             if type(payload['pid']) is not int or type(payload['signal']) is not int or type(payload['group']) is not bool:

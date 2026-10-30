@@ -19,15 +19,17 @@ from cohort_cases import GIT_ONLY as COHORT_GIT
 from bootstrap_cases import BOOTSTRAP
 
 
-def proposal_operands(raw,case):
+def proposal_operands(raw,case,native=None):
     from source_observer import shape
     from readiness_launch import STREAM_CASES
     shape(raw, ('case','executable','argv','cwd','environment','stdin')+(('inventory_fd',) if case in STREAM_CASES else ()))
     if type(raw['case']) is not str or raw['case'] != case or type(raw['executable']) is not str or type(raw['argv']) is not list:
         raise Refused('finite process proposal case or vector')
     argv = raw['argv']
+    from approval_launch import CASES as APPROVAL
     if (not 0 < len(argv) <= 256 or any(type(arg) is not str for arg in argv)
-            or (raw['executable'] != argv[0] and not (argv[0] in ('git','ps','sleep') and raw['executable']=='/usr/bin/'+argv[0])) or type(raw['cwd']) is not str
+            or (raw['executable'] != argv[0] and not (argv[0] in ('git','ps','sleep') and raw['executable']=='/usr/bin/'+argv[0])
+                and not (case in APPROVAL and native is not None and raw['executable']==native)) or type(raw['cwd']) is not str
             or type(raw['environment']) is not dict
             or any(type(k) is not str or type(v) is not str for k,v in raw['environment'].items())):
         raise Refused('finite process proposal operands')
@@ -48,9 +50,10 @@ def proposal_operands(raw,case):
 
 def proposal(host, actor, raw):
     host.launch_owner(actor)
-    argv=proposal_operands(raw,host.case)
+    from approval_launch import CASES as APPROVAL
+    argv=proposal_operands(raw,host.case,host.binding['entry']['path'] if host.case in APPROVAL else None)
     case=host.case
-    for name in ('repository_cli','mcp_inventory','package_proposals','desktop_launch','completion_server',
+    for name in ('approval_launch','repository_cli','mcp_inventory','package_proposals','desktop_launch','completion_server',
                  'terminal_leaves','readiness_launch','uv_cli','console_entries','http_cases'):
         module=__import__(name)
         selected=module.eligible(case) if name=='repository_cli' else case in (module.CASES if hasattr(module,'CASES') else (module.CASE,))

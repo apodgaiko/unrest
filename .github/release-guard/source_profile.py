@@ -15,7 +15,7 @@ from postbuild_root import CASES as ARCHIVE_CASES, COMMAND as ARCHIVE_COMMAND
 
 METHODS = frozenset({'collection', 'body-ready', 'case-start', 'case-finish', 'root-finish',
     'archive-snapshot','archive-result','preselected-finish','fixture-root','multiprocess-proposal','launch-proposal',
-    'self-probe','private-unix','custody_signal', 'resumed-signal', 'custody_close', 'self-stop', 'guard-refusal'})
+    'approval-signal','self-probe','private-unix','custody_signal', 'resumed-signal', 'custody_close', 'self-stop', 'guard-refusal'})
 
 
 def pytest_arguments(metadata,binding):
@@ -75,6 +75,8 @@ def validate(profile: dict, event: str, arguments: tuple) -> dict:
     else:
         from readiness_launch import STREAM_CASES
         mcp = profile['role']=='mcp' and profile['execution']['event']=='cpython.run_module' and profile['execution']['argument']=='unrest_harness'
+        from approval_launch import CASES as APPROVAL
+        mcp = mcp or profile['role']=='mcp' and profile['case'] in APPROVAL
         mcp = mcp or profile['role']=='fixed-inline' and profile['case'] in STREAM_CASES
         if (type(inherited) is not list or (not mcp and inherited)
                 or mcp and (len(inherited) != 1 or type(inherited[0]) is not list
