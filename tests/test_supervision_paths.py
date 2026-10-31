@@ -52,7 +52,7 @@ def test_static_carrier_refuses_without_outside_effects(tmp_path, nested, kind):
     elif kind == "socket":
         # Bind under a short disposable path for macOS's 104-byte limit.
         sock = socket.socket(socket.AF_UNIX)
-        with tempfile.TemporaryDirectory(dir="/private/tmp") as short:
+        with tempfile.TemporaryDirectory(prefix="unrest-inert-", dir="/tmp") as short:
             socket_path = Path(short) / "s"
             sock.bind(str(socket_path))
             socket_path.rename(lock)

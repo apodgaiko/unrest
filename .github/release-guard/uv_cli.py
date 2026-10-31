@@ -16,7 +16,7 @@ PROJECT=TEST+'::test_project_click_and_subprocess_stop_without_exact_request'
 IMPROVEMENT=TEST+'::test_improvement_click_and_subprocess_stop_without_exact_request'
 CASES=(INVALID,TASK,PROJECT,IMPROVEMENT)
 COMMANDS={INVALID:('run-task','run-project','run-improvement'),TASK:('run-task',),PROJECT:('run-project',),IMPROVEMENT:('run-improvement',)}
-PIN='4741feb6a71d9c06be777a08a34e064be0610c1f8b755ebfffef21489621c435'
+PIN='91af3f3447d89b2c4415e19eb4f0da427224f0cb0c9d642266dc31ebbbd6f52e'
 
 
 def uv_digest(path):

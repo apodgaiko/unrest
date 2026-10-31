@@ -10,6 +10,7 @@ from fastmcp.utilities import version_check
 import httpx
 from mcp import ClientSession
 import pytest
+import uvicorn
 
 from unrest_harness import server
 
@@ -80,19 +81,28 @@ def test_stdio_skips_update_check_but_serves_mcp(
 
 
 @pytest.mark.parametrize("protocol", ("streamable-http", "sse"))
-def test_http_keeps_transport_defaults(monkeypatch: pytest.MonkeyPatch, protocol: str):
+def test_http_keeps_transport_defaults(tmp_path, monkeypatch: pytest.MonkeyPatch, protocol: str):
     monkeypatch.setattr(sys, "argv", ["unrest-server", "--mode", "worker",
                                      "--transport", protocol, "--port", "12345"])
+    monkeypatch.setenv("UNREST_HOME", str(tmp_path / "home"))
+    monkeypatch.setattr(fastmcp.settings, "home", tmp_path / "fastmcp")
+    monkeypatch.setattr(fastmcp.settings, "check_for_updates", "stable")
+    requests = []
+    monkeypatch.setattr(version_check.httpx, "get", lambda *a, **kw: requests.append((a, kw)))
     calls = []
 
-    async def http_run(self, **kwargs):
-        calls.append(kwargs)
+    async def serve(instance, sockets=None):
+        config = instance.config
+        calls.append((config.host, config.port, config.app.state.path))
+        async with config.app.router.lifespan_context(config.app):
+            assert config.app.state.fastmcp_server is not None
 
     monkeypatch.setattr(fastmcp.settings, "show_server_banner", True)
-    monkeypatch.setattr(fastmcp.FastMCP, "run_http_async", http_run)
+    monkeypatch.setattr(uvicorn.Server, "serve", serve)
     server.main()
-    assert calls == [{"transport": protocol, "show_banner": True,
-                      "host": "127.0.0.1", "port": 12345}]
+    assert calls == [("127.0.0.1", 12345, "/sse" if protocol == "sse" else "/mcp")]
+    assert requests == []
+    assert not version_check._get_cache_path().exists()
 
 
 @pytest.mark.parametrize("role", ROLES)

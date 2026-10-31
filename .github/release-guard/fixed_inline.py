@@ -73,7 +73,7 @@ SEQUENCES[DRAIN_CASE]=('drain',)
 SEQUENCES.update(COMPLETION_SEQUENCES)
 SEQUENCES.update({case:('read0','read1') if case in (FRONTIER,*RETIREMENT_CASES) else ('read0',) for case in INSPECTION_CASES})
 SEQUENCES.update({case:(operation,) for case,operation in ISOLATED.items()})
-PINS[STDIO_TEST] = '588e6f2128c32f4020cae0dfaf00182bdc117ea640760da1790dd687f5246105'
+PINS[STDIO_TEST] = '27c795b119ec7fca34d1ba5746d3aeba005148df59b9157e71580a97ffe8b466'
 
 
 def translated(value):

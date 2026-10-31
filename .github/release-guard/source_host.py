@@ -172,7 +172,10 @@ def isolate(metadata, support, output):
     require(libc.unshare(0x00020000 | 0x40000000 | 0x08000000) == 0, 'private namespace refused')
     if libc.mount(None, b'/', None, ctypes.c_ulong((1 << 18) | (1 << 14)), None):
         raise OSError(ctypes.get_errno(), 'private mount propagation refused')
-    points={path:path for path in (metadata['checkout'],metadata['dependencies'],metadata['runtime_root'],support)}
+    source=metadata['checkout']
+    metadata['checkout']=metadata.pop('_checkout_destination',source)
+    points={path:path for path in (metadata['dependencies'],metadata['runtime_root'],support)}
+    points[metadata['checkout']]=source
     native_input=metadata.get('_native_input')
     if native_input is not None:
         points['/native']=native_input['root']
@@ -401,6 +404,7 @@ def main():
         if not archive:
             from full_launch import prepare as prepare_full
             metadata=prepare_full(binding,metadata)
+            metadata['_checkout_destination']=str(checkout)
         from namespace_supervisor import run
         run(lambda:supervise(binding,metadata,raw_directory,archive),raw_directory/'namespace-failure.txt')
         success = True

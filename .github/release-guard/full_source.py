@@ -61,8 +61,24 @@ class FullCases(OriginalCases):
         self.policy.client.request('root-finish',case_seal(self.completed))
 
 
+@pytest.hookimpl(tryfirst=True)
 def pytest_configure(config):
     from source_entry import ACTIVE
+    nested={
+        'setup':'cee06040110ea6a36a0377dbd8779a9f994c26471206f5d29ede65a06fa94e31',
+        'body':'8be87984b01652aa33b55ab95adc00b4d951352ad8d5ca362f4433b737474e88'}
+    if ACTIVE is not None and ACTIVE.profile['role']=='root' and type(ACTIVE.profile['cases']) is list:
+        phase=next((phase for phase in nested if ACTIVE.case=='tests/test_session_resource_ownership.py::test_actual_pytest_failure_finalizes_exact_factory['+phase+']'),None)
+        args=config.invocation_params.args
+        refuse_if(phase is None or len(args)!=4 or args[:3]!=('-c',str(Path(ACTIVE.profile['checkout'])/'pyproject.toml'),'-q'), 'nested pytest exact original invocation')
+        source=Path(args[3])
+        refuse_if(not source.is_relative_to(Path(ACTIVE.profile['owned'])/'pytest') or source.resolve()!=source
+                or source.name!='test_owned_failure_'+phase+'.py' or source.is_symlink()
+                or hashlib.sha256(source.read_bytes()).hexdigest()!=nested[phase]
+                or getattr(ACTIVE,'nested_case',None)==ACTIVE.case, 'nested pytest exact owned fixture')
+        ACTIVE.nested_case=ACTIVE.case
+        config.option.basetemp=str(source.parent/'nested-pytest')
+        return  # Same active native policy; the outer test owns failure/cleanup assertions.
     if ACTIVE is None or ACTIVE.profile['role']!='root' or type(ACTIVE.profile['cases']) is not dict:
         raise Refused('full source native activation absent')
     config.pluginmanager.register(FullCases(ACTIVE),'release-full-outcomes')

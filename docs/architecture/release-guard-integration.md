@@ -38,6 +38,16 @@ Tests run as UID20000 without capabilities. The independent observer runs as
 UID20001 with DAC_READ_SEARCH and SYS_PTRACE. No external network interfaces or
 routes, ambient sockets, credentials or generic provider authority are supplied.
 
+For full-source certification, the measured read-only source copy is mounted at
+the genuine editable installation's original canonical checkout pathname inside
+the empty jail. The host checkout is not mounted; editable distribution metadata
+is not rewritten. Extracted archive certification keeps its separate source root.
+The two resource-ownership tests may run their exact byte-pinned generated pytest
+failure in process under the same active policy. Its dedicated inner basetemp
+cannot delete the outer test tree, and it registers no duplicate collection or
+completion observer. The unchanged outer assertions own its failure and cleanup
+proof; no process capability is added.
+
 The native entry installs its audit hook before Python initialization. Protected
 observer-owned mode0444 profiles bind executable/source/support bytes, exact
 argv/env/cwd, current process birth and parent, credentials, mount identities,
@@ -74,6 +84,10 @@ and datagram sockets, anonymous Unix stream/datagram/seqpacket IPC and route-net
 families, raw IP and io_uring calls fail sticky. Python Unix pathname/abstract
 bind and connect remain refused except the exact authenticated control connect
 and the independently acquired controlled approval endpoint described below.
+The two unsafe-lock socket cases additionally permit one root-only bind to an
+owned mode0700 `/tmp/unrest-inert-XXXXXXXX/s` directory per case. This creates an
+inert carrier for the actual refusal test; it grants no connect, listen, child or
+provider permission. Endpoint aliases, reuse and other cases remain refused.
 Resolver calls use the actual system implementation inside this namespace.
 The private control pathname retains its independent kernel peer authentication
 and current registration/token checks.

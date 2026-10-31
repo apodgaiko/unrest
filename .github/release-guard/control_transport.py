@@ -37,11 +37,9 @@ def finite(value: Any) -> None:
     while pending:
         value, depth = pending.pop()
         nodes += 1
-        if depth > 16 or nodes > 4096:
-            raise Refused('control work bound')
+        refuse_if(depth > 16 or nodes > 4096, 'control work bound')
         if value is None or type(value) in (bool, int, str):
-            if type(value) is int and not -(1 << 63) <= value < 1 << 64:
-                raise Refused('control integer')
+            refuse_if(type(value) is int and not -(1 << 63) <= value < 1 << 64, 'control integer')
             if type(value) is str:
                 characters += len(value)
             refuse_if(characters > RESPONSE_LIMIT, 'control text bound')
@@ -58,8 +56,7 @@ def encode(value: dict, limit: int) -> bytes:
     refuse_if(type(value) is not dict, 'control object')
     finite(value)
     payload = json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=True).encode()
-    if not 0 < len(payload) <= limit:
-        raise Refused('control frame size')
+    refuse_if(not 0 < len(payload) <= limit, 'control frame size')
     return struct.pack('!I', len(payload)) + payload
 
 
@@ -159,13 +156,11 @@ def peer(stream: socket.socket, birth: Birth, gid: int) -> None:
     from linux_observation import credential_identity
 
     integer(gid)
-    if type(birth) is not Birth or stream.family != socket.AF_UNIX:
-        raise Refused('control peer')
+    refuse_if(type(birth) is not Birth or stream.family != socket.AF_UNIX, 'control peer')
     actual = struct.unpack('3i', stream.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
     current = credential_identity(birth.pid)
-    if (actual != (birth.pid, birth.uid, gid) or Birth.read(current) != birth
-            or current['gids'] != [gid] * 4):
-        raise Refused('control kernel peer')
+    refuse_if(actual != (birth.pid, birth.uid, gid) or Birth.read(current) != birth
+            or current['gids'] != [gid] * 4, 'control kernel peer')
 
 
 class Admission:
@@ -182,7 +177,7 @@ class Admission:
         peer(frame.stream, self.ledger.peer_birth(birth), gid)
         process = self.ledger.process(birth)
         identifier = request['id']
-        if (type(identifier) is not str or len(identifier) != 32
+        refuse_if(type(identifier) is not str or len(identifier) != 32
                 or any(char not in '0123456789abcdef' for char in identifier)
                 or identifier in self.seen or len(self.seen) >= 100000
                 or type(request['pid']) is not int or request['pid'] != birth.pid
@@ -193,8 +188,7 @@ class Admission:
                 or request['nonce'] != self.ledger.nonce
                 or type(request['kind']) is not str or request['kind'] not in self.methods
                 or type(request['payload']) is not dict
-                or process.exit is not None or process.terminal is not None):
-            raise Refused('control request authority')
+                or process.exit is not None or process.terminal is not None, 'control request authority')
         self.seen.add(identifier)
         return request
 
@@ -216,8 +210,7 @@ def reply(request: dict, answer: dict) -> dict:
 
 
 def verify_reply(response: dict, request: dict) -> dict:
-    if (type(response) is not dict or set(response) != {'request', 'answer'}
+    refuse_if(type(response) is not dict or set(response) != {'request', 'answer'}
             or type(response['request']) is not dict or type(response['answer']) is not dict
-            or encode(response['request'], REQUEST_LIMIT) != encode(request, REQUEST_LIMIT)):
-        raise Refused('control reply echo')
+            or encode(response['request'], REQUEST_LIMIT) != encode(request, REQUEST_LIMIT), 'control reply echo')
     return response['answer']

@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 import stat
 
-from content_manifest import Refused, refuse_if
+from content_manifest import Refused as Refused, refuse_if
 from git_policy import image, regular
 from launch_policy import Expected, build_expected
 
@@ -48,24 +48,21 @@ class Plan:
 
 
 def script(file,body):
-    if stat.S_IMODE(file.lstat().st_mode)!=0o700 or regular(file,maximum=4096,uid=OWNER)!=body:
-        raise Refused('preflight original owned script bytes or mode')
+    refuse_if(stat.S_IMODE(file.lstat().st_mode)!=0o700 or regular(file,maximum=4096,uid=OWNER)!=body, 'preflight original owned script bytes or mode')
     return hashlib.sha256(body).hexdigest()
 
 
 def shell():
     alias=Path('/bin/sh')
-    if (alias.resolve(strict=True)!=Path('/usr/bin/dash') or not alias.is_symlink()
-            or alias.lstat().st_uid!=0 or alias.lstat().st_nlink!=1 or os.readlink(alias)!='dash'):
-        raise Refused('preflight original shell alias')
+    refuse_if(alias.resolve(strict=True)!=Path('/usr/bin/dash') or not alias.is_symlink()
+            or alias.lstat().st_uid!=0 or alias.lstat().st_nlink!=1 or os.readlink(alias)!='dash', 'preflight original shell alias')
     return '/usr/bin/dash',image('/usr/bin/dash')
 
 
 def expected(case,cwd,owned,native,native_pin):
     refuse_if(type(case) is not str or case not in CASES or type(cwd) is not str, 'preflight exact case')
     root=Path(cwd)
-    if (str(root.resolve())!=cwd or not root.is_relative_to(owned/'pytest') or root==owned/'pytest'):
-        raise Refused('preflight original fixture root')
+    refuse_if(str(root.resolve())!=cwd or not root.is_relative_to(owned/'pytest') or root==owned/'pytest', 'preflight original fixture root')
     env={}
     role='plan-native'
     kind='native'
@@ -96,8 +93,7 @@ def expected(case,cwd,owned,native,native_pin):
         if case==CASES[4]:
             blocked=root/'blocked/adapter'
             info=blocked.lstat()
-            if not stat.S_ISDIR(info.st_mode) or info.st_uid!=OWNER or blocked.is_symlink() or tuple(blocked.iterdir()):
-                raise Refused('preflight original blocked PATH directory')
+            refuse_if(not stat.S_ISDIR(info.st_mode) or info.st_uid!=OWNER or blocked.is_symlink() or tuple(blocked.iterdir()), 'preflight original blocked PATH directory')
             env['PATH']=str(root/'blocked')+':'+str(root/'selected')
             attempts=(str(blocked),str(target))
         else:
@@ -106,9 +102,8 @@ def expected(case,cwd,owned,native,native_pin):
     elif case==PYTHON:
         alias=root/'adapter'
         info=alias.lstat()
-        if (not stat.S_ISLNK(info.st_mode) or info.st_uid!=OWNER or info.st_nlink!=1
-                or os.readlink(alias)!=native or alias.resolve(strict=True)!=Path(native)):
-            raise Refused('preflight original fixed interpreter alias')
+        refuse_if(not stat.S_ISLNK(info.st_mode) or info.st_uid!=OWNER or info.st_nlink!=1
+                or os.readlink(alias)!=native or alias.resolve(strict=True)!=Path(native), 'preflight original fixed interpreter alias')
         target=Path(native)
         pin=native_pin
         role='plan-python'

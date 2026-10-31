@@ -641,7 +641,29 @@ def test_composed_catalog_mirrors_and_api_exports_are_exact() -> None:
     root = Path(__file__).resolve().parents[1]
     catalog = root / "src" / "unrest_harness" / "bundled" / "foundation" / "public-surface.v1.json"
     documented = root / "docs" / "v03" / "v0.3.1" / "public-surface.v1.json"
-    assert catalog.read_bytes() == documented.read_bytes()
+    current = json.loads(catalog.read_bytes())
+    historical = json.loads(documented.read_bytes())
+    # The accepted approval-recovery addition leaves the frozen v0.3.1 surface intact.
+    addition = [method for method in current["mcp_methods"] if method["name"] == "review_approval"]
+    assert addition == [{
+        "args_schema": "#/definitions/review_approval_request",
+        "errors": "#/stable_error_codes", "idempotency_key": None,
+        "library_callable": "unrest_harness.approval_recovery.review_approval",
+        "name": "review_approval", "resource_key": ["run_id", "denial_id"],
+        "result_schema": "#/definitions/review_approval_result",
+    }]
+    run_id = {"pattern": "^run:[0-9a-f]{64}$", "type": "string"}
+    denial_id = {"maxLength": 128, "minLength": 1,
+                 "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "type": "string"}
+    for name, result in (("review_approval_request", False), ("review_approval_result", True)):
+        assert current["definitions"].pop(name) == {
+            "additionalProperties": False, "type": "object",
+            "properties": {"run_id": run_id, "denial_id": denial_id,
+                           **({"disposition": {"enum": ["unavailable", "queued", "uncertain"]}} if result else {})},
+            "required": ["run_id", "denial_id"] + (["disposition"] if result else []),
+        }
+    current["mcp_methods"].remove(addition[0])
+    assert _canonical(current) == _canonical(historical)
     assert callable(api.run_task)
     assert callable(api.run_project)
     assert callable(api.run_improvement)

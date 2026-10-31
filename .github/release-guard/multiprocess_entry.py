@@ -19,13 +19,11 @@ def eligible(case):
 
 
 def fd_record(pid,fd):
-    if type(fd) is not int or not 3<=fd<=1024:
-        raise Refused('spawn descriptor number')
+    refuse_if(type(fd) is not int or not 3<=fd<=1024, 'spawn descriptor number')
     path=Path('/proc')/str(pid)/'fd'/str(fd)
     info=path.stat()
     flags=[line.split()[1] for line in (path.parent.parent/'fdinfo'/str(fd)).read_text().splitlines() if line.startswith('flags:')]
-    if (len(flags)!=1 or not stat.S_ISFIFO(info.st_mode) or info.st_uid!=20000):
-        raise Refused('spawn owned FIFO')
+    refuse_if(len(flags)!=1 or not stat.S_ISFIFO(info.st_mode) or info.st_uid!=20000, 'spawn owned FIFO')
     access=int(flags[0],8)&os.O_ACCMODE
     refuse_if(access not in (os.O_RDONLY,os.O_WRONLY), 'spawn FIFO direction')
     return [fd,info.st_dev,info.st_ino,access]
@@ -52,50 +50,43 @@ def spawn_record(pid,fd):
 
 
 def stderr_record(pid,fd):
-    if type(fd) is not int or not 3<=fd<=1024:
-        raise Refused('tracker stderr descriptor')
+    refuse_if(type(fd) is not int or not 3<=fd<=1024, 'tracker stderr descriptor')
     path=Path('/proc')/str(pid)/'fd'/str(fd)
     info=path.stat()
     stderr=path.with_name('2').stat()
-    if (not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode)!=0o600
+    refuse_if(not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode)!=0o600
             or info.st_uid!=20000 or info.st_nlink!=0
-            or (info.st_dev,info.st_ino,info.st_mode)!=(stderr.st_dev,stderr.st_ino,stderr.st_mode)):
-        raise Refused('tracker anonymous captured stderr')
+            or (info.st_dev,info.st_ino,info.st_mode)!=(stderr.st_dev,stderr.st_ino,stderr.st_mode), 'tracker anonymous captured stderr')
     # Linux/x86-64 KCMP_FILE proves the same open file description, not merely
     # another descriptor pointing at the same inode.
     refuse_if(ctypes.CDLL(None,use_errno=True).syscall(312,pid,pid,0,fd,2)!=0, 'tracker stderr open file identity')
     flags=[line.split()[1] for line in (path.parent.parent/'fdinfo'/str(fd)).read_text().splitlines() if line.startswith('flags:')]
-    if len(flags)!=1 or int(flags[0],8)&os.O_ACCMODE!=os.O_RDWR:
-        raise Refused('tracker stderr access')
+    refuse_if(len(flags)!=1 or int(flags[0],8)&os.O_ACCMODE!=os.O_RDWR, 'tracker stderr access')
     return [fd,info.st_dev,info.st_ino,int(flags[0],8)&~os.O_CLOEXEC]
 
 
 def expected(case,argv,passfds,native,pin,checkout,environment):
-    if (not eligible(case) or type(argv) is not list
+    refuse_if(not eligible(case) or type(argv) is not list
             or any(type(arg) is not str for arg in argv) or argv[:4]!=[native,'-S','-I','-c'] or type(passfds) is not list
             or any(type(fd) is not int or not 2<=fd<=1024 for fd in passfds)
-            or len(set(passfds))!=len(passfds)):
-        raise Refused('spawn finite entry operands')
+            or len(set(passfds))!=len(passfds), 'spawn finite entry operands')
     prefix='from multiprocessing.resource_tracker import main;main('
     if len(argv)==5 and argv[4].startswith(prefix) and argv[4].endswith(')'):
         value=argv[4][len(prefix):-1]
-        if not value.isascii() or not value.isdigit() or str(int(value))!=value or not 3<=int(value)<=1024:
-            raise Refused('tracker read descriptor')
+        refuse_if(not value.isascii() or not value.isdigit() or str(int(value))!=value or not 3<=int(value)<=1024, 'tracker read descriptor')
         refuse_if(len(passfds)!=2 or int(value) not in passfds, 'tracker descriptor inventory')
         role='mp-tracker'
         descriptors=sorted(fd for fd in passfds if fd>2)
     else:
         prefix='from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd='
-        if (len(argv)!=6 or not argv[4].startswith(prefix) or not argv[4].endswith(')')
-                or argv[5]!='--multiprocessing-fork'):
-            raise Refused('spawn exact command and target declaration')
+        refuse_if(len(argv)!=6 or not argv[4].startswith(prefix) or not argv[4].endswith(')')
+                or argv[5]!='--multiprocessing-fork', 'spawn exact command and target declaration')
         parts=argv[4][len(prefix):-1].split(', pipe_handle=')
         refuse_if(len(parts)!=2 or any(not value.isascii() or not value.isdigit() or str(int(value))!=value or not 3<=int(value)<=1024 for value in parts), 'spawn tracker and bootstrap descriptors')
         tracker,reader=map(int,parts)
-        if (not 3<=len(passfds)<=7 or tracker==reader
+        refuse_if(not 3<=len(passfds)<=7 or tracker==reader
                 or not {tracker,reader}<=set(passfds) or 2 in passfds
-                or (passfds[0]!=tracker or passfds[-2]!=reader)):
-            raise Refused('spawn inherited pipe inventory')
+                or (passfds[0]!=tracker or passfds[-2]!=reader), 'spawn inherited pipe inventory')
         role='mp-child'
         descriptors=sorted(passfds)
     value=build_expected(case, native, pin, tuple(argv), tuple(sorted(environment.items())), str(checkout), 'python-command')
@@ -116,8 +107,7 @@ def proposal(host,actor,raw):
     host.root_only(actor)
     shape(raw,('case','argv','passfds','executable','cwd','environment'))
     native=host.binding['entry']['path']
-    if raw['case']!=host.case or raw['executable']!=native or raw['cwd']!=host.meta['checkout']:
-        raise Refused('spawn root identity and directory')
+    refuse_if(raw['case']!=host.case or raw['executable']!=native or raw['cwd']!=host.meta['checkout'], 'spawn root identity and directory')
     environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':host.case+' (call)'}
     value,role,descriptors=expected(host.case,raw['argv'],raw['passfds'],native,
         host.binding['entry']['sha256'],host.meta['checkout'],environment)
@@ -146,19 +136,17 @@ def proposal(host,actor,raw):
         from process_ledger import Birth
         owner=host.actors[tracker['pid']]
         process=host.ledger.process(owner['birth'])
-        if (process.exit is not None or process.terminal is not None
+        refuse_if(process.exit is not None or process.terminal is not None
                 or Birth.read(process_identity(tracker['pid']))!=owner['birth']
                 or retained!=tracker['tracker_read']
-                or tracked[1:3]!=retained[1:3] or tracked[3]!=os.O_WRONLY):
-            raise Refused('spawn tracker generation')
+                or tracked[1:3]!=retained[1:3] or tracked[3]!=os.O_WRONLY, 'spawn tracker generation')
         if not owner['body_ready']:
             return None  # Existing bounded RPC waits for the native READY join.
         reader=int(raw['argv'][4].split('pipe_handle=',1)[1][:-1])
         bootstrap=next(row for row in inherited if row[0]==reader)
         sentinel=next(row for row in inherited if row[0]==raw['passfds'][-1])
-        if (bootstrap[3]!=os.O_RDONLY or sentinel[3]!=os.O_WRONLY
-                or len({tuple(row[1:3]) for row in (tracked,bootstrap,sentinel)})!=3):
-            raise Refused('spawn distinct bootstrap reader and sentinel writer')
+        refuse_if(bootstrap[3]!=os.O_RDONLY or sentinel[3]!=os.O_WRONLY
+                or len({tuple(row[1:3]) for row in (tracked,bootstrap,sentinel)})!=3, 'spawn distinct bootstrap reader and sentinel writer')
     vector=[native,'-I','-S',*raw['argv'][3:]]
     fields={'tracker_read':tracker_read} if role=='mp-tracker' else {}
     return admit_expected(host,actor,raw,value,role,vector,inherited=inherited,
@@ -167,10 +155,9 @@ def proposal(host,actor,raw):
 
 def inherited(profile,actual):
     records=profile['inherited']
-    if (type(records) is not list or not ((1<=len(records)<=2) if profile['role']=='mp-tracker' else 3<=len(records)<=7)
+    refuse_if(type(records) is not list or not ((1<=len(records)<=2) if profile['role']=='mp-tracker' else 3<=len(records)<=7)
             or any(type(row) is not list or len(row) not in (4,5,7) or any(type(value) is not int for value in row) for row in records)
-            or profile['role']=='mp-tracker' and any(len(row)!=4 for row in records)):
-        raise Refused('spawn profile descriptor schema')
+            or profile['role']=='mp-tracker' and any(len(row)!=4 for row in records), 'spawn profile descriptor schema')
     reader=int(profile['argv'][4].removeprefix('from multiprocessing.resource_tracker import main;main(')[:-1]) if profile['role']=='mp-tracker' else None
     seen=[]
     for name in os.listdir('/proc/self/fd'):
@@ -187,7 +174,6 @@ def inherited(profile,actual):
         except FileNotFoundError:
             continue
         flags=fcntl.fcntl(fd,fcntl.F_GETFL)
-        if (reader is None or fd==reader) and flags&~(os.O_ACCMODE|os.O_CLOEXEC|((0o100000|os.O_NOFOLLOW) if len(row)==5 else 0)):
-            raise Refused('spawn descriptor flags')
+        refuse_if((reader is None or fd==reader) and flags&~(os.O_ACCMODE|os.O_CLOEXEC|((0o100000|os.O_NOFOLLOW) if len(row)==5 else 0)), 'spawn descriptor flags')
         seen.append(row)
     refuse_if(sorted(seen)!=sorted(records), 'spawn inherited descriptor generation')

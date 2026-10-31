@@ -386,3 +386,78 @@ def test_durable_case_finish_waits_its_actual_child_handle_before_sending_comple
         assert child.returncode==0 and calls==[('case-finish',{'case':RUNS[0]})]
     finally:
         child.wait(timeout=5)
+
+
+@pytest.mark.parametrize('phase', ('setup', 'body'))
+def test_exact_nested_failure_keeps_outer_temp_policy_and_cleanup(tmp_path, monkeypatch, phase):
+    import os
+    from pathlib import Path
+    import source_entry
+    root = Path(__file__).resolve().parents[2]
+    monkeypatch.syspath_prepend(str(root))
+    from tests.test_session_resource_ownership import test_actual_pytest_failure_finalizes_exact_factory
+
+    outer = tmp_path / 'pytest'
+    outer.mkdir()
+    sentinel = outer / 'outer-sentinel'
+    sentinel.write_text('retain outer lifetime')
+    case_root = outer / ('ownership-' + phase)
+    case_root.mkdir()
+    root = Path(__file__).resolve().parents[2]
+    case = 'tests/test_session_resource_ownership.py::test_actual_pytest_failure_finalizes_exact_factory[' + phase + ']'
+    profile = {'role': 'root', 'cases': ['original-collection'], 'checkout': str(root), 'owned': str(tmp_path)}
+    policy = SimpleNamespace(profile=profile, case=case)
+    monkeypatch.setattr(source_entry, 'ACTIVE', policy)
+    monkeypatch.setenv('PYTEST_PLUGINS', 'full_source')
+    monkeypatch.setenv('PYTEST_ADDOPTS', '--basetemp=' + str(outer))
+    environment = dict(os.environ)
+    test_actual_pytest_failure_finalizes_exact_factory(case_root, monkeypatch, phase)
+    assert policy.case == case and policy.profile is profile
+    assert profile['cases'] == ['original-collection'] and policy.nested_case == case
+    assert sentinel.read_text() == 'retain outer lifetime'
+    # pytest itself removes its current-test marker after the inner teardown.
+    assert {key: value for key, value in os.environ.items() if key != 'PYTEST_CURRENT_TEST'} == {
+        key: value for key, value in environment.items() if key != 'PYTEST_CURRENT_TEST'}
+
+
+@pytest.mark.parametrize('mutation', ('case', 'argv', 'body', 'basename', 'outside', 'symlink', 'repeated'))
+def test_nested_pytest_rejects_every_non_original_invocation(tmp_path, monkeypatch, mutation):
+    import ast
+    from pathlib import Path
+    import full_source
+    import source_entry
+
+    root = Path(__file__).resolve().parents[2]
+    tree = ast.parse((root / 'tests/test_session_resource_ownership.py').read_text())
+    function = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
+                    and node.name == 'test_actual_pytest_failure_finalizes_exact_factory')
+    template = next(node.value for node in ast.walk(function) if isinstance(node, ast.Constant)
+                    and isinstance(node.value, str) and node.value.startswith('import pytest\n'))
+    outer = tmp_path / 'pytest'
+    outer.mkdir()
+    source = outer / 'test_owned_failure_setup.py'
+    source.write_text(template.replace('PHASE', repr('setup')))
+    case = 'tests/test_session_resource_ownership.py::test_actual_pytest_failure_finalizes_exact_factory[setup]'
+    policy = SimpleNamespace(profile={'role': 'root', 'cases': ['collected'], 'checkout': str(root), 'owned': str(tmp_path)}, case=case)
+    if mutation == 'case':
+        policy.case = 'tests/unrelated.py::test_one'
+    elif mutation == 'body':
+        source.write_text('pass\n')
+    elif mutation in ('basename', 'outside'):
+        destination = outer / 'other.py' if mutation == 'basename' else tmp_path / source.name
+        source.rename(destination)
+        source = destination
+    elif mutation == 'symlink':
+        target = outer / 'body.py'
+        source.rename(target)
+        source.symlink_to(target)
+    elif mutation == 'repeated':
+        policy.nested_case = case
+    args = ('-c', str(root / 'pyproject.toml'), '-q', str(source))
+    if mutation == 'argv':
+        args += ('--collect-only',)
+    config = SimpleNamespace(invocation_params=SimpleNamespace(args=args), option=SimpleNamespace(basetemp='outer'))
+    monkeypatch.setattr(source_entry, 'ACTIVE', policy)
+    with pytest.raises(Refused):
+        full_source.pytest_configure(config)
+    assert config.option.basetemp == 'outer'

@@ -105,7 +105,8 @@ class Policy:
                         raise Refused('source declared script bytes changed')
                 return True
             if event in ('socket.bind','socket.connect'):
-                refuse_if(type(self.case) is not str or not self.case.startswith('tests/test_approval_recovery.py::'), 'source unknown private Unix endpoint')
+                from approval_fixture import INERT
+                refuse_if(type(self.case) is not str or not (self.case in INERT or self.case.startswith('tests/test_approval_recovery.py::')), 'source unknown private Unix endpoint')
                 refuse_if(self.client.request('private-unix',{'event':event,'address':args[1]})!={'ok':True}, 'source private Unix acknowledgement')
                 return True
             if event == 'subprocess.Popen':
