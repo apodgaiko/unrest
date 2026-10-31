@@ -124,7 +124,11 @@ coordinator; the tool itself does not seal a mission.
   remain independently admissible. Ordinary direct controller inspection and
   standalone supervision use blocking/default acquisition; MCP and attached
   inspection use the trusted read-only live projection. Controller work
-  executes in a thread.
+  executes in a thread. Cancelling its MCP waiter does not stop that thread or
+  release its mutation guard. A persisted task status such as `cleared` can be
+  visible before final workspace synchronization, envelope construction and
+  guard release finish; it is not a completion barrier. Same-project mutations
+  remain `project_busy` until the underlying controller invocation completes.
 - Durable `submit_run` admission and synchronous Mission methods converge on
   the same per-project OS mutation lock and the same `ProjectController`;
   run custody is not a second Mission authority.

@@ -11,10 +11,10 @@ import multiprocessing
 import os
 import threading
 import weakref
-from contextlib import redirect_stderr, redirect_stdout
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from pathlib import Path
 from time import monotonic
-from typing import Any
+from typing import Any, Iterator
 
 import pytest
 
@@ -918,7 +918,21 @@ async def test_cancelled_public_advance_keeps_real_dispatch_exclusive_and_recove
     first_dispatcher = _BlockingDispatcher(entered, release)
     second_dispatcher = _CountingDispatcher()
     reviewer = MockTerminalReviewer(TerminalReviewHandoff(done=True, report=""))
-    first_controller = _CountingProjectController(
+    finalizing = threading.Event()
+    release_final = threading.Event()
+
+    class FinalizingController(_CountingProjectController):
+        @contextmanager
+        def _project_access(self, project_id: str, *, blocking: bool = True) -> Iterator[None]:
+            with super()._project_access(project_id, blocking=blocking):
+                yield
+                if first_dispatcher.calls:
+                    # Durable writes precede actual guard release; hold that real window.
+                    finalizing.set()
+                    if not release_final.wait(2):
+                        raise RuntimeError("test finalization release timed out")
+
+    first_controller = FinalizingController(
         config, first_dispatcher, reviewer
     )
     contract_dir = first_controller.store.ensure_contract_dir(
@@ -967,8 +981,10 @@ async def test_cancelled_public_advance_keeps_real_dispatch_exclusive_and_recove
             "advance_project", _arguments("advance_project", "project-a")
         )
     )
+    mutation_task = None
     try:
         assert await asyncio.to_thread(entered.wait, 1)
+        mutation_task = _active_mutation_task()
         during_state = state_path.read_bytes()
         during_task_state = task_state_path.read_bytes()
         during_attempts = (
@@ -1025,6 +1041,17 @@ async def test_cancelled_public_advance_keeps_real_dispatch_exclusive_and_recove
         assert "missing" not in report_attempts[0].read_text(encoding="utf-8").lower()
         assert state_path.read_bytes() == before_state
 
+        assert await asyncio.to_thread(finalizing.wait, 1)
+        still_busy = _payload(
+            await second_server.call_tool(
+                "abort_project", _arguments("abort_project", "project-a")
+            )
+        )
+        assert still_busy["error"] == "project_busy"
+        assert not mutation_task.done()
+        release_final.set()
+        completed = await asyncio.wait_for(asyncio.shield(mutation_task), timeout=2.0)
+        assert "error" not in completed
         recovered = _payload(
             await second_server.call_tool(
                 "abort_project", _arguments("abort_project", "project-a")
@@ -1036,6 +1063,11 @@ async def test_cancelled_public_advance_keeps_real_dispatch_exclusive_and_recove
         assert second_dispatcher.calls == 0
     finally:
         release.set()
+        release_final.set()
+        if mutation_task is not None:
+            await asyncio.wait_for(asyncio.shield(mutation_task), timeout=2.0)
+        else:
+            await asyncio.wait_for(asyncio.shield(waiter), timeout=2.0)
     assert monotonic() - started < 10.0
 
 
