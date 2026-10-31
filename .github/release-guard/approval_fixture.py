@@ -1,9 +1,12 @@
 """Controlled approval fixture IPC; never native provider permission authority."""
 import re
+import os
 import stat
 from pathlib import Path
 
-from content_manifest import Refused
+from content_manifest import Refused as Refused, refuse_if
+from linux_observation import process_identity
+from process_ledger import Birth
 
 TEST='tests/test_approval_recovery.py'
 INERT=tuple('tests/test_supervision_paths.py::test_static_carrier_refuses_without_outside_effects[socket-'+value+']' for value in ('False','True'))
@@ -11,29 +14,33 @@ INERT=tuple('tests/test_supervision_paths.py::test_static_carrier_refuses_withou
 
 def unix(host,actor,event,address):
     inert=host.case in INERT
-    pattern=r'/tmp/unrest-inert-[a-z0-9_]{8}/s' if inert else r'/tmp/unrest-approval-(?:test-)?[a-z0-9_]{8}/control'
-    if (host.finished or type(host.case) is not str or not (inert or host.case.startswith(TEST+'::')) or actor['case'] not in (host.case,'<bootstrap>')
+    pattern=r'attempt-validator\.lock' if inert else r'/tmp/unrest-approval-(?:test-)?[a-z0-9_]{8}/control'
+    refuse_if(host.finished or type(host.case) is not str or not (inert or host.case.startswith(TEST+'::')) or actor['case'] not in (host.case,'<bootstrap>')
             or not actor['body_ready'] or event not in ('socket.bind','socket.connect')
             or inert and (event!='socket.bind' or actor['role']!='root')
-            or type(address) is not str or re.fullmatch(pattern,address) is None):
-        raise Refused('approval exact private Unix endpoint')
+            or type(address) is not str or re.fullmatch(pattern,address) is None, 'approval exact private Unix endpoint')
     path=Path(address)
     parent=path.parent
+    if inert:
+        from owned_fixture import retain
+        parent=retain(host,Path(os.readlink('/proc/'+str(actor['birth'].pid)+'/cwd')))
+        relative=parent.relative_to(Path(host.meta['owned'])/'pytest')
+        refuse_if(Birth.read(process_identity(actor['birth'].pid))!=actor['birth']
+                or re.fullmatch(r'test_static_carrier_refuses_wi[0-9]+/home/projects/project-1/\.unrest-runtime/missions/mission-001/supervision',
+                    str(relative)) is None, 'inert socket exact current fixture directory')
+        path=parent/address
     info=parent.lstat()
-    if parent.resolve()!=parent or not stat.S_ISDIR(info.st_mode) or info.st_uid!=20000 or stat.S_IMODE(info.st_mode)!=0o700:
-        raise Refused('approval private Unix directory custody')
+    refuse_if(parent.resolve()!=parent or not stat.S_ISDIR(info.st_mode) or info.st_uid!=20000 or stat.S_IMODE(info.st_mode)!=0o700, 'approval private Unix directory custody')
     generation=(info.st_dev,info.st_ino)
     key=('inert-unix',host.case) if inert else ('approval-unix',host.case,address)
     if event=='socket.bind':
         if actor['role']!='root':
             from approval_launch import worker_owner
             worker_owner(host,actor)
-        if key in host.fixture_roots or path.exists() or path.is_symlink():
-            raise Refused('approval private Unix repeated bind')
+        refuse_if(key in host.fixture_roots or path.exists() or path.is_symlink(), 'approval private Unix repeated bind')
         host.fixture_roots[key]=generation
     else:
         endpoint=path.lstat()
-        if (host.fixture_roots.get(key)!=generation or not stat.S_ISSOCK(endpoint.st_mode)
-                or endpoint.st_uid!=20000 or stat.S_IMODE(endpoint.st_mode)!=0o600):
-            raise Refused('approval private Unix endpoint custody')
+        refuse_if(host.fixture_roots.get(key)!=generation or not stat.S_ISSOCK(endpoint.st_mode)
+                or endpoint.st_uid!=20000 or stat.S_IMODE(endpoint.st_mode)!=0o600, 'approval private Unix endpoint custody')
     return {'ok':True}

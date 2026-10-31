@@ -84,9 +84,12 @@ and datagram sockets, anonymous Unix stream/datagram/seqpacket IPC and route-net
 families, raw IP and io_uring calls fail sticky. Python Unix pathname/abstract
 bind and connect remain refused except the exact authenticated control connect
 and the independently acquired controlled approval endpoint described below.
-The two unsafe-lock socket cases additionally permit one root-only bind to an
-owned mode0700 `/tmp/unrest-inert-XXXXXXXX/s` directory per case. This creates an
-inert carrier for the actual refusal test; it grants no connect, listen, child or
+The two unsafe-lock socket cases additionally permit one root-only relative bind
+of `attempt-validator.lock` per case. The observer acquires the held actor's actual
+cwd, exact case-owned supervision path and safe ancestor custody, requiring the
+final directory to be mode0700. The socket is created directly at its final path,
+avoiding pathname-length limits and cross-mount rename. This creates an inert
+carrier for the actual refusal test; it grants no connect, listen, child or
 provider permission. Endpoint aliases, reuse and other cases remain refused.
 Resolver calls use the actual system implementation inside this namespace.
 The private control pathname retains its independent kernel peer authentication

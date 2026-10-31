@@ -1,8 +1,11 @@
 """Real empty-root containment, including UID and old-proc-root escape negatives."""
 import errno
+from contextlib import chdir
 import os
 from pathlib import Path
 import sys
+import socket
+import stat
 import tempfile
 import traceback
 
@@ -13,6 +16,9 @@ def main():
     from namespace_supervisor import run
     import package_proposals
     import source_observer  # Preload trusted guard code before discarding the host root.
+    from approval_fixture import INERT, unix
+    from linux_observation import process_identity
+    from process_ledger import Birth
     from types import SimpleNamespace
     assert sys.platform == 'linux' and os.getuid() == 0
     with tempfile.TemporaryDirectory(prefix='unrest-filesystem-scope-') as temporary:
@@ -81,6 +87,28 @@ def main():
                             raise AssertionError('source changed an observer-sealed snapshot')
                     assert (sealed/'member').read_text()=='public sealed snapshot sentinel'
                     (base / 'owned/created').write_text('owned scratch')
+                    parent=base/'owned/pytest/test_static_carrier_refuses_wi10/home/projects/project-1/.unrest-runtime/missions/mission-001/supervision'
+                    parent.mkdir(mode=0o700,parents=True)
+                    target=parent/'attempt-validator.lock'
+                    assert len(os.fsencode(target))>108
+                    with socket.socket(socket.AF_UNIX) as old:
+                        old.bind('/tmp/inert-old')
+                        try:
+                            Path('/tmp/inert-old').rename(target)
+                        except OSError as error:
+                            assert error.errno==errno.EXDEV
+                        else:
+                            raise AssertionError('control did not reproduce the cross-mount rename')
+                    Path('/tmp/inert-old').unlink()
+                    before=Path.cwd()
+                    actor={'case':INERT[0],'role':'root','body_ready':True,
+                        'birth':Birth.read(process_identity(os.getpid()))}
+                    host=SimpleNamespace(case=INERT[0],finished=False,fixture_roots={},meta=result)
+                    with socket.socket(socket.AF_UNIX) as carrier, chdir(parent):
+                        assert unix(host,actor,'socket.bind',target.name)=={'ok':True}
+                        carrier.bind(target.name)
+                    assert Path.cwd()==before and stat.S_ISSOCK(target.lstat().st_mode)
+                    print('Cross-mount EXDEV reproduced; exact relative socket bind and cwd restoration passed',flush=True)
                     for path in (base / 'input/member', base / 'input/new-member'):
                         try:
                             path.write_text('forbidden write')
