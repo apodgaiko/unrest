@@ -1572,5 +1572,17 @@ the pinned isolated interpreter and the resulting files retain measured custody.
 Native C still hashes and compiles the raw `native_entry.py` before any body.
 The paired native support-import controls retain READY, original-parent waits
 and every previous negative control; their elapsed values are diagnostic only.
-Full-source and child deadlines, timing assertions and final-timing UNVERIFIED
+Child behavioral deadlines, timing assertions and the final-timing UNVERIFIED
 disposition are unchanged.
+
+The full unexcluded SOURCE allocation is 7,200 seconds, restoring the accepted
+aggregate setup resource in [the source environment contract](../release/v046-source-checkpoint-environment.md).
+The replacement's 1,200-second allocation could interrupt an otherwise healthy
+original suite; its timeout carriers remain failed evidence. The root allocation
+is fixed before attachment and is never reset or extended during execution.
+Generic tracing remains capped at 180 seconds, archive tracing at 100 seconds,
+and every original test, turn, READY, cleanup and actual-wait requirement remains
+in force. Namespace supervision and the literal shell have fixed 7,220/7,240
+second envelopes; the CI job allows 135 minutes for setup, SOURCE and subsequent
+archive/installed checks. This resource correction is not a startup or timing
+acceptance claim and adds no case, launch, image, provider or permission right.

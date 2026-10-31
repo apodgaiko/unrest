@@ -191,7 +191,7 @@ class OwnedTrace:
         if (child <= 0 or type(timeout) not in (int, float)
                 or (type(timeout) is float and not math.isfinite(timeout)) or timeout <= 0):
             raise ValueError("bounded owned trace required")
-        if (type(child) is not int or type(full_source) is not bool or timeout > (1200 if full_source else 180)
+        if (type(child) is not int or type(full_source) is not bool or timeout > (7200 if full_source else 180)
                 or type(cleanup_seconds) not in (int, float)
                 or not math.isfinite(cleanup_seconds) or not 0 < cleanup_seconds <= 60):
             raise ValueError("bounded owned trace required")

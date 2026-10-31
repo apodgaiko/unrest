@@ -20,7 +20,7 @@ jobs:
   primary:
     name: full source and package gate (py3.13)
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 135
     steps:
       - uses: actions/checkout@v7.0.1
         with:

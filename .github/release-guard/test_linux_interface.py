@@ -47,7 +47,9 @@ def test_pidfd_wrapper_does_not_accept_flags_or_non_numeric_identity(pid, flags)
         (False, 180, True),
         (False, 181, False),
         (True, 1200, True),
-        (True, 1201, False),
+        (True, 1201, True),
+        (True, 7200, True),
+        (True, 7201, False),
         (True, float("nan"), False),
     ],
 )
