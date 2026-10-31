@@ -1593,3 +1593,12 @@ the existing session-inline path with one constructor, authenticated READY,
 kernel session identity and actual parent wait. Its original TERM/KILL cleanup
 and unknown-child quarantine assertions remain unchanged. This declaration
 grants no adapter, provider, descendant or additional launch authority.
+
+The review-repair regression module has a closed catalog of 21 direct wire
+cases and six full-runner cases. They reuse the existing pinned local approval
+fixture and original MCP worker topology. The runner cases have no Git launch
+authority: unlike the earlier frame-order cases, they do not create a repository
+or submit an MCP completion. Scenario bytes remain opaque, bounded and acquired
+into exclusive read-only snapshots; the guard does not manufacture review
+outcomes or completion. All denial, malformed-identity, replay and owned-cleanup
+assertions execute in the unchanged source tests. No external review is invoked.

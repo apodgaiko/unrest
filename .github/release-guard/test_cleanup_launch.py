@@ -242,3 +242,20 @@ def test_ordinary_scenario_snapshot_acquires_actual_bounded_bytes_without_predic
     (tmp_path/'other').write_bytes(body)
     with pytest.raises(Refused):
         acquired(CASES[0],tmp_path)
+
+
+@pytest.mark.parametrize('case',tuple(case for case in cleanup_launch.RUNNER if case not in cleanup_launch.RUNNER_GIT))
+def test_repair_runner_keeps_exact_two_children_and_no_git_authority(tmp_path,case):
+    checkout=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
+    root={'PATH':'/bin','HOME':'/owned','TMPDIR':'/tmp'}
+    assert selection(case)==(False,case.rsplit('[',1)[1][:-1],'work')
+    agent=expected(case,'cleanup-acp',tmp_path,'/native','a'*64,checkout,root)
+    assert agent.argv==('/native',str(checkout/'tests/fixtures/approval_acp_process.py'),str(tmp_path/'scenario.json'))
+    assert agent.cwd==str(tmp_path/'workspace')
+    assert dict(agent.environment)==environment(tmp_path,root,agent=True,case=case)
+    mcp=expected(case,'mcp',tmp_path,'/native','a'*64,checkout,root,port=12345,descriptor=12)
+    assert mcp.argv==('/native','-m','unrest_harness','--mode','worker','--transport','streamable-http','--host','127.0.0.1','--port','12345','--sensitive-inventory-fd','12')
+    assert dict(mcp.environment)=={**environment(tmp_path,root,agent=False,case=case)}
+    for role in ('git-init','git-commit','git-observe','unknown'):
+        with pytest.raises(Refused,match='undeclared launch role'):
+            expected(case,role,tmp_path,'/native','a'*64,checkout,root)

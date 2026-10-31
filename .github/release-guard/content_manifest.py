@@ -45,10 +45,9 @@ class Manifest(TypedDict):
 
 
 def _path(value: object) -> str:
-    if (type(value) is not str or not value or "\x00" in value or "\\" in value
+    refuse_if(type(value) is not str or not value or "\x00" in value or "\\" in value
             or len(value.split("/")) > MAX_PATH_DEPTH
-            or any(part in {"", ".", ".."} for part in value.split("/"))):
-        raise Refused("noncanonical_path")
+            or any(part in {"", ".", ".."} for part in value.split("/")), "noncanonical_path")
     try:
         refuse_if(len(value.encode("utf-8")) > MAX_PATH_BYTES, "path_bound")
     except UnicodeError:
@@ -59,8 +58,7 @@ def _path(value: object) -> str:
 def _inventory(paths: Sequence[str]) -> list[str]:
     refuse_if(type(paths) not in (list, tuple), "inventory_type")
     values = list(paths)
-    if not values or len(values) > MAX_FILES:
-        raise Refused("inventory_bound")
+    refuse_if(not values or len(values) > MAX_FILES, "inventory_bound")
     values = [_path(value) for value in values]
     refuse_if(len(set(values)) != len(values), "duplicate_path")
     return sorted(values)
@@ -111,11 +109,10 @@ def _member(root: int, name: str, line_counts: dict[str, int] | None,
     with ExitStack() as stack:
         parent,directories=_descend(stack,root,parts[:-1],_key)
         before = os.stat(parts[-1], dir_fd=parent, follow_symlinks=False)
-        if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
+        refuse_if(not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
                 or before.st_mode & forbidden or uid is not None and before.st_uid!=uid
                 or mode is not None and stat.S_IMODE(before.st_mode)!=mode
-                or before.st_size<minimum):
-            raise Refused("nonregular_or_aliased_file")
+                or before.st_size<minimum, "nonregular_or_aliased_file")
         refuse_if(before.st_size > file_bound, "file_bound")
         fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
                      dir_fd=parent)
@@ -125,10 +122,9 @@ def _member(root: int, name: str, line_counts: dict[str, int] | None,
             body=stream.read(before.st_size+1)
         size=len(body)
         refuse_if(size>before.st_size, 'file_read_bound')
-        if (size != before.st_size or _key(before) != _key(os.fstat(fd))
+        refuse_if(size != before.st_size or _key(before) != _key(os.fstat(fd))
                 or _key(before) != _key(os.stat(parts[-1], dir_fd=parent,
-                                                 follow_symlinks=False))):
-            raise Refused("file_read_race")
+                                                 follow_symlinks=False)), "file_read_race")
         _verify(directories,_key,'directory_read_race')
         if line_counts is not None:
             try:

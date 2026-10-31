@@ -68,7 +68,8 @@ def test_original_wire_selection_preserves_oversized_parameter_without_large_mes
     from case_inventory import identity
 
     cases = wire.CASES
-    assert len(cases) == len(set(cases)) == 63
+    assert len(cases) == len(set(cases)) == 84
+    assert len([case for case in cases if not case.startswith(wire.REPAIR+'::')]) == 63
     node = (
         wire.TEST + "::test_malformed_and_oversized_wire_never_become_success[" + "x" * 70000 + "]"
     )
@@ -194,7 +195,7 @@ def test_component_collection_and_reports_keep_actual_large_pytest_item(monkeypa
     from case_inventory import identity
 
     node = next(node for node in wire.NODES if len(node) > 70000)
-    assert len(wire.NODES) == 63 and tuple(identity(node) for node in wire.NODES) == wire.CASES
+    assert len(wire.NODES) == 84 and tuple(identity(node) for node in wire.NODES) == wire.CASES
     calls = []
     policy = SimpleNamespace(
         children={},
@@ -277,19 +278,22 @@ def test_wire_retirement_requires_ready_and_authorized_cleanup(code, signals, re
     assert Observer.completed_child(host, actor) is accepted
 
 
-def test_extra_wire_catalogue_matches_the_unmodified_original_collection(monkeypatch):
+@pytest.mark.parametrize('test_file',(wire.FRAMES,wire.REPAIR))
+def test_extra_wire_catalogue_matches_the_unmodified_original_collection(monkeypatch,test_file):
     monkeypatch.setenv('PYTEST_DISABLE_PLUGIN_AUTOLOAD','1')
     nodes=[]
     class Collected:
         def pytest_collection_finish(self,session):
             nodes.extend(item.nodeid for item in session.items)
-    assert pytest.main(['--collect-only','-q','-o','addopts=',wire.FRAMES],plugins=[Collected()])==0
+    assert pytest.main(['--collect-only','-q','-o','addopts=',test_file],plugins=[Collected()])==0
     import ast
-    unit=ast.parse(Path(wire.FRAMES).read_bytes())
+    unit=ast.parse(Path(test_file).read_bytes())
     consumers={fn.name for fn in unit.body if isinstance(fn,ast.AsyncFunctionDef)
         and any(isinstance(call,ast.Call) and isinstance(call.func,ast.Name) and call.func.id=='wire' for call in ast.walk(fn))}
     expected=tuple(node for node in nodes if node.split('::')[1].split('[')[0] in consumers)
-    assert tuple(node for node in wire.NODES if node.startswith(wire.FRAMES+'::'))==expected
+    assert tuple(node for node in wire.NODES if node.startswith(test_file+'::'))==expected
+    runners=tuple(node for node in nodes if node.split('::')[1].startswith('test_actual_runner_'))
+    assert tuple(node for node in wire.RUNNER if node.startswith(test_file+'::'))==runners
 
 
 @pytest.mark.parametrize('case',wire.RUNNER)
@@ -322,3 +326,53 @@ def test_runner_keeps_protocol_data_without_reconstructing_application_results(t
     assert case not in wire.CASES
     with pytest.raises(Refused):
         wire.runner_scenario('foreign',tmp_path)
+
+
+@pytest.mark.parametrize('case',tuple(case for case in wire.CASES if case.startswith(wire.REPAIR+'::')))
+@pytest.mark.parametrize('mutation',(None,'argv','environment','cwd','owner','stdin','quota'))
+def test_repair_wire_is_one_pinned_local_fixture_not_native_review(tmp_path,monkeypatch,case,mutation):
+    from source_observer import Observer
+    source_files(monkeypatch)
+    checkout=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
+    base=tmp_path/'pytest'/'case'
+    base.mkdir(parents=True)
+    scenario=base/'scenario.json'
+    scenario.write_text('{"events":[],"delay":0,"raw_frame":null}')
+    profiles=tmp_path/'profiles'
+    profiles.mkdir()
+    host=object.__new__(Observer)
+    host.case,host.serial,host.root_birth=case,0,'root-birth'
+    host.meta={'checkout':str(checkout),'owned':str(tmp_path)}
+    host.binding={'entry':{'path':'/native','sha256':'a'*64}}
+    host.intents={}
+    host.directory=profiles
+    host.meta_environment=lambda:{'PATH':'/bin'}
+    host.root_only=lambda actor:None if actor['role']=='root' else (_ for _ in ()).throw(Refused('owner'))
+    actor={'role':'root','birth':'root-birth'}
+    environment={'PATH':'/bin','PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}
+    raw={'argv':['/native',str(checkout/wire.SCRIPT),str(scenario)],'cwd':str(checkout),'environment':environment,'stdin':None}
+    if mutation=='argv':
+        raw['argv'][1]+='.foreign'
+    elif mutation=='environment':
+        raw['environment']['EXTRA']='foreign'
+    elif mutation=='cwd':
+        raw['cwd']=str(base)
+    elif mutation=='owner':
+        actor['role']='child'
+    elif mutation=='stdin':
+        raw['stdin']='foreign'
+    elif mutation=='quota':
+        host.intents[1]={'case':case}
+    if mutation:
+        with pytest.raises(Refused):
+            wire.proposal(host,actor,raw)
+        assert not list(profiles.iterdir())
+    else:
+        answer=wire.proposal(host,actor,raw)
+        row=host.intents[answer['ticket']]
+        assert row['role']=='review-wire' and row['script_sha256']==wire.PIN
+        snapshot=Path(answer['translated'][-1])
+        assert snapshot.read_bytes()==scenario.read_bytes() and snapshot.stat().st_mode&0o777==0o444
+        with pytest.raises(Refused,match='quota'):
+            wire.proposal(host,actor,raw)
+        assert len(host.intents)==1

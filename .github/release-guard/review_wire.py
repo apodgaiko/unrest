@@ -3,7 +3,7 @@ import hashlib
 from pathlib import Path
 
 from case_inventory import identity
-from content_manifest import Refused, read_regular, refuse_if
+from content_manifest import read_regular, refuse_if
 from launch_policy import build_expected,source_unit,admit_expected
 
 TEST='tests/test_provider_review.py'
@@ -35,6 +35,15 @@ COUNT_CASE=TEST+'::test_review_count_bound_and_malformed_action'
 NODES+=(*(TEST+'::test_schema_action_variants_do_not_persist_private_payloads[action'+str(i)+']' for i in range(6)),COUNT_CASE)
 DENIAL=tuple(TEST+'::test_runner_denial_overrides_handoff_and_reaps_owned_processes['+value+']' for value in ('True','False'))
 NODES+=DENIAL
+REPAIR='tests/test_provider_review_repair.py'
+REPAIR_PIN='e0aa8957ca85cb0d2f7250ae58243ed79de00cf04cd6f0aec437b6f92be45907'
+REVIEW_SOURCES={FRAMES:FRAMES_PIN,REPAIR:REPAIR_PIN}
+NODES+=tuple(REPAIR+'::'+name for name in (
+    *(f'test_malformed_outer_identity_blocks_on_managed_wire[{value}-{mapping}]'
+      for value in ('missing','None','12','identity3','identity4','','wrong:review-1') for mapping in ('creation','update')),
+    *(f'test_recognized_creation_missing_neighbor_field_blocks[{field}]' for field in ('kind','title','rawInput','status')),
+    *(f'test_mcp_wrappers_and_prose_do_not_gain_review_provenance[{registered}]' for registered in ('False','True')),
+    'test_unregistered_update_blocks_and_denial_keeps_precedence'))
 CASES=tuple(identity(node) for node in NODES)
 DOUBLE=TEST+'::test_duplicate_and_conflicting_reviews_are_monotone'
 
@@ -44,14 +53,16 @@ def count(case):
 
 
 def scenario(file,owned,case=None):
-    if (str(file.resolve())!=str(file) or file.name!='scenario.json'
-            or not file.parent.is_relative_to(owned/'pytest') or file.parent==owned/'pytest'):
-        raise Refused('review-wire owned scenario path')
+    refuse_if(str(file.resolve())!=str(file) or file.name!='scenario.json'
+            or not file.parent.is_relative_to(owned/'pytest') or file.parent==owned/'pytest', 'review-wire owned scenario path')
     return read_regular(file,131072,uid=20000,mode=0o644)[0]
 
 
 RUNNER=tuple(FRAMES+'::test_actual_runner_matching_id_order_and_owned_cleanup['+value+']'
     for value in ('before','after','batch_before','batch_after','eof'))
+RUNNER_GIT=RUNNER
+RUNNER+=tuple(REPAIR+'::test_actual_runner_mcp_restart_and_retained_projection['+value+']'
+    for value in ('valid','missing','wrong','nonstring','update_missing','spoof'))
 
 
 def runner_scenario(case,base):
@@ -67,14 +78,12 @@ def proposal(host,actor,raw):
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
     checkout,owned=Path(host.meta['checkout']),Path(host.meta['owned'])
     argv=raw['argv']
-    if case not in CASES or len(argv)!=3 or argv[:2]!=[native,str(checkout/SCRIPT)] or raw['cwd']!=str(checkout) or raw['stdin'] is not None:
-        raise Refused('review-wire exact entry')
+    refuse_if(case not in CASES or len(argv)!=3 or argv[:2]!=[native,str(checkout/SCRIPT)] or raw['cwd']!=str(checkout) or raw['stdin'] is not None, 'review-wire exact entry')
     records=[row for row in host.intents.values() if row['case']==case]
-    if (len(records)>=count(case) or any(row['role']!='review-wire' or not row['consumed']
-            or not host.ledger.reaped(row['birth'],row['token']) for row in records)):
-        raise Refused('review-wire sequential finite quota')
-    if case.startswith(FRAMES+'::'):
-        source_unit(checkout,FRAMES,FRAMES_PIN)
+    refuse_if(len(records)>=count(case) or any(row['role']!='review-wire' or not row['consumed']
+            or not host.ledger.reaped(row['birth'],row['token']) for row in records), 'review-wire sequential finite quota')
+    if case.split('::')[0] in REVIEW_SOURCES:
+        source_unit(checkout,case.split('::')[0],REVIEW_SOURCES[case.split('::')[0]])
     body=scenario(Path(argv[-1]),owned,case)
     environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}
     value=build_expected(

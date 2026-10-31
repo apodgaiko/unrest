@@ -7,14 +7,14 @@ from pathlib import Path
 
 from content_manifest import Refused, refuse_if
 from git_policy import image as system_git
-from launch_policy import build_expected
+from launch_policy import build_expected,source_unit
 from ordinary_acp import PRODUCT, PINS as ACP_PINS
-from review_wire import RUNNER,runner_scenario,SCRIPT as REVIEW_SCRIPT,PIN as REVIEW_PIN,FRAMES,FRAMES_PIN
+from review_wire import RUNNER,RUNNER_GIT,runner_scenario,SCRIPT as REVIEW_SCRIPT,PIN as REVIEW_PIN,REVIEW_SOURCES
 
 TEST = 'tests/test_acp_cleanup.py'
 SCRIPT = 'tests/fixtures/cleanup_acp_process.py'
 SERVER = 'src/unrest_harness/server.py'
-PINS = {REVIEW_SCRIPT:REVIEW_PIN,FRAMES:FRAMES_PIN,PRODUCT: ACP_PINS[PRODUCT], TEST: '8903f87610c61684a4db0dcf22f771ed5a9f75bcade8ce4f1c528378b1c992ae',
+PINS = {**REVIEW_SOURCES,REVIEW_SCRIPT:REVIEW_PIN,PRODUCT: ACP_PINS[PRODUCT], TEST: '8903f87610c61684a4db0dcf22f771ed5a9f75bcade8ce4f1c528378b1c992ae',
     SCRIPT: 'f4b1c4ca59b7550e5bcd43210e487b0f979c3133196ff39470eae36b76726959',
     SERVER: 'd1abbe2f76ff874849d113919777efe1ccb8fee0a6327d5eaf27e87892fd886f',
     'tests/test_provider_review.py': 'dd9962020bcf265bc6a4e35de8ca7fe557666a1d0e63fa325b4ad955c2465a5e'}
@@ -39,7 +39,7 @@ CREDENTIAL = {'OPENAI_API_KEY': 'controlled-secret-observer-value'}
 def selection(case):
     refuse_if(type(case) is not str or case not in EXECUTION_CASES, 'cleanup finite case declaration')
     if case in RUNNER:
-        return True,case.rsplit('[',1)[1][:-1],'work'
+        return case in RUNNER_GIT,case.rsplit('[',1)[1][:-1],'work'
     if case in SAVED:
         return False, case.rsplit('[', 1)[1][:-1], 'terminal_reviewer'
     variant, role = case.rsplit('[', 1)[1][:-1].split('-', 1)
@@ -49,9 +49,8 @@ def selection(case):
 def base_path(value, owned):
     refuse_if(type(value) is not str, 'cleanup base path type')
     path = Path(value)
-    if (not path.is_absolute() or str(path.resolve(strict=True)) != value
-            or path.parent != owned / 'pytest' or path.stat().st_uid != 20000):
-        raise Refused('cleanup owned case directory')
+    refuse_if(not path.is_absolute() or str(path.resolve(strict=True)) != value
+            or path.parent != owned / 'pytest' or path.stat().st_uid != 20000, 'cleanup owned case directory')
     return path
 
 
@@ -84,8 +83,7 @@ def environment(base, root_environment, *, agent, case=CASES[0]):
 def read_pipe(birth,descriptor):
     from process_ledger import Birth
     from socket_observation import acquire,pipe_descriptor
-    if type(birth) is not Birth or birth.uid!=20000:
-        raise Refused('cleanup inventory process birth')
+    refuse_if(type(birth) is not Birth or birth.uid!=20000, 'cleanup inventory process birth')
     return acquire(birth,descriptor,pipe_descriptor)
 
 
@@ -94,8 +92,7 @@ def expected(case, role, base, native, native_pin, checkout, root_environment, *
     recorded,_,node_role=selection(case)
     home = base / 'workspace'
     if case in RUNNER:
-        from launch_policy import source_unit
-        source_unit(checkout,FRAMES,FRAMES_PIN)
+        source_unit(checkout,case.split('::')[0],REVIEW_SOURCES[case.split('::')[0]])
     vector: tuple[str, ...]
     payload: str | None
     if role == 'cleanup-acp':
@@ -105,19 +102,18 @@ def expected(case, role, base, native, native_pin, checkout, root_environment, *
         env = environment(base, root_environment, agent=True, case=case)
         cwd = str(home)
     elif role == 'mcp':
-        if type(port) is not int or not 0 < port <= 65535 or type(descriptor) is not int or not 3 <= descriptor <= 1024:
-            raise Refused('cleanup finite listener or descriptor')
+        refuse_if(type(port) is not int or not 0 < port <= 65535 or type(descriptor) is not int or not 3 <= descriptor <= 1024, 'cleanup finite listener or descriptor')
         vector = (native, '-m', 'unrest_harness', '--mode', {'work':'worker','validate':'validator','terminal_reviewer':'terminal-reviewer'}[node_role], '--transport', 'streamable-http',
                   '--host', '127.0.0.1', '--port', str(port), '--sensitive-inventory-fd', str(descriptor))
         executable, pin, kind, payload = native, native_pin, 'python-module', PINS[SERVER]
         env = environment(base, root_environment, agent=False, case=case)
         cwd = str(home)
-    elif role in ('git-init', 'git-commit', 'git-observe') and (case in (*RECORDED,*RUNNER) if role != 'git-observe' else recorded and node_role=='work'):
+    elif role in ('git-init', 'git-commit', 'git-observe') and (case in (*RECORDED,*RUNNER_GIT) if role != 'git-observe' else recorded and node_role=='work'):
         arguments = {'git-init': ('init', '-q', str(home)),
             'git-commit': ('-c', 'user.name=Controlled', '-c', 'user.email=controlled@example.invalid',
                            '-c', 'maintenance.auto=false', '-c', 'gc.auto=0', 'commit', '--allow-empty', '-qm', 'Controlled'),
             'git-observe': ('rev-parse', 'HEAD')}[role]
-        if case in RUNNER and role=='git-commit':
+        if case in RUNNER_GIT and role=='git-commit':
             arguments=('-c','user.name=Controlled Test','-c','user.email=controlled@example.invalid',
                 'commit','--allow-empty','-qm','Controlled completion identity')
         vector, executable, pin, kind, payload = ('git', *arguments), '/usr/bin/git', system_git(), 'native', None

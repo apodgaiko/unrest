@@ -22,16 +22,14 @@ def proposal_operands(raw,case,native=None):
     from source_observer import shape
     from inline_leaves import STREAM_CASES
     shape(raw, ('case','executable','argv','cwd','environment','stdin')+(('inventory_fd',) if case in STREAM_CASES else ()))
-    if type(raw['case']) is not str or raw['case'] != case or type(raw['executable']) is not str or type(raw['argv']) is not list:
-        raise Refused('finite process proposal case or vector')
+    refuse_if(type(raw['case']) is not str or raw['case'] != case or type(raw['executable']) is not str or type(raw['argv']) is not list, 'finite process proposal case or vector')
     argv = raw['argv']
     from approval_launch import CASES as APPROVAL
-    if (not 0 < len(argv) <= 256 or any(type(arg) is not str for arg in argv)
+    refuse_if(not 0 < len(argv) <= 256 or any(type(arg) is not str for arg in argv)
             or (raw['executable'] != argv[0] and not (argv[0] in ('git','ps','sleep') and raw['executable']=='/usr/bin/'+argv[0])
                 and not (case in APPROVAL and native is not None and raw['executable']==native)) or type(raw['cwd']) is not str
             or type(raw['environment']) is not dict
-            or any(type(k) is not str or type(v) is not str for k,v in raw['environment'].items())):
-        raise Refused('finite process proposal operands')
+            or any(type(k) is not str or type(v) is not str for k,v in raw['environment'].items()), 'finite process proposal operands')
     values=[raw['executable'],raw['cwd'],*argv,*raw['environment'],*raw['environment'].values()]
     try:
         for value in values:
@@ -90,15 +88,13 @@ def proposal(host, actor, raw):
     elif case in SESSIONS:
         from session_launch import TIMEOUT,INVALID,INVALID_BYTES
         child = actor['role']=='session-adapter'
-        if child and case!=TIMEOUT or not child and actor['role']!='root':
-            raise Refused('session original launch parent')
+        refuse_if(child and case!=TIMEOUT or not child and actor['role']!='root', 'session original launch parent')
         expected = session_expected(case,cwd,checkout,owned,native,pin,root_environment,child=child)
         script_pin = expected.payload_sha256
         role='session-invalid' if case in INVALID else 'session-child' if child else 'session-inline' if expected.payload_kind=='python-command' else 'session-adapter'
         if role=='session-invalid':
             from git_policy import regular
-            if regular(Path(expected.executable))!=INVALID_BYTES or Path(expected.executable).stat().st_mode&0o777!=0o700:
-                raise Refused('session exact invalid executable fixture')
+            refuse_if(regular(Path(expected.executable))!=INVALID_BYTES or Path(expected.executable).stat().st_mode&0o777!=0o700, 'session exact invalid executable fixture')
         vector = list(expected.argv) if expected.payload_kind=='expected-exec-failure' else [native,'-I','-S',*expected.argv[1:]]
     elif case in FIXED:
         environment = {**root_environment,'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}
