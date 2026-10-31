@@ -456,6 +456,9 @@ class Observer:
                 refuse_if(payload['group'] or child['role']!='workspace-owned' and not journal and not worker
                         or journal and child.get('liveness_probes',0)!=0, 'source exact owned liveness probe')
                 if journal:
+                    if not child['body_ready']:
+                        refuse_if(process.exit is not None or process.terminal is not None, 'journal child terminated before readiness')
+                        return None
                     child['liveness_probes']=1
                 try:
                     refuse_if(Birth.read(process_identity(child['birth'].pid)) != self.ledger.peer_birth(child['birth']), 'source reused probe PID')
@@ -519,6 +522,7 @@ class Observer:
                 channel['request'] = admitted
                 self.controls.append({**admitted, 'observed_monotonic_ns': time.monotonic_ns()})
             if frame.output is None:
+                frame.check()
                 answer = self.dispatch(actor, channel['request'])
                 if answer is not None:
                     frame.answer(reply(channel['request'], answer))

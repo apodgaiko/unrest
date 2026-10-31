@@ -69,7 +69,7 @@ def test_journal_zero_signal_is_one_owned_liveness_probe_not_generic_permission(
     host=object.__new__(Observer)
     host.case,host.root_birth,host.finished,host.ledger=JOURNAL_CASE,root,False,ledger
     actor={'role':'root','birth':root}
-    target={'role':'fixed-inline','birth':child,'case':JOURNAL_CASE,'token':'child-token','signals':set()}
+    target={'role':'fixed-inline','birth':child,'case':JOURNAL_CASE,'token':'child-token','signals':set(),'body_ready':True}
     host.actors={child.pid:target}
     monkeypatch.setattr(source_observer,'process_identity',lambda pid:ledger.process(child).identity)
     message={'kind':'custody_signal','payload':{'pid':child.pid,'child_token':'child-token','signal':0,'group':False}}
@@ -81,3 +81,83 @@ def test_journal_zero_signal_is_one_owned_liveness_probe_not_generic_permission(
     host.case=target['case']='foreign-case'
     with pytest.raises(Refused,match='liveness probe'):
         host.dispatch(actor,message)
+
+
+@pytest.mark.parametrize('early_death',(False,True))
+def test_journal_probe_defers_without_spending_quota_until_bound_body_ready(monkeypatch,early_death):
+    import source_observer
+    from source_observer import Observer
+    from fixed_inline import JOURNAL_CASE
+    from test_process_ledger import setup,terminal,wait4
+    ledger,root,child=setup()
+    host=object.__new__(Observer)
+    host.case,host.root_birth,host.finished,host.ledger=JOURNAL_CASE,root,False,ledger
+    actor={'role':'root','birth':root}
+    target={'role':'fixed-inline','birth':child,'case':JOURNAL_CASE,'token':'child-token','signals':set(),'body_ready':False}
+    row={'ticket':1,'birth':child,'role':'fixed-inline','case':JOURNAL_CASE,'token':'child-token','consumed':True}
+    target['intent']=row
+    host.intents={1:row}
+    host.actors={child.pid:target}
+    observed=[]
+    monkeypatch.setattr(source_observer,'process_identity',lambda pid:observed.append(pid) or ledger.process(child).identity)
+    message={'kind':'custody_signal','payload':{'pid':child.pid,'child_token':'child-token','signal':0,'group':False}}
+    if early_death:
+        terminal(ledger,child,15)
+        with pytest.raises(Refused,match='journal child terminated before readiness'):
+            host.dispatch(actor,message)
+        assert 'liveness_probes' not in target and not observed
+        assert not host.completed_child(target) and not ledger.reaped(child,'child-token')
+        return
+    assert host.dispatch(actor,message) is None
+    assert host.dispatch(actor,message) is None
+    assert 'liveness_probes' not in target and not observed and not target['signals']
+    target['body_ready']=True
+    assert host.dispatch(actor,message)=={'ok':True,'live':True}
+    assert target['liveness_probes']==1 and observed==[child.pid]
+    with pytest.raises(Refused,match='liveness probe'):
+        host.dispatch(actor,message)
+    terminate_message={'kind':'custody_signal','payload':{**message['payload'],'signal':15}}
+    assert host.dispatch(actor,terminate_message)=={'ok':True,'live':True}
+    assert target['signals']=={15}
+    ledger.wait_entry(root,child.pid)
+    terminal(ledger,child,15)
+    assert host.completed_child(target) and not ledger.reaped(child,'child-token')
+    wait4(ledger,root,child,15)
+    assert ledger.reaped(child,'child-token')
+
+
+@pytest.mark.parametrize('seconds',(4,8,22))
+def test_pending_observer_request_keeps_the_original_channel_deadline(monkeypatch,seconds):
+    import os
+    import socket
+    from types import SimpleNamespace
+    import control_transport
+    from control_transport import Frame,REQUEST_LIMIT
+    from source_observer import Observer
+    now=[0.0]
+    monkeypatch.setattr(control_transport.time,'monotonic',lambda:now[0])
+    left,right=socket.socketpair()
+    read,write=os.pipe()
+    os.set_blocking(read,False)
+    calls=[]
+    class Listener:
+        def accept(self):
+            raise BlockingIOError
+    frame=Frame(left,REQUEST_LIMIT,seconds=seconds)
+    host=SimpleNamespace(consume=lambda trace:None,server=Listener(),
+        frames=[{'frame':frame,'actor':{},'request':{'kind':'pending'}}],
+        dispatch=lambda actor,request:calls.append(request),out_read=read,output=bytearray())
+    try:
+        for moment in (0,seconds):
+            now[0]=moment
+            Observer.tick(host,None)
+        assert len(calls)==2 and frame.started==0 and frame.seconds==seconds
+        now[0]=seconds+.001
+        with pytest.raises(Refused,match='channel deadline'):
+            Observer.tick(host,None)
+        assert len(calls)==2 and frame.stream.fileno()==-1
+    finally:
+        left.close()
+        right.close()
+        os.close(read)
+        os.close(write)

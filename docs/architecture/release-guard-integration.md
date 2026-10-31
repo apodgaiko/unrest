@@ -1637,3 +1637,11 @@ in the owned sibling candidate directory, with the stock fixed environment and
 a four-launch ceiling. Their source bytes are pinned at admission. They gain no
 controlled backend, ACP, other fixture command, hook or remote authority. Original
 observation, fsync, immutable-record and substitution assertions are unchanged.
+
+The mutation-journal foreign-owner case waits for its exact bound child's
+authenticated BODY_READY before acknowledging the single liveness probe. A
+pending probe spends no quota; death before readiness refuses it. The original
+os.kill(pid, 0), terminate and actual parent wait still execute, and ordinary
+fixed-inline cleanup still requires READY. Pending observer requests also check
+their existing channel deadline before each dispatch; no deadline is reset or
+extended. This prevents startup/cleanup races without waiving completion proof.
