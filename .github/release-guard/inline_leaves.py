@@ -41,7 +41,9 @@ PROGRAM_PINS=dict(zip(READINESS_CASES,(
 
 STREAM_CASES=tuple(READINESS_TEST+'::test_mcp_role_child_oversized_streams_are_bounded_and_singly_drained['+mode+']'
     for mode in ('worker','terminal-reviewer'))
-READINESS_CASES=(*READINESS_CASES,*STREAM_CASES)
+LEASE='tests/test_experimental_lease.py::test_owned_ignoring_child_and_unknown_quarantine'
+READINESS_CASES=(*READINESS_CASES,*STREAM_CASES,LEASE)
+PROGRAM_PINS[LEASE]='f7616e6e7591ef2471038fa253ec0de2ce8d66d706c63b3a28754c84c406528a'
 PROGRAM_PINS.update(dict.fromkeys(STREAM_CASES,'2e72c5f2a12366eb52edf0f0414ddbc2b2b24a539f202bff89417b23589f8ad2'))
 
 
@@ -115,6 +117,8 @@ def proposal(host,actor,raw):
     else:
         code=pinned_body(raw['argv'],PROGRAM_PINS[case])
         vector=(native,'-c',code)
+        if case==LEASE:
+            cwd,env=str(retain(host,Path(raw['cwd']),OWNER)),{}
         if case in STREAM_CASES:
             from cleanup_launch import read_pipe
             base=retain(host,Path(raw['cwd']).parent,20000)
@@ -122,7 +126,7 @@ def proposal(host,actor,raw):
             if case==STREAM_CASES[0]:
                 env['UNREST_NODE_ASSIGNMENT']='{"targets":["VAL-SEC-014"],"task_type":"work"}'
             inherited=[read_pipe(actor['birth'],raw['inventory_fd'])]
-        if case.endswith('::test_sigterm_ignoring_owned_process_is_killed_and_reaped'):
+        if case==LEASE or case.endswith('::test_sigterm_ignoring_owned_process_is_killed_and_reaped'):
             role='session-inline'
     value=build_expected(case,executable,pin,vector,tuple(sorted(env.items())),cwd,kind)
     translated=list(vector) if kind=='native' else [native,'-I','-S',*vector[1:]]

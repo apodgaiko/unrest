@@ -53,7 +53,7 @@ def test_exact_original_readiness_program_and_operands(case,mutation):
 
 
 
-@pytest.mark.parametrize('status,signals,expected',[(0,(),True),(-15,(15,),True),(-15,(),False),(23,(),True)])
+@pytest.mark.parametrize('status,signals,expected',[(0,(),True),(-15,(15,),True),(-15,(),False),(-9,(9,),True),(-9,(),False),(23,(),True)])
 def test_real_child_terminal_status_and_authorized_cleanup_required(status,signals,expected):
     from source_observer import Observer
     from types import SimpleNamespace
@@ -104,3 +104,59 @@ def test_literal_owned_client_leaves_keep_exact_original_body_and_parent(case,mu
     else:
         assert readiness.proposal(host,{'role':'root'},raw)['translated']==['/native','-I','-S','-c',body]
         assert calls[0][2]==('session-inline' if case.endswith('::test_sigterm_ignoring_owned_process_is_killed_and_reaped') else 'fixed-inline')
+
+
+@pytest.mark.parametrize('mutation',[None,'body','args','env','cwd','alias','owner','stdin','second'])
+def test_lease_ignoring_child_is_exact_owned_session_with_one_constructor(tmp_path,monkeypatch,mutation):
+    import hashlib
+    import os
+    from source_observer import Observer
+    case=readiness.LEASE
+    unit=ast.parse((ROOT/case.split('::')[0]).read_bytes())
+    function=next(node for node in unit.body if isinstance(node,ast.FunctionDef) and node.name==case.split('::')[1])
+    call=next(node for node in ast.walk(function) if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute)
+              and node.func.attr=='launch_local')
+    body=ast.literal_eval(call.args[0].elts[2])
+    assert hashlib.sha256(body.encode()).hexdigest()==readiness.PROGRAM_PINS[case]
+    monkeypatch.setattr(readiness,'OWNER',os.getuid())
+    cwd=tmp_path/'pytest'/'lease'
+    cwd.mkdir(parents=True)
+    host=object.__new__(Observer)
+    host.case,host.serial,host.root_birth=case,0,'root-birth'
+    host.meta={'checkout':str(ROOT),'owned':str(tmp_path)}
+    host.binding={'entry':{'path':'/native','sha256':'a'*64}}
+    host.intents,host.fixture_roots={},{}
+    host.meta_environment=lambda:{'PATH':'/bin'}
+    host.root_only=lambda actor:None if actor['role']=='root' else (_ for _ in ()).throw(Refused('owner'))
+    actor={'role':'root','birth':'root-birth'}
+    raw={'case':case,'argv':['/native','-c',body],'executable':'/native','cwd':str(cwd),'stdin':None,'environment':{}}
+    if mutation=='body':
+        raw['argv'][2]+='; print("foreign")'
+    elif mutation=='args':
+        raw['argv'].append('foreign')
+    elif mutation=='env':
+        raw['environment']['PATH']='/bin'
+    elif mutation=='cwd':
+        raw['cwd']=str(tmp_path)
+    elif mutation=='alias':
+        alias=tmp_path/'pytest'/'alias'
+        alias.symlink_to(cwd,target_is_directory=True)
+        raw['cwd']=str(alias)
+    elif mutation=='owner':
+        actor['role']='child'
+    elif mutation=='stdin':
+        raw['stdin']='foreign'
+    if mutation in (None,'second'):
+        answer=readiness.proposal(host,actor,raw)
+        assert answer['translated']==['/native','-I','-S','-c',body]
+        row=host.intents[answer['ticket']]
+        assert row['role']=='session-inline' and row['parent']=='root-birth'
+        assert row['environment']=={} and row['cwd']==str(cwd)
+        if mutation=='second':
+            with pytest.raises(Refused,match='independent launch'):
+                readiness.proposal(host,actor,raw)
+            assert len(host.intents)==1
+    else:
+        with pytest.raises(Refused):
+            readiness.proposal(host,actor,raw)
+        assert not host.intents

@@ -1586,3 +1586,10 @@ in force. Namespace supervision and the literal shell have fixed 7,220/7,240
 second envelopes; the CI job allows 135 minutes for setup, SOURCE and subsequent
 archive/installed checks. This resource correction is not a startup or timing
 acceptance claim and adds no case, launch, image, provider or permission right.
+
+The lease quarantine source case declares exactly its original SIGTERM-ignoring
+inline program, empty environment and current owned pytest directory. It uses
+the existing session-inline path with one constructor, authenticated READY,
+kernel session identity and actual parent wait. Its original TERM/KILL cleanup
+and unknown-child quarantine assertions remain unchanged. This declaration
+grants no adapter, provider, descendant or additional launch authority.
