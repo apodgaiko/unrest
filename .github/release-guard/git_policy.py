@@ -273,7 +273,8 @@ FIXTURE_PINS={
     'tests/test_project_adapter.py':'b48d315875eedb9350219fcc3c203c778f329389f32d8f787de0c574390235cf',
     'tests/test_v04_activation.py':'4741feb6a71d9c06be777a08a34e064be0610c1f8b755ebfffef21489621c435',
 }
-WORKER_REPOSITORIES={'tests/test_foundation_authority.py::test_async_project_lock_contention_is_public_busy_with_private_cause': ('repo',),
+WORKER_REPOSITORIES={'tests/test_foundation_integration.py::test_production_run_executor_routes_start_once_and_attaches': ('workspace',),
+ 'tests/test_foundation_authority.py::test_async_project_lock_contention_is_public_busy_with_private_cause': ('repo',),
  'tests/test_foundation_authority.py::test_tool_error_mapping_is_closed_and_private_details_survive_async_run': ('repo',),
  'tests/test_server.py::test_real_run_inquiry_workspace_and_campaign_results_cross_validator': ('repository',)}
 

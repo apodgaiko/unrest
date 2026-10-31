@@ -4,14 +4,16 @@ import json
 import os
 import re
 
-from content_manifest import Refused, read_regular, native_digest, refuse_if
+from content_manifest import read_regular, native_digest, refuse_if
 from control_transport import unique
 from git_policy import fixture_root as repository_root, WORKER_REPOSITORIES as SLOTS, FIXTURE_SERVER_INQUIRY as SERVER_INQUIRY
 from launch_policy import build_expected,admit_expected,source_unit,literal
 from owned_fixture import retain
 from content_manifest import _key
 
+FOUNDATION='tests/test_foundation_integration.py::test_production_run_executor_routes_start_once_and_attaches'
 CASES={
+    FOUNDATION:'start_project',
     SERVER_INQUIRY:'start_project',
     'tests/test_foundation_authority.py::test_tool_error_mapping_is_closed_and_private_details_survive_async_run':'submit_plan',
     'tests/test_foundation_authority.py::test_async_project_lock_contention_is_public_busy_with_private_cause':'end_mission',
@@ -84,13 +86,11 @@ def install_fixture(policy):
         def exec_module(self,module):
             try:
                 body,info,pin=read_regular(Path(binding['path']),16384,uid=20000,forbidden=0o6022)
-                if list(_key(info))!=binding['identity'] or pin!=binding['sha256']:
-                    raise Refused('fixed fixture import changed')
+                refuse_if(list(_key(info))!=binding['identity'] or pin!=binding['sha256'], 'fixed fixture import changed')
                 code=compile(body,binding['path'],'exec',dont_inherit=True)
                 if delivery:
                     product,_,product_pin=read_regular(source_path,4*1024*1024,uid=0,forbidden=0o6022)
-                    if product_pin!=binding['module_sha256']:
-                        raise Refused('fixed bootstrap product module changed')
+                    refuse_if(product_pin!=binding['module_sha256'], 'fixed bootstrap product module changed')
                     exec(compile(product,str(source_path),'exec',dont_inherit=True),module.__dict__)
                     module=types.ModuleType('sitecustomize')
                     module.__file__=binding['path']
@@ -157,6 +157,8 @@ def admit_worker(host,actor,raw,home,operation,env,maximum,binding=None,custom=F
     refuse_if(document.get('run_id')!=run or document.get('operation')!=operation or document.get('generation')!=1, 'async error worker exact retained request')
     arguments=document.get('arguments',{})
     refuse_if(type(arguments) is not dict, 'worker retained request arguments')
+    refuse_if(case==FOUNDATION and arguments!={'brief':'durable async admission','workspace_dir':str(home.parent/'workspace')},
+              'foundation worker original request arguments')
     refuse_if(case in WAITING and arguments!={'project_id':'project-1','max_steps':99}, 'waiting worker original slow request')
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
     vector=[native,'-m','unrest_harness.run_worker','--project-root',str(home),'--run-id',run,

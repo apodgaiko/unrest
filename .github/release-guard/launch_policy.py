@@ -80,8 +80,7 @@ def literal(unit,name):
 
 
 def pinned_body(argv,pin):
-    if len(argv)<3 or argv[1]!='-c' or hashlib.sha256(argv[2].encode('utf-8')).hexdigest()!=pin:
-        raise Refused('declared inline body bytes')
+    refuse_if(len(argv)<3 or argv[1]!='-c' or hashlib.sha256(argv[2].encode('utf-8')).hexdigest()!=pin, 'declared inline body bytes')
     return argv[2]
 
 
@@ -104,8 +103,7 @@ def render_string(node,substitutions):
 
 
 def check_expected(raw,value):
-    if raw['argv']!=list(value.argv) or raw['environment']!=dict(value.environment) or raw['cwd']!=value.cwd:
-        raise Refused('original launch operands differ from declaration')
+    refuse_if(raw['argv']!=list(value.argv) or raw['environment']!=dict(value.environment) or raw['cwd']!=value.cwd, 'original launch operands differ from declaration')
 
 
 def admit_expected(host,actor,raw,value,role,vector,script_pin=None,*,fields=None,**options):

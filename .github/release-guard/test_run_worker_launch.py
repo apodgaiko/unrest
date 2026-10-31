@@ -18,7 +18,8 @@ def test_error_worker_admission_is_exact_and_single(tmp_path,monkeypatch,case,mu
     run='run:'+'a'*64
     file=home/'.unrest/runs'/run[4:]/'request.json'
     file.parent.mkdir(parents=True)
-    file.write_text(json.dumps({'run_id':run,'generation':1,'operation':worker.CASES[case]}))
+    file.write_text(json.dumps({'run_id':run,'generation':1,'operation':worker.CASES[case],
+        'arguments':{'brief':'durable async admission','workspace_dir':str(home.parent/'workspace')} if case==worker.FOUNDATION else {}}))
     file.chmod(0o600)
     monkeypatch.setattr(worker,'repository_root',lambda *args:None)
     monkeypatch.setattr(worker,'native_digest',lambda path:'b'*64)
@@ -193,3 +194,60 @@ def test_waiting_worker_is_one_original_slow_request_without_descendant_authorit
     else:
         with pytest.raises(Refused,match='waiting worker original slow request'):
             worker.admit_worker(host,{},raw,home,'advance_project',env,1,custom=True)
+
+
+@pytest.mark.parametrize('mutation',(None,'brief','workspace','extra','operation','generation'))
+def test_foundation_worker_retains_one_original_start_without_descendant_authority(tmp_path,monkeypatch,mutation):
+    from source_observer import Observer
+    home=tmp_path/'pytest'/'case'/'.unrest'
+    workspace=home.parent/'workspace'
+    workspace.mkdir(parents=True)
+    request=home/'.unrest/runs'/('a'*64)/'request.json'
+    request.parent.mkdir(parents=True)
+    document={'run_id':'run:'+'a'*64,'generation':1,'operation':'start_project',
+              'arguments':{'brief':'durable async admission','workspace_dir':str(workspace)}}
+    if mutation=='brief':
+        document['arguments']['brief']='foreign'
+    elif mutation=='workspace':
+        document['arguments']['workspace_dir']=str(tmp_path/'foreign')
+    elif mutation=='extra':
+        document['arguments']['extra']='foreign'
+    elif mutation=='operation':
+        document['operation']='advance_project'
+    elif mutation=='generation':
+        document['generation']=2
+    request.write_text(json.dumps(document))
+    request.chmod(0o600)
+    checkout=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
+    import git_policy
+    acquire=git_policy.acquire
+    monkeypatch.setattr(git_policy,'acquire',lambda path,owned:acquire(path,owned,os.getuid()))
+    read=worker.read_regular
+    monkeypatch.setattr(worker,'read_regular',lambda path,*args,**kwargs:read(path,*args,**{**kwargs,'uid':os.getuid()}))
+    host=object.__new__(Observer)
+    host.case,host.serial,host.root_birth=worker.FOUNDATION,0,'root-birth'
+    host.meta={'checkout':str(checkout),'owned':str(tmp_path)}
+    host.binding={'entry':{'path':'/native','sha256':'a'*64}}
+    host.intents={}
+    host.root_only=lambda actor:None if actor['role']=='root' else (_ for _ in ()).throw(Refused('owner'))
+    actor={'role':'root','birth':'root-birth'}
+    env={'LANG':'C.UTF-8','PATH':os.defpath,'PYTHONPATH':str(checkout/'src'),
+         'UNREST_APPROVAL_RECOVERY':'0','UNREST_HOME':str(home),'UNREST_PROJECTS_DIR':str(home/'projects')}
+    raw={'argv':['/native','-m','unrest_harness.run_worker','--project-root',str(home),'--run-id',document['run_id'],
+        '--executor','unrest_harness.runtime_executor:execute','--custody-root-id','local:unrest-run-control','--generation','1'],
+        'executable':'/native','cwd':str(home),'environment':env,'stdin':None}
+    assert host.case not in worker.DESCENDANTS and host.case not in worker.WORKERS
+    if mutation:
+        with pytest.raises(Refused):
+            worker.proposal(host,actor,raw)
+        assert not host.intents
+    else:
+        answer=worker.proposal(host,actor,raw)
+        row=host.intents[answer['ticket']]
+        assert row['run_worker'] and row['execution_fixture'] is None
+        assert row['translated']==['/native','-I','-S',*raw['argv'][1:]]
+        with pytest.raises(Refused,match='exact case and count'):
+            worker.proposal(host,actor,raw)
+        host.finished=False
+        with pytest.raises(Refused,match='query authority'):
+            Observer.launch_owner(host,{'role':'fixed-inline','birth':'child','token':row['token'],'case':host.case,'body_ready':True})

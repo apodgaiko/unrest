@@ -1610,3 +1610,11 @@ environment, owned cwd and one session child. The injected spawn-failure
 parameter has no child declaration because it fails before constructing a
 process. Existing revocation, quarantine, wait, stream-close and thread-barrier
 assertions are unchanged; cleanup retains actual signal/status attribution.
+
+The foundation integration start-once case admits one production run-worker
+module with its original start-project operation, brief and owned sibling
+workspace. The retained request must have generation one; module, runtime
+executor, cwd, environment and run identity retain existing independent checks.
+It uses the byte-pinned foundation fixture and has no executor substitution,
+provider, descendant or extra worker authority. The original idempotency,
+terminal attach and single-project assertions are unchanged.
