@@ -407,15 +407,17 @@ def test_missing_thread_exit_stop_accepts_only_actual_group_sigkill(leader_raw,t
             emit(ledger,'tracer_terminal_wait',**row)
 
 
+@pytest.mark.parametrize('own_exit',(False,True))
 @pytest.mark.parametrize('leader_raw',(0,9,15,256))
-def test_thread_kill_terminal_before_group_exit_requires_the_later_actual_group_status(leader_raw):
+def test_thread_kill_terminal_before_group_exit_requires_the_later_actual_group_status(leader_raw,own_exit):
     ledger,root,leader=setup()
     thread_id=identity(102,root.pid,tgid=leader.pid)
     thread=Birth.read(thread_id)
     emit(ledger,'kernel_child',parent=leader.pid,child=thread.pid,event=3,identity=thread_id)
-    emit(ledger,'kernel_exit',pid=thread.pid,raw=0)
+    if own_exit:
+        emit(ledger,'kernel_exit',pid=thread.pid,raw=0)
     emit(ledger,'tracer_terminal_wait',pid=thread.pid,raw=9,normalized=-9,identity=thread_id)
-    assert ledger.process(thread).exit[1]==0
+    assert (ledger.process(thread).exit[1] if own_exit else ledger.process(thread).exit)==(0 if own_exit else None)
     assert ledger.process(thread).terminal[1:]==(9,-9)
     assert not ledger.reaped(leader,'child-token')
     assert ledger.process(leader).exit is None
@@ -430,7 +432,7 @@ def test_thread_kill_terminal_before_group_exit_requires_the_later_actual_group_
     assert ledger.reaped(leader,'child-token')
 
 
-@pytest.mark.parametrize('raw,own_exit',((9,False),(15,True),(256,True)))
+@pytest.mark.parametrize('raw,own_exit',((15,False),(0,False),(256,False),(15,True),(256,True)))
 def test_unjoined_thread_terminal_does_not_gain_a_general_status_exception(raw,own_exit):
     ledger,root,leader=setup()
     thread_id=identity(102,root.pid,tgid=leader.pid)
@@ -441,13 +443,15 @@ def test_unjoined_thread_terminal_does_not_gain_a_general_status_exception(raw,o
         emit(ledger,'tracer_terminal_wait',pid=102,raw=raw,normalized=__import__('os').waitstatus_to_exitcode(raw),identity=thread_id)
 
 
+@pytest.mark.parametrize('own_exit',(False,True))
 @pytest.mark.parametrize('mutation',('birth','group','duplicate'))
-def test_deferred_group_kill_keeps_exact_thread_identity_and_single_terminal(mutation):
+def test_deferred_group_kill_keeps_exact_thread_identity_and_single_terminal(mutation,own_exit):
     ledger,root,leader=setup()
     thread_id=identity(102,root.pid,tgid=leader.pid)
     thread=Birth.read(thread_id)
     emit(ledger,'kernel_child',parent=leader.pid,child=102,event=3,identity=thread_id)
-    emit(ledger,'kernel_exit',pid=102,raw=0)
+    if own_exit:
+        emit(ledger,'kernel_exit',pid=102,raw=0)
     if mutation=='group':
         ledger.process(thread).group=root
     elif mutation=='birth':
@@ -463,3 +467,15 @@ def test_excluded_socket_or_ring_record_is_never_source_completion(denied):
     ledger,_,_=setup()
     with pytest.raises(Refused,match='denied syscall'):
         emit(ledger,'denied_syscall_return',pid=100,syscall=41,denied=denied,return_code=-1)
+
+
+def test_pending_missing_thread_stop_cannot_close_with_failure_cleanup():
+    ledger,root,leader=setup()
+    thread_id=identity(102,root.pid,tgid=leader.pid)
+    thread=Birth.read(thread_id)
+    emit(ledger,'kernel_child',parent=leader.pid,child=thread.pid,event=3,identity=thread_id)
+    emit(ledger,'tracer_terminal_wait',pid=thread.pid,raw=9,normalized=-9,identity=thread_id)
+    assert ledger.process(thread).exit is None
+    with pytest.raises(Refused,match='failure cleanup cannot retire'):
+        emit(ledger,'failure_cleanup_tracer_wait',pid=leader.pid,raw=9,normalized=-9,identity=ledger.process(leader).identity)
+    assert not ledger.reaped(leader,'child-token')

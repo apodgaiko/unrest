@@ -19,7 +19,7 @@ import sys
 import time
 import traceback
 
-CASES = ('support-import-source','support-import-cached','private-network-positive','private-unix-path','private-unix-abstract','private-unix-prefix','private-process','product-order-resolver-positive', 'product-order-resolver-fallback', 'product-order-positive', 'product-order-fallback', 'fastpath-positive', 'compile-bytes', 'compile-current', 'positive', 'caught-process', 'caught-network', 'bad-case', 'bad-argv',
+CASES = ('thread-group-kill','support-import-source','support-import-cached','private-network-positive','private-unix-path','private-unix-abstract','private-unix-prefix','private-process','product-order-resolver-positive', 'product-order-resolver-fallback', 'product-order-positive', 'product-order-fallback', 'fastpath-positive', 'compile-bytes', 'compile-current', 'positive', 'caught-process', 'caught-network', 'bad-case', 'bad-argv',
          'bad-flags', 'bad-identity', 'bad-native', 'bad-entry', 'bad-nonce',
          'bad-token', 'bad-observer', 'extra-fd', 'bad-bootstrap', 'bad-environment', 'bad-cwd',
          'source-reject-control', 'source-reject-unknown', 'source-reject-profile')
@@ -209,8 +209,8 @@ def worker(case, binding, output):
         consume(trace)
         raw = result['root_parent_wait_raw']
         actual_ready = ledger.process(birth).stage
-        positive=case in ('support-import-source','support-import-cached','positive','fastpath-positive','product-order-positive','product-order-resolver-positive','private-network-positive')
-        expected_status = 0 if positive else 86 << 8
+        positive=case in ('thread-group-kill','support-import-source','support-import-cached','positive','fastpath-positive','product-order-positive','product-order-resolver-positive','private-network-positive')
+        expected_status = 9 if case=='thread-group-kill' else 0 if positive else 86 << 8
         if raw != expected_status or result['poison']:
             raise RuntimeError('native controlled return or trace refused')
         if case in BODIES:
@@ -230,6 +230,13 @@ def worker(case, binding, output):
                     or (observations[0]['source_compilations']<=0 if case=='support-import-source'
                         else observations[0]['source_compilations']!=0)):
                 raise RuntimeError('native trusted support cache consumption')
+        if case=='thread-group-kill':
+            members=[ledger.process(member) for member in ledger.children.get(birth,())]
+            if (len(members)!=2 or any(member.birth.tgid!=birth.pid or member.group!=birth
+                    or member.terminal is None or member.terminal[1:]!=(9,-9) for member in members)
+                    or ledger.process(birth).exit is None or ledger.process(birth).exit[1]!=9
+                    or ledger.process(birth).terminal[1:]!=(9,-9) or raw!=9):
+                raise RuntimeError('native actual thread-group kill closeout')
         if len([row for row in result['records'] if row['kind'] == 'exec_attempt']) != 1:
             raise RuntimeError('native caught forbidden launch reached kernel')
         with os.fdopen(output, 'w') as stream:

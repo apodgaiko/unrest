@@ -1618,3 +1618,15 @@ executor, cwd, environment and run identity retain existing independent checks.
 It uses the byte-pinned foundation fixture and has no executor substitution,
 provider, descendant or extra worker authority. The original idempotency,
 terminal attach and single-project assertions are unchanged.
+
+Linux SIGKILL can omit a nonleader PTRACE_EVENT_EXIT notification; the actual
+terminal wait remains required. A recorded thread birth with raw terminal
+status 9 may therefore await its exact group's later exit status. The leader
+must subsequently report the same SIGKILL status; a contradictory exit refuses
+closure. Missing per-thread pre-exit events remain absent, never synthesized.
+The process leader still requires its real exit, terminal and original-parent
+wait; pending thread data cannot retire it. Exact identity, signal attribution,
+normal completion and cleanup requirements remain unchanged. The bounded native
+control kills one actual two-thread group and accepts either documented event
+ordering; deterministic unit sequences also exercise omitted notifications.
+See https://man7.org/linux/man-pages/man2/ptrace.2.html, Death under ptrace.

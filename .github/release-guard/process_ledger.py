@@ -204,7 +204,7 @@ class Ledger:
                 status(raw, os.waitstatus_to_exitcode(raw))
                 refuse_if(process.exit is not None, 'ledger duplicate exit')
                 if birth.pid==birth.tgid and any(member.group==birth and member.terminal is not None
-                        and member.exit is not None and member.exit[1]!=member.terminal[1]
+                        and (member.exit is None or member.exit[1]!=member.terminal[1])
                         and member.terminal[1]!=raw for member in map(self.process,self.children.get(birth,()))):
                     raise Refused('ledger pending thread group status')
                 process.exit = (sequence, raw)
@@ -220,7 +220,7 @@ class Ledger:
                     group_terminal=(group_exit is not None and group_exit[1]==raw
                                     and (process.exit is not None or raw==9))
                     pending_group_kill=(birth.pid!=birth.tgid and process.group is not None and process.group.pid==birth.tgid
-                                        and raw==9 and process.exit is not None and group_exit is None)
+                                        and raw==9 and group_exit is None)
                     if (not (own_exit or group_terminal or pending_group_kill) or Birth.read(row.get('identity')) != birth):
                         raise Refused('ledger terminal birth or exit')
                 process.terminal = (sequence, raw, code)

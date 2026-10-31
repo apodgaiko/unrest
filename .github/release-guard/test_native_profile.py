@@ -25,6 +25,16 @@ BODIES = {
     'caught-process': 'import subprocess\ntry: subprocess.run(["/usr/bin/true"])\nexcept RuntimeError: print("REFUSAL_CAUGHT", flush=True)',
     'caught-network': 'import socket\ns=socket.socket()\ntry: s.bind(("127.0.0.1",0))\nexcept RuntimeError: print("REFUSAL_CAUGHT", flush=True)\nfinally: s.close()',
 }
+BODIES['thread-group-kill'] = """import os,signal,threading,time
+ready=[threading.Event(),threading.Event()]
+def run(event):
+ event.set()
+ time.sleep(30)
+for event in ready: threading.Thread(target=run,args=(event,),daemon=True).start()
+assert all(event.wait(2) for event in ready)
+print('NATIVE_BODY_OK',flush=True)
+os.kill(os.getpid(),signal.SIGKILL)
+"""
 SUPPORT_CASES=('support-import-source','support-import-cached')
 for name in SUPPORT_CASES:
     BODIES[name]="""import sys,time,json
