@@ -25,6 +25,21 @@ BODIES = {
     'caught-process': 'import subprocess\ntry: subprocess.run(["/usr/bin/true"])\nexcept RuntimeError: print("REFUSAL_CAUGHT", flush=True)',
     'caught-network': 'import socket\ns=socket.socket()\ntry: s.bind(("127.0.0.1",0))\nexcept RuntimeError: print("REFUSAL_CAUGHT", flush=True)\nfinally: s.close()',
 }
+SUPPORT_CASES=('support-import-source','support-import-cached')
+for name in SUPPORT_CASES:
+    BODIES[name]="""import sys,time,json
+from pathlib import Path
+support=str(Path(sys.executable).parents[2]/'support')+'/'
+compiled=[]
+def observe(event,args):
+ if event=='compile' and len(args)==2 and type(args[1]) is str and args[1].startswith(support):compiled.append(args[1])
+sys.addaudithook(observe)
+started=time.perf_counter()
+import source_entry
+elapsed=time.perf_counter()-started
+print('SUPPORT_IMPORT='+json.dumps({'seconds':elapsed,'source_compilations':len(compiled)}),flush=True)
+print('NATIVE_BODY_OK',flush=True)
+"""
 
 
 BODIES['private-network-positive'] = """

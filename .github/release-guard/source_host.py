@@ -58,6 +58,13 @@ def inventory(root):
     return hashlib.sha256(json.dumps(rows, separators=(',', ':')).encode()).hexdigest()
 
 
+def prepare_bytecode(binding, dependencies, log):
+    compiled=subprocess.run([binding['runtime']['path'],'-I','-S','-m','compileall','-q','-f','-j','1',
+        '--invalidation-mode','checked-hash',str(dependencies),binding['support']],capture_output=True,timeout=60,check=False)
+    log.write_bytes(compiled.stdout+compiled.stderr)
+    require(compiled.returncode==0,'dependency bytecode preparation failed; private log retained')
+
+
 def prepare(binding, checkout, root, git=False, public=False, native=False, extracted=None, distribution=False):
     from content_manifest import capture, encode
     require(subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD'], cwd=checkout).decode().strip()
@@ -98,11 +105,8 @@ def prepare(binding, checkout, root, git=False, public=False, native=False, extr
         require(target.is_relative_to(original) and (target.is_file() or target.is_dir())
                 and not (member.is_symlink() and target.is_dir()), 'dependency alias refused')
     shutil.copytree(original, dependencies, symlinks=False, ignore=shutil.ignore_patterns('__pycache__'))
-    compiled=subprocess.run([binding['runtime']['path'],'-I','-S','-m','compileall','-q','-j','1',
-        '--invalidation-mode','checked-hash',str(dependencies)],capture_output=True,timeout=60,check=False)
     log=Path(binding['profiles']).parent/('archive-private' if extracted is not None else 'source-private')/'dependency-bytecode.log'
-    log.write_bytes(compiled.stdout+compiled.stderr)
-    require(compiled.returncode==0,'dependency bytecode preparation failed; private log retained')
+    prepare_bytecode(binding,dependencies,log)
     if extracted is not None:
         shutil.copyfile(checkout/'tools/check_distribution.py',dependencies/'release_distribution_oracle.py')
     for member in [dependencies, *sorted(dependencies.rglob('*'))]:

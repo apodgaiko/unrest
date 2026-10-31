@@ -19,7 +19,7 @@ import sys
 import time
 import traceback
 
-CASES = ('private-network-positive','private-unix-path','private-unix-abstract','private-unix-prefix','private-process','product-order-resolver-positive', 'product-order-resolver-fallback', 'product-order-positive', 'product-order-fallback', 'fastpath-positive', 'compile-bytes', 'compile-current', 'positive', 'caught-process', 'caught-network', 'bad-case', 'bad-argv',
+CASES = ('support-import-source','support-import-cached','private-network-positive','private-unix-path','private-unix-abstract','private-unix-prefix','private-process','product-order-resolver-positive', 'product-order-resolver-fallback', 'product-order-positive', 'product-order-fallback', 'fastpath-positive', 'compile-bytes', 'compile-current', 'positive', 'caught-process', 'caught-network', 'bad-case', 'bad-argv',
          'bad-flags', 'bad-identity', 'bad-native', 'bad-entry', 'bad-nonce',
          'bad-token', 'bad-observer', 'extra-fd', 'bad-bootstrap', 'bad-environment', 'bad-cwd',
          'source-reject-control', 'source-reject-unknown', 'source-reject-profile')
@@ -209,7 +209,7 @@ def worker(case, binding, output):
         consume(trace)
         raw = result['root_parent_wait_raw']
         actual_ready = ledger.process(birth).stage
-        positive=case in ('positive','fastpath-positive','product-order-positive','product-order-resolver-positive','private-network-positive')
+        positive=case in ('support-import-source','support-import-cached','positive','fastpath-positive','product-order-positive','product-order-resolver-positive','private-network-positive')
         expected_status = 0 if positive else 86 << 8
         if raw != expected_status or result['poison']:
             raise RuntimeError('native controlled return or trace refused')
@@ -221,6 +221,15 @@ def worker(case, binding, output):
                 raise RuntimeError('native controlled body absent')
         elif b'NATIVE_BODY_OK' in captured or b'UNAPPROVED_BODY' in captured:
             raise RuntimeError('native unapproved body executed')
+        if case.startswith('support-import-'):
+            observations=[json.loads(line.removeprefix('SUPPORT_IMPORT=')) for line in captured.decode().splitlines()
+                if line.startswith('SUPPORT_IMPORT=')]
+            if (len(observations)!=1 or set(observations[0])!={'seconds','source_compilations'}
+                    or type(observations[0]['seconds']) is not float or not 0<observations[0]['seconds']<35
+                    or type(observations[0]['source_compilations']) is not int
+                    or (observations[0]['source_compilations']<=0 if case=='support-import-source'
+                        else observations[0]['source_compilations']!=0)):
+                raise RuntimeError('native trusted support cache consumption')
         if len([row for row in result['records'] if row['kind'] == 'exec_attempt']) != 1:
             raise RuntimeError('native caught forbidden launch reached kernel')
         with os.fdopen(output, 'w') as stream:
@@ -449,6 +458,22 @@ def main():
         filesystem_access(binding, profiles)
         ownership_controls(profiles)
         for case in CASES:
+            if case=='support-import-cached':
+                import importlib.util
+                from source_host import prepare_bytecode,inventory
+                dependencies=root/'cache-control-dependencies'
+                dependencies.mkdir(mode=0o755)
+                prepare_bytecode(binding,dependencies,profiles/'support-bytecode.log')
+                support=Path(binding['support'])
+                for source in sorted(support.glob('*.py')):
+                    cache=Path(importlib.util.cache_from_source(str(source)))
+                    body=cache.read_bytes()
+                    if (body[:4]!=importlib.util.MAGIC_NUMBER or int.from_bytes(body[4:8],'little')!=3
+                            or body[8:16]!=importlib.util.source_hash(source.read_bytes())
+                            or cache.stat().st_uid!=0 or cache.stat().st_mode&0o6022):
+                        raise RuntimeError('native trusted support cache preparation')
+                (profiles/'support-bytecode-inventory.json').write_text(json.dumps({'support_sha256':inventory(support),
+                    'claim':'trusted support import diagnostic only; final timing UNVERIFIED'},sort_keys=True))
             read, write = os.pipe()
             child = os.fork()
             if child == 0:

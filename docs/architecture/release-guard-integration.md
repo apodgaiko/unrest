@@ -1562,3 +1562,15 @@ barrier backend from `CompletionBarriers`, rather than the standard backend.
 Only that exact case selects that image; all other additional controlled owners
 retain their original standard image. Configuration variants, pair ceilings,
 READY, actual process identity, original-parent waits and cleanup are unchanged.
+
+Trusted preparation force-generates checked-hash bytecode for the locked
+dependency copy and guard support before their complete inventories and readonly
+mounts. This removes repeated parsing of guard imports; source tests, generated
+backends, candidate modules and extracted archive code remain outside these
+compilation targets. Checked-hash headers alone confer no trust: generation uses
+the pinned isolated interpreter and the resulting files retain measured custody.
+Native C still hashes and compiles the raw `native_entry.py` before any body.
+The paired native support-import controls retain READY, original-parent waits
+and every previous negative control; their elapsed values are diagnostic only.
+Full-source and child deadlines, timing assertions and final-timing UNVERIFIED
+disposition are unchanged.
