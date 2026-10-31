@@ -6,6 +6,8 @@ observer that admits launches and joins actual original-parent waits.
 from __future__ import annotations
 
 import base64
+import cProfile
+from contextlib import suppress
 import ctypes
 import hashlib
 import json
@@ -207,7 +209,7 @@ def worker(binding, metadata, raw_directory):
     from source_observer import Observer
     metadata = isolate(metadata, binding['support'], raw_directory)
     full=type(metadata['cases']) is dict
-    timeout=1200 if full else 100
+    timeout=300 if full else 100
     start_read, start_write = os.pipe()
     ready_read, ready_write = os.pipe()
     output_read, output_write = os.pipe()
@@ -242,7 +244,7 @@ def worker(binding, metadata, raw_directory):
             os.execve(vector[0], vector, environment)
         finally:
             os._exit(125)
-    observer, trace, result, failure = None, None, None, None
+    observer, trace, result, failure, profiler = None, None, None, None, cProfile.Profile()
     os.close(start_read)
     os.close(ready_write)
     os.close(output_write)
@@ -258,7 +260,7 @@ def worker(binding, metadata, raw_directory):
                            on_attached=lambda: observer.consume(trace), on_tick=observer.tick,on_exit=observer.before_exit,
                            resolve_exec=lambda *args: observer.resolve(trace, *args),
                            validate_wait=lambda *args: observer.validate_wait(trace, *args))
-        result = trace.run()
+        result = profiler.runcall(trace.run)
         observer.tick(trace)
         if full:
             from full_launch import finished
@@ -276,7 +278,9 @@ def worker(binding, metadata, raw_directory):
         raise
     finally:
         try:
-            record = {'schema': 'unrest.bootstrap-source-result.v5', 'wait_evidence': 'kernel-original-parent-terminal-wait4-and-explicit-namespace-init-wait', 'source_checkpoint_ready': bool(result is not None and result['root_parent_wait_raw']==0 and observer is not None and full and observer.finished and failure is None),
+            with suppress(Exception):
+                profiler.dump_stats(raw_directory/'observer-profile.pstats')
+            record = {'schema': 'unrest.bootstrap-source-result.v5', 'wait_evidence': 'kernel-original-parent-terminal-wait4-and-explicit-namespace-init-wait', 'source_checkpoint_ready': False,
                       'git_value_provenance_proven':False, 'release_certified': False, 'completed': [] if observer is None else observer.completed,
                       'result': result, 'failure': failure, 'metadata': metadata,
                       'kernel': [] if trace is None else trace.records,
@@ -419,7 +423,7 @@ def main():
                             '-in', str(packed), '-out', str(root / (raw_directory.name+'.cms')), binding['recipient']['path']], check=True)
             packed.unlink()
         require(not children(), 'source host cleanup residue')
-    require(success, 'original source integration did not complete')
+    require(success and False, 'diagnostic-only guard profile cannot certify or package')
     print('Guarded source integration passed; release certification: false', flush=True)
     return 0
 
