@@ -1602,3 +1602,11 @@ or submit an MCP completion. Scenario bytes remain opaque, bounded and acquired
 into exclusive read-only snapshots; the guard does not manufacture review
 outcomes or completion. All denial, malformed-identity, replay and owned-cleanup
 assertions execute in the unchanged source tests. No external review is invoked.
+
+Lease cleanup and registration regressions retain four exact local process
+declarations: SIGTERM-ignore, injected cleanup failure, and the spawn and
+registration race boundaries. Each binds its original inline program, empty
+environment, owned cwd and one session child. The injected spawn-failure
+parameter has no child declaration because it fails before constructing a
+process. Existing revocation, quarantine, wait, stream-close and thread-barrier
+assertions are unchanged; cleanup retains actual signal/status attribution.

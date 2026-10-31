@@ -106,17 +106,17 @@ def test_literal_owned_client_leaves_keep_exact_original_body_and_parent(case,mu
         assert calls[0][2]==('session-inline' if case.endswith('::test_sigterm_ignoring_owned_process_is_killed_and_reaped') else 'fixed-inline')
 
 
+@pytest.mark.parametrize('case',readiness.LEASES)
 @pytest.mark.parametrize('mutation',[None,'body','args','env','cwd','alias','owner','stdin','second'])
-def test_lease_ignoring_child_is_exact_owned_session_with_one_constructor(tmp_path,monkeypatch,mutation):
+def test_lease_child_is_exact_owned_session_with_one_constructor(tmp_path,monkeypatch,mutation,case):
     import hashlib
     import os
     from source_observer import Observer
-    case=readiness.LEASE
     unit=ast.parse((ROOT/case.split('::')[0]).read_bytes())
-    function=next(node for node in unit.body if isinstance(node,ast.FunctionDef) and node.name==case.split('::')[1])
-    call=next(node for node in ast.walk(function) if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute)
-              and node.func.attr=='launch_local')
-    body=ast.literal_eval(call.args[0].elts[2])
+    function=next(node for node in unit.body if isinstance(node,ast.FunctionDef) and node.name==case.split('::')[1].split('[')[0])
+    argv=next(node for node in ast.walk(function) if isinstance(node,ast.List) and len(node.elts)==3
+              and isinstance(node.elts[1],ast.Constant) and node.elts[1].value=='-c')
+    body=ast.literal_eval(argv.elts[2])
     assert hashlib.sha256(body.encode()).hexdigest()==readiness.PROGRAM_PINS[case]
     monkeypatch.setattr(readiness,'OWNER',os.getuid())
     cwd=tmp_path/'pytest'/'lease'
@@ -160,3 +160,11 @@ def test_lease_ignoring_child_is_exact_owned_session_with_one_constructor(tmp_pa
         with pytest.raises(Refused):
             readiness.proposal(host,actor,raw)
         assert not host.intents
+
+
+def test_injected_spawn_failure_has_no_child_declaration():
+    case='tests/test_experimental_lease.py::test_close_waits_for_launch_registration[spawn_failure]'
+    assert case not in readiness.LEASES and case not in readiness.CASES
+    host=SimpleNamespace(case=case,root_only=lambda actor:None)
+    with pytest.raises(Refused,match='original leaf'):
+        readiness.proposal(host,{'role':'root'},{'stdin':None})
