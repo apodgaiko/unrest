@@ -16,6 +16,7 @@ from launch_policy import source_unit, build_expected, admit_expected
 from owned_fixture import acquire, retain
 from content_manifest import Refused, native_digest, read_regular, refuse_if
 from controlled_cases import custody as CONTROLLED_CASES
+from controlled_owners import IMMUTABLE
 from cohort_cases import CASES as COHORT_CASES, EXTRA as COHORT_EXTRA
 from completion_roles import CASES as ROLE_CASES, SOURCE as ROLE_SOURCE, ROOT_QUERIES, DEFECT as ROLE_DEFECT, NO_GIT, schedule as role_schedule, root as role_root, actor_slot
 from composed_cases import CASES as COMPOSED_CASES, queries as composed_queries
@@ -583,6 +584,10 @@ def custody_command(case, argv, cwd, owned):
     refuse_if(type(cwd) is not str or str(Path(cwd).resolve()) != cwd or not Path(cwd).is_relative_to(owned/'pytest'), 'custody Git owned repository')
     refuse_if(argv[:len(CUSTODY_PREFIX)] != CUSTODY_PREFIX, 'custody Git literal executable and prefix')
     args = argv[len(CUSTODY_PREFIX):]
+    if case in IMMUTABLE:
+        refuse_if(Path(cwd).name!='candidate' or Path(cwd).parent.parent!=owned/'pytest'
+            or args not in (('init','--initial-branch=main','--object-format=sha1'),('add','.'),
+                           ('commit','-m','base'),('rev-parse','HEAD')), 'immutable custody original commands')
     if args not in (*CUSTODY_FIXED,*COHORT_EXTRA.get(case,())):
         if args[:2] == ('add','--'):
             refuse_if(args[2:] not in (('a',),('b',),('lane_a.txt',),('lane_b.txt',)), 'custody Git exact authored scope')
@@ -601,9 +606,11 @@ def custody_repository(cwd, owned):
 def custody_launch(host,actor,result,kind,raw):
     from cohort_controller import parent
     parent(host,actor)
+    if host.case in IMMUTABLE:
+        source_unit(Path(host.meta['checkout']),'tests/test_immutable_custody.py','b66b4f0e46218408367937477f5e7dfe07ea687d67f5eae43fd7036f2009066d')
     prior = [v for v in host.intents.values() if v['case'] == host.case and v['role'] == 'git-custody']
     from cohort_controller import CASES as CRASH
-    maximum=4 if host.case in CRASH else COHORT_CASES[host.case][1] if host.case in COHORT_CASES else 128
+    maximum=4 if host.case in (*CRASH,*IMMUTABLE) else COHORT_CASES[host.case][1] if host.case in COHORT_CASES else 128
     refuse_if(len(prior) >= maximum, 'custody Git finite case command bound')
     custody_repository(result.cwd,Path(host.meta['owned']))
     return issue(host,actor,raw,result,CUSTODY_ENVIRONMENT,role='git-custody',maximum=maximum,

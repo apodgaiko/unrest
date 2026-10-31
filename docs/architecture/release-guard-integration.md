@@ -1630,3 +1630,10 @@ normal completion and cleanup requirements remain unchanged. The bounded native
 control kills one actual two-thread group and accepts either documented event
 ordering; deterministic unit sequences also exercise omitted notifications.
 See https://man7.org/linux/man-pages/man2/ptrace.2.html, Death under ptrace.
+
+The two immutable-custody persistence cases have Git-only declarations: exactly
+four seed commands (SHA1/main initialization, add, base commit and HEAD query)
+in the owned sibling candidate directory, with the stock fixed environment and
+a four-launch ceiling. Their source bytes are pinned at admission. They gain no
+controlled backend, ACP, other fixture command, hook or remote authority. Original
+observation, fsync, immutable-record and substitution assertions are unchanged.

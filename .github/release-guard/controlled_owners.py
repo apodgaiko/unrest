@@ -62,7 +62,10 @@ RESOURCE_NEGATIVES=tuple(RESOURCES+'::test_resource_refusals_have_no_dispatch['+
 DRAINS=(*(DRAIN+'::test_persistent_fault_after_backend_receipt_drains['+kind+']' for kind in ('journal','state','completion','consume','combined','cancel','timeout','refusal')),
     *(DRAIN+'::test_failed_or_unsent_owner_revokes_while_received_sibling_drains['+kind+']' for kind in ('timeout','refusal','unsent')),
     DRAIN+'::test_campaign_status_write_failure_cannot_report_success')
-GIT_CASES=(*PRIORITIES,*TTLS,*DRIFTS,*RESOURCE_NEGATIVES,*DRAINS)
+IMMUTABLE=tuple('tests/test_immutable_custody.py::test_'+name for name in (
+    'persist_reuses_digest_without_caching_observation_or_projection',
+    'persist_refuses_manifest_substitution_before_publication'))
+GIT_CASES=(*PRIORITIES,*TTLS,*DRIFTS,*RESOURCE_NEGATIVES,*DRAINS,*IMMUTABLE)
 
 
 def selection(case):
