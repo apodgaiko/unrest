@@ -16,9 +16,12 @@ verified_by:
   - tests/test_cli.py
   - tests/test_coordinator.py
   - tests/test_documentation_contract.py
+  - tests/test_run_receipt_golden.py
+  - tests/test_run_stop_custody.py
   - tests/test_runtime_observability.py
   - tests/test_terminal_review.py
-related_decisions: []
+related_decisions:
+  - ADR-0500
 schema_version: 1
 ---
 
@@ -502,6 +505,72 @@ acquisition/body `BaseException`, including cancellation, takes precedence over
 cleanup failures. Without an operation failure, the first cleanup failure is
 exposed. A cleanup exception alone is not evidence of a descriptor leak.
 
+## 10. Run stop custody and terminal receipt reference
+
+[ADR-0500](../decisions/ADR-0500-run-stop-custody.md) bounds manual
+`RunControl.cancel_run`. It is the only stop authority; there is no controller
+`killpg`, SIGKILL escalation, wait or watchdog.
+
+- **Pre-journal.** A malformed run id, reason or key, an unknown run, a request
+  without admission event, or a corrupt request/event chain fails before a
+  `cancel_run` journal record exists.
+- **Convergence.** The journal effect and reconcile are one convergence under
+  the per-run lock, decided on an event snapshot. It never calls
+  `inspect_run`, `project_inspector`, the admission lock or a resource lock
+  while the run lock is held, and never re-enters the run lock. A terminal run
+  returns its summary before stop validation. At `draining` no request is
+  recorded and no signal is sent.
+- **At most one signal per binding.** A marked request
+  (`stop_custody: 1`) precedes signalling. For the single durable `running`
+  binding, a create-only `stop/<binding>/attempt.json` is published (temporary
+  file plus `link`, then read back) before the one `SIGTERM`; the outcome is
+  recorded in `delivered.json` (`accepted`, `esrch` or `eperm`). Any existing
+  attempt suppresses every later automatic signal, whatever key or controller
+  calls. An attempt without delivery is `ambiguous` and is never resent.
+  Publication errors never fall through to the signal.
+- **Owner identity** remains the PID/session/cursor predicate, kept only for
+  manual compatibility (`pid_session_only`). It is vulnerable to PID reuse and
+  check-to-signal races and is not process identity proof. With owner proof
+  false the controller settles `owner_unproven`; that releases admission but
+  proves neither drain nor death.
+- **EPERM.** A recorded `eperm` holds every controller and recovery settlement
+  until `getsid` reports no such process or another session. Cursor mismatch
+  and `getsid` errors are not death proof.
+- **Settlement classes** are written only on terminal events of a stop prefix:
+  `never_dispatched`, `owner_reported`, `unrequested_owner_cancel`,
+  `owner_failed`, `owner_completed`, `owner_unproven`. Owner stop paths first
+  check that the caller is the bound owner (PID and owner id) and fail with
+  `integrity_error` without any mutation otherwise. `inspect_stop` returns a
+  read-only `StopStatus`; only `never_dispatched` gives
+  `replay_clearance: clear`.
+  For compatibility with v0.4.7, a direct `worker_cancelled` call after
+  `effect_complete` without a stop prefix returns `attention` without a stop
+  settlement class; `inspect_stop` reports `not_applicable`.
+- **Pending terminal receipts.** Before a terminal writer issues its own
+  receipt (finalize, settle, cancel convergence, recovery after failed
+  reattach), the four receipts the current prefix can produce are probed and
+  exactly one valid, transition-compatible receipt is adopted by digest:
+  custody is repaired, then the terminal event is appended with
+  `terminal_source: pending_receipt`. Several candidates or a read/verify
+  failure are a typed conflict without writes. Progress writers are not fenced;
+  a receipt superseded by later progress stays unreferenced. **The terminal run
+  event is the sole authoritative reference to a run receipt**; no consumer may
+  enumerate run receipts or custody to derive an outcome. Transitions are
+  validated before a receipt is published, so one constructor version never
+  publishes two receipts with one `receipt_id`. Pre-existing duplicates are not
+  migrated. The receipt constructor and catalogue are unchanged; golden
+  digests bind them to v0.4.7.
+- **Recovery** isolates only the typed pending-receipt and stop-custody
+  conflicts in `RunControl.recovery_blocked`, without inventing a terminal
+  outcome. Corrupt requests or event chains still fail recovery as before.
+  Recovery never signals and branches on the latest state, including the
+  `draining` stop actor.
+- **Fault model.** Process crash only. Machine crash, power loss, tree
+  rollback and live mixed-version controllers or workers are outside the
+  guarantee. Activation is cold, after quiescence of earlier controllers and
+  workers. A writer unaware of STOP-A1 that terminates a marked stop prefix
+  without a class is reported by `inspect_stop` as `integrity_error`.
+
 ## Change protocol
 
 State transition, task selection, gate, resume, terminal-review, or storage
@@ -523,7 +592,8 @@ At a completed implementation slice, also run the milestone checks in the root
 
 ## Related decisions
 
-No accepted repository ADR currently changes this architecture.
+- [ADR-0500](../decisions/ADR-0500-run-stop-custody.md): bounded manual run
+  cancellation and pending terminal receipt recovery.
 
 ## Known limitations
 

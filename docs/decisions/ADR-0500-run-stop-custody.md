@@ -1,8 +1,8 @@
-# ADR-0306: Bound manual run cancellation and pending terminal receipt recovery
+# ADR-0500: Bound manual run cancellation and pending terminal receipt recovery
 
 ## Record metadata
 
-id: ADR-0306
+id: ADR-0500
 status: accepted
 date: 2026-11-03
 task_ids:

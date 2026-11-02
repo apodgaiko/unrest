@@ -24,7 +24,7 @@ Provide the canonical registry for repository ADR IDs and accepted status.
 - [ADR-0303: Govern isolated child work and parent-only integration](ADR-0303-workspace.md)
 - [ADR-0304: Govern offline evolution, exact promotion, and rollback](ADR-0304-evolution.md)
 - [ADR-0305: Preserve the v0.2 compatibility and rollback perimeter](ADR-0305-compatibility.md)
-- [ADR-0306: Bound manual run cancellation and pending terminal receipt recovery](ADR-0306-run-stop-custody.md)
+- [ADR-0500: Bound manual run cancellation and pending terminal receipt recovery](ADR-0500-run-stop-custody.md)
 
 ## Public contract
 
