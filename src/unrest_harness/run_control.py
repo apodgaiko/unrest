@@ -797,6 +797,9 @@ class RunControl:
         return tuple(recovered)
 
     def worker_start(self, run_id: str, *, pid: int, pgid: int, generation: int) -> bool:
+        # Equality alone admits aliases such as True or 1.0; require the native int.
+        if type(generation) is not int or generation <= 0:
+            _fail("invalid_argument", "worker generation must be a positive integer")
         request = self._load_request(run_id)
         if generation != request.generation:
             _fail("stale", "worker generation does not match admission")
