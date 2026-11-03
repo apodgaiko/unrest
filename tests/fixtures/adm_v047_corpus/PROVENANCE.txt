@@ -1,0 +1,18 @@
+ADM-R legacy admission corpus (ADR-0502, VAL-ADM-16)
+
+Origin: produced once by the v0.4.7 run-control source at commit
+b307cc619cc042f47161ba0b22fa4b5475729fff (tag v0.4.7), extracted from git
+blobs, in an isolated single-process generator with spawn recorded and every
+process, signal and network primitive refused. The generator and extracted
+source are not part of this repository.
+
+Contents: runs/** (26 admitted request.json files, their first queued events
+and 26 idempotency index records) and manifest.json, copied byte-for-byte.
+expected_token values are the run ids returned by the baseline submit_run.
+Cases the baseline refused (for example max_steps 0, True and 1.0) are
+recorded in manifest.json only; no request was persisted for them.
+
+Limits: admission-only (every run is queued). No running or terminal trees,
+foundation identities, result, private, stop or runtime-cursor records. The
+start_project resource_key depends on the generating host and working
+directory and is not a portable oracle. Not evidence about real user trees.

@@ -269,6 +269,26 @@ class _Event:
     details: Mapping[str, Any]
 
 
+@dataclass(frozen=True)
+class _Claim:
+    """One retained request: committed (``latest`` set) or an incomplete admission."""
+
+    request: _Request
+    key_token: str
+    latest: str | None
+
+
+@dataclass(frozen=True)
+class _AdmissionView:
+    """Effect-free classification of every retained claim (ADR-0502)."""
+
+    claims: Mapping[str, _Claim]
+    groups: Mapping[str, tuple[str, ...]]
+    indexed: Mapping[str, str]
+    quarantined: frozenset[str]
+    held_resources: frozenset[str]
+
+
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
@@ -638,8 +658,9 @@ class RunControl:
         for path in (self.durable_root, self.runtime_root, self.runtime_root / "locks"):
             path.mkdir(mode=0o700, parents=True, exist_ok=True)
         self.foundation = FoundationStore(self.project_root, custody_root_id=custody_root_id)
-        # Runs skipped by the latest recover() pass because of a typed STOP-A1
-        # conflict, as (run_id, code); no terminal outcome is invented for them.
+        # Report of the latest recover() pass as sorted (run_id, code) pairs:
+        # typed STOP-A1 conflicts, held/quarantined admissions and halted work
+        # (ADR-0500, ADR-0502). No terminal outcome is invented for them.
         self.recovery_blocked: tuple[tuple[str, str], ...] = ()
         if recover:
             self.recover()
@@ -670,21 +691,33 @@ class RunControl:
         run_token = request_fingerprint.removeprefix(_DIGEST_PREFIX)
         run_id = f"run:{run_token}"
         with _exclusive_lock(self.runtime_root / "admission.lock"):
-            existing_id = self._idempotency_lookup(idempotency_key)
-            if existing_id is not None:
-                if existing_id != run_id:
+            # ADR-0502: classify every retained claim before deciding; the
+            # index is a projection and never short-cuts this preflight.
+            view = self._admission_view()
+            members = view.groups.get(_safe_token(idempotency_key), ())
+            if len(members) > 1:
+                _fail("admission_key_conflict", "idempotency key has conflicting admissions")
+            if members:
+                bound = view.claims[members[0]]
+                if bound.latest is None:
+                    if bound.request.run_id == run_id:
+                        _fail("admission_incomplete", "run admission is incomplete")
+                    _fail("conflict", "idempotency key is held by an incomplete admission")
+                if bound.request.run_id != run_id:
                     _fail("conflict", "idempotency key was used for another request")
-                return self._admission_summary(existing_id)
-            for active in self._active_summaries():
-                if active.resource_key == resource_key:
+                # Read-only exact dedupe: the original receipt, without any
+                # write, index repair, project inspection or launch.
+                return self._admission_summary(run_id)
+            if resource_key in view.held_resources:
+                _fail("admission_resource_blocked", "resource is held by an unresolved admission")
+            for claim in view.claims.values():
+                if claim.latest in _ACTIVE_RUN_STATES and claim.request.resource_key == resource_key:
                     _fail("busy", "resource already has an active run")
+            self._require_admissible_run_dir(run_id)
             created_at = _utc_now()
             issuer_identity, run_identity, control_identity = self._construct_identities(
                 run_id, operation, idempotency_key, request_fingerprint
             )
-            self.foundation.append_identity(issuer_identity)
-            self.foundation.append_identity(run_identity)
-            self.foundation.append_identity(control_identity)
             request = _Request(
                 run_id=run_id,
                 operation=operation,
@@ -698,9 +731,34 @@ class RunControl:
                 issuer_identity_digest=issuer_identity.digest,
                 generation=1,
             )
-            self._append_request(request)
-            self._append_event(run_id, "queued", {"owner_id": self.owner_id})
-            self._append_idempotency(idempotency_key, run_id)
+            # Stage outcomes (ADR-0502 Decision 7). The first queued event is the
+            # commit fact: before its helper runs nothing is committed, once it
+            # is entered the outcome is unknown, and only after it returns is a
+            # failed index write a committed projection failure. Errors are
+            # raised outside the handler so no OSError detail is chained.
+            stage_failure: tuple[str, str] | None = None
+            try:
+                self.foundation.append_identity(issuer_identity)
+                self.foundation.append_identity(run_identity)
+                self.foundation.append_identity(control_identity)
+                self._append_request(request)
+            except OSError:
+                stage_failure = ("admission_io_not_committed", "admission was not committed")
+            if stage_failure is None:
+                try:
+                    self._append_event(run_id, "queued", {"owner_id": self.owner_id})
+                except OSError:
+                    stage_failure = ("admission_io_unknown", "admission outcome is unknown")
+            if stage_failure is None:
+                try:
+                    self._append_idempotency(idempotency_key, run_id)
+                except OSError:
+                    stage_failure = (
+                        "admission_committed_io_error",
+                        "admission committed; projection write failed",
+                    )
+            if stage_failure is not None:
+                _fail(*stage_failure)
             admitted = self._admission_summary(run_id)
             with _exclusive_lock(self._run_lock(run_id)):
                 if self.inspect_run(run_id).state == "queued":
@@ -711,7 +769,7 @@ class RunControl:
         request = self._load_request(run_id)
         events = self._load_events(run_id)
         if not events:
-            _fail("integrity_error", "run has no admission event")
+            self._reject_empty_stream(run_id)
         latest = events[-1]
         result: Mapping[str, Any] | None = None
         result_path = self._run_dir(run_id) / "result.json"
@@ -762,7 +820,16 @@ class RunControl:
         request: Mapping[str, Any],
     ) -> Mapping[str, Any]:
         """Route attached steering without copying its private body into run state."""
-        summary = self.inspect_run(run_id)
+        incomplete = False
+        try:
+            summary = self.inspect_run(run_id)
+        except RunControlError as exc:
+            # The api adapter forwards this code unmapped; keep it stable.
+            if exc.code != "admission_incomplete":
+                raise
+            incomplete = True
+        if incomplete:
+            _fail("invalid_transition", "run is not an active advance_project or end_mission")
         admitted = self._load_request(run_id)
         if (
             admitted.operation not in {"advance_project", "end_mission"}
@@ -1028,39 +1095,121 @@ class RunControl:
             self._controller_settle_unlocked(run_id)
 
     def recover(self) -> tuple[RunSummary, ...]:
+        """One recovery pass (ADR-0500, ADR-0502).
+
+        Phase A classifies every retained claim without effects; Phase B creates
+        missing index projections; Phase C runs per-run actions. The admission
+        lock is held throughout, so one snapshot decides the whole pass. An
+        attributable repair or action I/O failure halts the remaining work of
+        this pass only; a normal return with a non-empty report is partial.
+        """
         recovered: list[RunSummary] = []
-        blocked: list[tuple[str, str]] = []
+        entries: dict[tuple[str, int], str] = {}
+        self.recovery_blocked = ()
+
+        def report(run_id: str, rank: int, code: str) -> None:
+            entries.setdefault((run_id, rank), code)
+            # Published at once: an unexpected exception leaves what is known.
+            self.recovery_blocked = tuple(
+                (name, entries[name, order]) for name, order in sorted(entries)
+            )
+
         with _local_workers_lock:
             for key, worker in list(_local_workers.items()):
                 if key[0] == str(self.project_root.resolve()) and worker.poll() is not None:
                     del _local_workers[key]
         with _exclusive_lock(self.runtime_root / "admission.lock"):
-            for request in self._all_requests():
-                with _exclusive_lock(self._run_lock(request.run_id)):
-                    summary = self.inspect_run(request.run_id)
+            view = self._admission_view()
+            for run_id, claim in view.claims.items():
+                if run_id in view.quarantined:
+                    report(run_id, 0, "admission_key_conflict")
+                elif claim.latest is None:
+                    report(run_id, 0, "admission_incomplete")
+            halted = False
+            remaining: list[str] = []
+            repairs = [
+                run_id
+                for run_id, claim in view.claims.items()
+                if claim.latest is not None
+                and run_id not in view.quarantined
+                and claim.key_token not in view.indexed
+            ]
+            for position, run_id in enumerate(repairs):
+                code = self._repair_index(view.claims[run_id].request)
+                if code is not None:
+                    report(run_id, 1, code)
+                    halted = True
+                    remaining.extend(repairs[position + 1:])
+                    break
+            processed: set[str] = set()
+            for run_id, claim in view.claims.items():
+                if halted:
+                    break
+                if claim.latest is None:
+                    continue
+                processed.add(run_id)
+                request = claim.request
+                with _exclusive_lock(self._run_lock(run_id)):
+                    summary = self.inspect_run(run_id)
                     if summary.state in TERMINAL_RUN_STATES:
                         continue
-                    cursor = self._load_worker_cursor(request.run_id)
+                    cursor = self._load_worker_cursor(run_id)
                     if cursor is not None and self._cursor_matches(request, cursor):
                         if _pid_live(int(cursor["pid"])):
                             recovered.append(summary)
                             continue
+                    quarantined = run_id in view.quarantined
+                    gated = quarantined or request.resource_key in view.held_resources
+                    action_failed = False
                     try:
-                        self._recover_run_unlocked(request)
+                        withheld = self._recover_run_unlocked(request, dispatch=not gated)
+                        current = self.inspect_run(run_id)
                     except (PendingReceiptConflict, StopCustodyInvalid) as exc:
-                        # Isolate only the new typed STOP-A1 conflicts; other
-                        # corruption keeps failing recovery as before.
-                        blocked.append((request.run_id, exc.recovery_code))
+                        # Typed STOP-A1 conflicts are isolated and the pass goes on.
+                        report(run_id, 1, exc.recovery_code)
                         continue
-                    recovered.append(self.inspect_run(request.run_id))
-        self.recovery_blocked = tuple(blocked)
+                    except OSError:
+                        # Attributed to this run inside its lock; the outcome of
+                        # the action is unknown and the rest of the pass halts.
+                        action_failed = True
+                    if action_failed:
+                        report(run_id, 1, "recovery_io_unknown")
+                        halted = True
+                        continue
+                    if withheld and not quarantined:
+                        report(run_id, 1, "admission_resource_blocked")
+                    recovered.append(current)
+            if halted:
+                remaining.extend(
+                    run_id
+                    for run_id, claim in view.claims.items()
+                    if claim.latest is not None
+                    and claim.latest not in TERMINAL_RUN_STATES
+                    and run_id not in processed
+                )
+                for run_id in remaining:
+                    report(run_id, 1, "recovery_halted")
         return tuple(recovered)
 
-    def _recover_run_unlocked(self, request: _Request) -> None:
+    def _repair_index(self, request: _Request) -> str | None:
+        """Create a missing index projection with baseline bytes (recover only)."""
+        code: str | None = None
+        try:
+            self._append_idempotency(request.idempotency_key, request.run_id)
+        except RunControlError as exc:
+            if exc.code != "conflict":
+                raise
+            code = "admission_key_conflict"
+        except OSError:
+            code = "admission_committed_io_error"
+        return code
+
+    def _recover_run_unlocked(self, request: _Request, *, dispatch: bool = True) -> bool:
+        """Recover one run under its lock; True when a queued dispatch was withheld."""
         run_id = request.run_id
         # W4: a run that failed reattach first adopts a committed receipt.
         if self._reconcile_pending_terminal_unlocked(run_id) == "adopted":
-            return
+            return False
         events = self._load_events(run_id)
         binding = _single_running(events)
         records = self._read_stop_records_unlocked(run_id, events)
@@ -1068,7 +1217,7 @@ class RunControl:
             pid = binding.details.get("pid")
             if type(pid) is not int or not _death_proven(pid):
                 # EPERM hold: without independent death proof nothing is mutated.
-                return
+                return False
         latest = events[-1]
         stop_prefix = _is_stop_prefix(events)
         unproven = "owner_unproven" if stop_prefix else None
@@ -1079,6 +1228,9 @@ class RunControl:
             }
         }
         if latest.state == "queued":
+            if not dispatch:
+                # Quarantine or a held resource denies only the new dispatch.
+                return True
             self._spawn(request)
         elif latest.state == "cancel_requested":
             self._controller_settle_unlocked(run_id)
@@ -1098,6 +1250,7 @@ class RunControl:
             self._finalize_terminal_unlocked(
                 run_id, "attention", error=ownership_lost, settlement=unproven
             )
+        return False
 
     def worker_start(self, run_id: str, *, pid: int, pgid: int, generation: int) -> bool:
         # Equality alone admits aliases such as True or 1.0; require the native int.
@@ -1354,6 +1507,10 @@ class RunControl:
         value = self._read_json(path)
         if not isinstance(value, Mapping) or value.get("run_id") != run_id:
             _fail("integrity_error", "run request is invalid")
+        return self._request_from_value(run_id, value)
+
+    @staticmethod
+    def _request_from_value(run_id: str, value: Mapping[str, Any]) -> _Request:
         try:
             return _Request(
                 run_id=str(value["run_id"]),
@@ -1371,23 +1528,192 @@ class RunControl:
         except (KeyError, TypeError, ValueError) as exc:
             raise RunControlError("integrity_error", "run request is invalid") from exc
 
-    def _all_requests(self) -> tuple[_Request, ...]:
-        requests: list[_Request] = []
-        for path in sorted(self.durable_root.glob("*/request.json")):
+    def _validated_request(self, token: str, value: Any) -> _Request:
+        """V1-V5 of ADR-0502 on the raw stored fields, before any coercion."""
+        valid = _HEX_TOKEN.fullmatch(token) is not None and isinstance(value, Mapping)
+        if valid:
+            operation = value.get("operation")
+            key = value.get("idempotency_key")
+            arguments = value.get("arguments")
+            valid = (
+                value.get("run_id") == f"run:{token}"
+                and isinstance(operation, str)
+                and operation in RUN_OPERATIONS
+                and isinstance(key, str)
+                and bool(key)
+                and isinstance(arguments, dict)
+            )
+        if valid:
+            # The baseline fingerprint over the stored values: no normalization,
+            # and fields outside it (created_at, resource_key) are not bound.
             try:
-                value = self._read_json(path)
-                if isinstance(value, Mapping) and isinstance(value.get("run_id"), str):
-                    requests.append(self._load_request(value["run_id"]))
+                fingerprint = hashlib.sha256(
+                    _json_bytes(
+                        {
+                            "arguments": arguments,
+                            "idempotency_key": key,
+                            "operation": operation,
+                            "schema_version": 1,
+                        }
+                    )
+                ).hexdigest()
             except RunControlError:
-                raise
-        return tuple(requests)
+                fingerprint = ""
+            valid = fingerprint == token
+        if not valid:
+            _fail("integrity_error", "run request is invalid")
+        return self._request_from_value(f"run:{token}", value)
 
-    def _active_summaries(self) -> tuple[RunSummary, ...]:
-        return tuple(
-            summary
-            for summary in (self.inspect_run(request.run_id) for request in self._all_requests())
-            if summary.state in _ACTIVE_RUN_STATES
+    def _admission_events(self, run_id: str) -> tuple[_Event, ...]:
+        """Read a stream lock-free; confirm an apparent defect under the run lock.
+
+        A directory listing may miss an event linked concurrently by a worker,
+        so a suspicious stream is re-read once under its run lock (admission
+        lock already held) before it is declared corrupt.
+        """
+        try:
+            return self._load_events(run_id)
+        except RunControlError:
+            pass
+        with _exclusive_lock(self._run_lock(run_id)):
+            return self._load_events(run_id)
+
+    @staticmethod
+    def _entry_exists(path: Path) -> bool:
+        failed = False
+        try:
+            path.lstat()
+        except FileNotFoundError:
+            return False
+        except OSError:
+            failed = True
+        if failed:
+            _fail("integrity_error", "run record is invalid")
+        return True
+
+    @staticmethod
+    def _index_target(path: Path, key_token: str) -> str:
+        """Run id of an exactly canonical index record (I1/I2), else corruption."""
+        content: bytes | None = None
+        try:
+            if stat.S_ISREG(path.lstat().st_mode):
+                content = path.read_bytes()
+        except OSError:
+            content = None
+        target: Any = None
+        if content is not None:
+            try:
+                value = json.loads(content)
+            except (ValueError, UnicodeError):
+                value = None
+            if isinstance(value, dict):
+                target = value.get("run_id")
+        if not isinstance(target, str) or content != _json_bytes(
+            {"key_digest": _DIGEST_PREFIX + key_token, "run_id": target, "schema_version": 1}
+        ):
+            _fail("integrity_error", "idempotency record is invalid")
+        return target
+
+    def _require_recognizable_incomplete(self, run_id: str, *, indexed: bool) -> None:
+        """X1-X5: an empty stream with any later evidence is corruption."""
+        directory = self._run_dir(run_id)
+        evidence = (
+            directory / "result.json",
+            directory / "private",
+            directory / "stop",
+            self.runtime_root / f"{_safe_token(run_id)}.worker.json",
         )
+        if indexed or any(self._entry_exists(path) for path in evidence):
+            _fail("integrity_error", "run has no admission event")
+
+    def _reject_empty_stream(self, run_id: str) -> NoReturn:
+        """Per-run view of a request without events (no admission lock taken)."""
+        token = run_id.removeprefix("run:")
+        request = self._validated_request(
+            token, self._read_json(self._run_dir(run_id) / "request.json")
+        )
+        key_token = _safe_token(request.idempotency_key)
+        index = self.durable_root / "idempotency" / f"{key_token}.json"
+        indexed = self._entry_exists(index) and self._index_target(index, key_token) == run_id
+        self._require_recognizable_incomplete(run_id, indexed=indexed)
+        _fail("admission_incomplete", "run admission is incomplete")
+
+    def _admission_view(self) -> _AdmissionView:
+        """Effect-free preflight over all retained claims (caller holds admission)."""
+        claims: dict[str, _Claim] = {}
+        for path in sorted(self.durable_root.glob("*/request.json")):
+            request = self._validated_request(path.parent.name, self._read_json(path))
+            events = self._admission_events(request.run_id)
+            if events and events[0].state != "queued":
+                _fail("integrity_error", "run has no admission event")
+            claims[request.run_id] = _Claim(
+                request=request,
+                key_token=_safe_token(request.idempotency_key),
+                latest=events[-1].state if events else None,
+            )
+        indexed: dict[str, str] = {}
+        for path in sorted((self.durable_root / "idempotency").glob("*.json")):
+            key_token = path.name.removesuffix(".json")
+            if _HEX_TOKEN.fullmatch(key_token) is None:
+                _fail("integrity_error", "idempotency record is invalid")
+            target = self._index_target(path, key_token)
+            claim = claims.get(target)
+            if claim is None or claim.key_token != key_token:
+                _fail("integrity_error", "idempotency record is invalid")
+            indexed[key_token] = target
+        indexed_runs = set(indexed.values())
+        for run_id, claim in claims.items():
+            if claim.latest is None:
+                self._require_recognizable_incomplete(run_id, indexed=run_id in indexed_runs)
+        grouped: dict[str, list[str]] = {}
+        for run_id, claim in claims.items():
+            grouped.setdefault(claim.key_token, []).append(run_id)
+        quarantined = frozenset(
+            run_id for members in grouped.values() if len(members) > 1 for run_id in members
+        )
+        held = frozenset(
+            claim.request.resource_key
+            for run_id, claim in claims.items()
+            if claim.latest is None or run_id in quarantined
+        )
+        return _AdmissionView(
+            claims=claims,
+            groups={key: tuple(members) for key, members in grouped.items()},
+            indexed=indexed,
+            quarantined=quarantined,
+            held_resources=held,
+        )
+
+    def _require_admissible_run_dir(self, run_id: str) -> None:
+        """Admit only into an absent, empty or staging-only run directory.
+
+        Leftover ``.run-*`` staging files of a pre-link request publication
+        failure are preserved unchanged; anything else conflicts (ADR-0502 D9).
+        """
+        directory = self._run_dir(run_id)
+        verdict: str | None = None
+        try:
+            mode = directory.lstat().st_mode
+        except FileNotFoundError:
+            return
+        except OSError:
+            verdict = "run record is invalid"
+        else:
+            if not stat.S_ISDIR(mode):
+                verdict = "run record conflicts"
+            else:
+                try:
+                    with os.scandir(directory) as entries:
+                        for entry in entries:
+                            if not entry.name.startswith(".run-") or not entry.is_file(
+                                follow_symlinks=False
+                            ):
+                                verdict = "run record conflicts"
+                                break
+                except OSError:
+                    verdict = "run record is invalid"
+        if verdict is not None:
+            _fail("integrity_error", verdict)
 
     def _run_dir(self, run_id: str) -> Path:
         if not isinstance(run_id, str) or not run_id.startswith("run:"):
@@ -1489,18 +1815,6 @@ class RunControl:
             _json_bytes({"key_digest": _sha256(key.encode("utf-8")), "run_id": run_id, "schema_version": 1}),
             immutable=True,
         )
-
-    def _idempotency_lookup(self, key: str) -> str | None:
-        path = self.durable_root / "idempotency" / f"{_safe_token(key)}.json"
-        if not path.exists():
-            return None
-        value = self._read_json(path)
-        if not isinstance(value, Mapping) or value.get("key_digest") != _sha256(key.encode("utf-8")):
-            _fail("integrity_error", "idempotency record is invalid")
-        run_id = value.get("run_id")
-        if not isinstance(run_id, str):
-            _fail("integrity_error", "idempotency record is invalid")
-        return run_id
 
     def _spawn(self, request: _Request) -> None:
         command = [

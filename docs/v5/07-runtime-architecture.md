@@ -16,12 +16,14 @@ verified_by:
   - tests/test_cli.py
   - tests/test_coordinator.py
   - tests/test_documentation_contract.py
+  - tests/test_run_admission_recovery.py
   - tests/test_run_receipt_golden.py
   - tests/test_run_stop_custody.py
   - tests/test_runtime_observability.py
   - tests/test_terminal_review.py
 related_decisions:
   - ADR-0500
+  - ADR-0502
 schema_version: 1
 ---
 
@@ -563,6 +565,7 @@ exposed. A cleanup exception alone is not evidence of a descriptor leak.
 - **Recovery** isolates only the typed pending-receipt and stop-custody
   conflicts in `RunControl.recovery_blocked`, without inventing a terminal
   outcome. Corrupt requests or event chains still fail recovery as before.
+  Admission isolation and the recovery halt rule are in section 11.
   Recovery never signals and branches on the latest state, including the
   `draining` stop actor.
 - **Fault model.** Process crash only. Machine crash, power loss, tree
@@ -570,6 +573,64 @@ exposed. A cleanup exception alone is not evidence of a descriptor leak.
   guarantee. Activation is cold, after quiescence of earlier controllers and
   workers. A writer unaware of STOP-A1 that terminates a marked stop prefix
   without a class is reported by `inspect_stop` as `integrity_error`.
+
+## 11. Run admission and recovery
+
+[ADR-0502](../decisions/ADR-0502-admission-recovery.md) isolates incomplete
+admission and keeps the idempotency key binding durable.
+
+- **Commit fact.** A run is admitted when a valid request has a non-empty, valid
+  event stream whose first event is `queued`. A request without events is an
+  incomplete admission: a held claim, never permission to append `queued`.
+  Recognizable incomplete admission has no events, `result.json`, `private/`,
+  `stop/`, worker cursor or index record pointing at it; any of these makes the
+  run corrupt.
+- **Preflight.** Under the admission lock, `submit_run` and `recover` classify
+  every retained claim before any decision, effect-free and sorted. Requests are
+  checked on raw stored fields: 64-hex directory, `run_id`, field types,
+  admissible operation, non-empty key and the baseline fingerprint (no
+  normalization; `created_at` and `resource_key` are not bound). Index records
+  must be exact baseline bytes pointing at a retained run with the same key. A
+  suspicious event stream is re-read once under its run lock. Preflight never
+  calls `inspect_run` or the project inspector. Any corruption fails with
+  `integrity_error` before an action.
+- **Key groups.** One committed claim binds its key; one incomplete claim holds
+  it; two or more claims quarantine the key with no winner, and every member
+  resource (terminal members included) stays held. The index is a projection
+  and never chooses a winner. Exact retry of a committed claim returns the
+  original admission receipt without writes, index repair or launch.
+- **Submit outcomes.** Quarantined key `admission_key_conflict`; incomplete
+  same request `admission_incomplete`; key held or used by another request
+  `conflict`; held resource `admission_resource_blocked`; active run on the
+  resource `busy`. A new run directory must be absent, empty, or hold only
+  regular `.run-*` staging files, which are preserved; anything else is
+  `integrity_error`. Write `OSError` is normalized by stage: before the queued
+  helper `admission_io_not_committed`; inside it `admission_io_unknown` (no
+  read-back); index write after it `admission_committed_io_error`. There is no
+  rollback or automatic retry, and own messages carry no path, key or errno.
+- **Per-run surfaces** take no admission lock. On incomplete admission
+  `inspect_run`, `attach_run` and `worker_start` fail with
+  `admission_incomplete`, `steer_attempt` with `invalid_transition`, and
+  `cancel_run` keeps `not_found` with no journal record or signal.
+- **Recovery** holds the admission lock for one snapshot. Phase A reports
+  incomplete admissions and quarantine members. Phase B creates a missing index
+  record for a uniquely committed claim with baseline bytes, create-only. Phase
+  C runs sorted per-run actions under each run lock; quarantine or a held
+  resource withholds only the `queued` dispatch, while STOP reconciliation,
+  settlement and finalization continue. An index repair `OSError` or conflict,
+  or an action `OSError` inside the run lock, halts the remaining repairs and
+  actions of that pass, which are reported as `recovery_halted`; completed
+  progress is kept. `recovery_blocked` is reset per pass and sorted by
+  `(run_id, rank)`.
+  Lock-acquisition errors and other exceptions still escape.
+- **Wire mapping.** The six admission codes map onto the frozen public enum
+  (`integrity_error`, `conflict`, `internal_error`); recovery report codes are
+  not wire codes. Coarse mapping is not operator visibility.
+- **Fault model and limits.** Process crash only; homogeneous ADM-R controllers
+  must share one runtime root and admission-lock inode. Cold activation only. No automatic repair of incomplete admission, no expiry, rebind or
+  cleanup, no user-data migration, power-loss or concurrency claim. Operator
+  visibility, manual disposition, Linux and real crash evidence are separate
+  activation gates. The v0.4.7 fixture corpus is admission-only.
 
 ## Change protocol
 
@@ -594,6 +655,8 @@ At a completed implementation slice, also run the milestone checks in the root
 
 - [ADR-0500](../decisions/ADR-0500-run-stop-custody.md): bounded manual run
   cancellation and pending terminal receipt recovery.
+- [ADR-0502](../decisions/ADR-0502-admission-recovery.md): incomplete
+  admission isolation and durable idempotency key binding.
 
 ## Known limitations
 

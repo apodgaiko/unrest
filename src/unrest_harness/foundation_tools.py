@@ -77,6 +77,13 @@ _ERROR_MAP = {
     "stale_base": "stale",
     "stale_parent": "stale",
     "stale_accepted_working_point": "stale",
+    # ADR-0502 admission codes onto the frozen public enum (coarse by design).
+    "admission_incomplete": "integrity_error",
+    "admission_key_conflict": "conflict",
+    "admission_resource_blocked": "conflict",
+    "admission_io_not_committed": "internal_error",
+    "admission_io_unknown": "internal_error",
+    "admission_committed_io_error": "internal_error",
 }
 
 
