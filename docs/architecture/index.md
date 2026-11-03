@@ -32,6 +32,7 @@ withdraws the former repository governance language and duplicate root schemas.
 - [Experimental disposable cohort](experimental-cohort.md) — resource admission, sealed Git custody and retained process composition.
 - [Experimental candidate inputs](experimental-candidate.md) — nonpersistent committed-fixture observation.
 - [Continuation value types](continuation-types.md) — inert int64 ms values, EventId and closed value codec v1.
+- [Continuation recovery reservations](continuation-reservations.md) — inert bounded reservation ledger, actual settlement and snapshot custody.
 
 - [Controlled speed runner v2](controlled-speed-runner.md) — prepared-state compatibility measurement.
 

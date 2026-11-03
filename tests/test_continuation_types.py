@@ -1191,9 +1191,18 @@ def test_val10_component_and_index_registration() -> None:
             "decisions": [],
             "id": "COMP-CONTINUATION",
             "invariants": [],
-            "paths": ["src/unrest_harness/continuation_types.py"],
-            "specifications": ["docs/architecture/continuation-types.md"],
-            "tests": ["tests/test_continuation_types.py"],
+            "paths": [
+                "src/unrest_harness/continuation_reservations.py",
+                "src/unrest_harness/continuation_types.py",
+            ],
+            "specifications": [
+                "docs/architecture/continuation-reservations.md",
+                "docs/architecture/continuation-types.md",
+            ],
+            "tests": [
+                "tests/test_continuation_reservations.py",
+                "tests/test_continuation_types.py",
+            ],
         }
     ]
     index = (ROOT / "docs/architecture/index.md").read_text(encoding="utf-8")
