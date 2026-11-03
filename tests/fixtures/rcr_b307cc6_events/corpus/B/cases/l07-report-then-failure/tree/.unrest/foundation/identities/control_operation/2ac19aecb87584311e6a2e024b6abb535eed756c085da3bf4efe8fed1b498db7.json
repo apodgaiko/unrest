@@ -1,0 +1,1 @@
+{"idempotency_key_digest":"sha256:e46cae564c377fd9ee59725d7909cc8fdbb7dbfb4722578ad48184d32e8b20ee","operation":"abort_project","public_id":"control_operation:77b5944710435e132dacbaeb3677efd9f23f901fcc46c58661ce407916badea9","run_digest":"sha256:d03b850b982d73889e11d431910702ad56a278f0cebbf1fe376e5a7afc2f0864","schema_version":1}

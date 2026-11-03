@@ -16,6 +16,7 @@ import fcntl
 import hashlib
 import importlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -128,6 +129,43 @@ _DELIVERY_KEYS = frozenset(
 )
 
 
+# Native field types of a stored request (ADR-0503 D1). Strings are type-only;
+# their existing constraints (V2/V3/V4 of ADR-0502) are checked separately.
+_REQUEST_STRING_FIELDS = (
+    "control_identity_digest",
+    "created_at",
+    "issuer_identity_digest",
+    "resource_key",
+    "run_identity_digest",
+)
+_REQUEST_REQUIRED_KEYS = frozenset(
+    {
+        "arguments",
+        "control_identity_digest",
+        "created_at",
+        "generation",
+        "idempotency_key",
+        "issuer_identity_digest",
+        "operation",
+        "project_id",
+        "resource_key",
+        "run_id",
+        "run_identity_digest",
+    }
+)
+_EVENT_REQUIRED_KEYS = frozenset(
+    {
+        "details",
+        "event_digest",
+        "observed_at",
+        "previous_event_digest",
+        "run_id",
+        "sequence",
+        "state",
+    }
+)
+
+
 class RunState(str, Enum):
     QUEUED = "queued"
     RUNNING = "running"
@@ -139,6 +177,9 @@ class RunState(str, Enum):
     CANCELLED = "cancelled"
     FAILED = "failed"
     ATTENTION = "attention"
+
+
+_RUN_STATE_VALUES = frozenset(state.value for state in RunState)
 
 
 @dataclass(frozen=True)
@@ -304,6 +345,28 @@ def _json_bytes(value: Any) -> bytes:
 
 def _sha256(value: bytes) -> str:
     return _DIGEST_PREFIX + hashlib.sha256(value).hexdigest()
+
+
+def _all_finite(value: Any) -> bool:
+    """Whether a decoded JSON document holds only finite numbers (ADR-0503 D3).
+
+    Iterative on purpose: a recursive walk would refuse nesting the decoder
+    accepts. Runs after ``json.loads``, so an overwritten duplicate key is not seen.
+    """
+    pending = [value]
+    try:
+        while pending:
+            item = pending.pop()
+            if type(item) is float:
+                if not math.isfinite(item):
+                    return False
+            elif type(item) is dict:
+                pending.extend(item.values())
+            elif type(item) is list:
+                pending.extend(item)
+    except RecursionError:
+        return False
+    return True
 
 
 def _safe_token(value: str) -> str:
@@ -1504,44 +1567,66 @@ class RunControl:
         path = self._run_dir(run_id) / "request.json"
         if not path.is_file():
             _fail("not_found", "run was not found")
-        value = self._read_json(path)
-        if not isinstance(value, Mapping) or value.get("run_id") != run_id:
-            _fail("integrity_error", "run request is invalid")
-        return self._request_from_value(run_id, value)
+        # The per-run path applies the same raw V1-V5 as admission (ADR-0503).
+        return self._validated_request(run_id.removeprefix("run:"), self._read_record(path))
 
     @staticmethod
-    def _request_from_value(run_id: str, value: Mapping[str, Any]) -> _Request:
+    def _read_record(path: Path) -> Any:
+        """Decode one request/event record; decoder failures are corruption.
+
+        ``_read_json`` stays the shared reader of result and cursor records; only
+        request and event reads also contain the remaining decoder failures
+        (integer digit limit, ``RecursionError``).
+        """
         try:
-            return _Request(
-                run_id=str(value["run_id"]),
-                operation=str(value["operation"]),
-                arguments=dict(value["arguments"]),
-                idempotency_key=str(value["idempotency_key"]),
-                resource_key=str(value["resource_key"]),
-                project_id=str(value["project_id"]) if value["project_id"] is not None else None,
-                created_at=str(value["created_at"]),
-                run_identity_digest=str(value["run_identity_digest"]),
-                control_identity_digest=str(value["control_identity_digest"]),
-                issuer_identity_digest=str(value["issuer_identity_digest"]),
-                generation=int(value["generation"]),
-            )
-        except (KeyError, TypeError, ValueError) as exc:
-            raise RunControlError("integrity_error", "run request is invalid") from exc
+            return RunControl._read_json(path)
+        except (ValueError, RecursionError) as exc:
+            raise RunControlError("integrity_error", "run record is invalid") from exc
+
+    @staticmethod
+    def _request_from_value(value: Mapping[str, Any]) -> _Request:
+        """Exact native types of the remaining fields; no coercion (ADR-0503 D1)."""
+        project_id = value.get("project_id")
+        generation = value.get("generation")
+        schema_version = value.get("schema_version")
+        if (
+            not _REQUEST_REQUIRED_KEYS <= value.keys()
+            or any(type(value[name]) is not str for name in _REQUEST_STRING_FIELDS)
+            or (project_id is not None and type(project_id) is not str)
+            or type(generation) is not int
+            or generation <= 0
+            or ("schema_version" in value and type(schema_version) is not int)
+            or not _all_finite(value)
+        ):
+            _fail("integrity_error", "run request is invalid")
+        return _Request(
+            run_id=value["run_id"],
+            operation=value["operation"],
+            arguments=dict(value["arguments"]),
+            idempotency_key=value["idempotency_key"],
+            resource_key=value["resource_key"],
+            project_id=project_id,
+            created_at=value["created_at"],
+            run_identity_digest=value["run_identity_digest"],
+            control_identity_digest=value["control_identity_digest"],
+            issuer_identity_digest=value["issuer_identity_digest"],
+            generation=generation,
+        )
 
     def _validated_request(self, token: str, value: Any) -> _Request:
-        """V1-V5 of ADR-0502 on the raw stored fields, before any coercion."""
-        valid = _HEX_TOKEN.fullmatch(token) is not None and isinstance(value, Mapping)
+        """V1-V5 of ADR-0502 on the raw stored fields, then native types."""
+        valid = _HEX_TOKEN.fullmatch(token) is not None and type(value) is dict
         if valid:
             operation = value.get("operation")
             key = value.get("idempotency_key")
             arguments = value.get("arguments")
             valid = (
                 value.get("run_id") == f"run:{token}"
-                and isinstance(operation, str)
+                and type(operation) is str
                 and operation in RUN_OPERATIONS
-                and isinstance(key, str)
+                and type(key) is str
                 and bool(key)
-                and isinstance(arguments, dict)
+                and type(arguments) is dict
             )
         if valid:
             # The baseline fingerprint over the stored values: no normalization,
@@ -1557,12 +1642,12 @@ class RunControl:
                         }
                     )
                 ).hexdigest()
-            except RunControlError:
+            except (RunControlError, RecursionError):
                 fingerprint = ""
             valid = fingerprint == token
         if not valid:
             _fail("integrity_error", "run request is invalid")
-        return self._request_from_value(f"run:{token}", value)
+        return self._request_from_value(value)
 
     def _admission_events(self, run_id: str) -> tuple[_Event, ...]:
         """Read a stream lock-free; confirm an apparent defect under the run lock.
@@ -1604,13 +1689,19 @@ class RunControl:
         if content is not None:
             try:
                 value = json.loads(content)
-            except (ValueError, UnicodeError):
+            except (ValueError, UnicodeError, RecursionError):
                 value = None
             if isinstance(value, dict):
                 target = value.get("run_id")
-        if not isinstance(target, str) or content != _json_bytes(
-            {"key_digest": _DIGEST_PREFIX + key_token, "run_id": target, "schema_version": 1}
-        ):
+        if not isinstance(target, str):
+            _fail("integrity_error", "idempotency record is invalid")
+        try:
+            canonical = _json_bytes(
+                {"key_digest": _DIGEST_PREFIX + key_token, "run_id": target, "schema_version": 1}
+            )
+        except (RunControlError, RecursionError) as exc:
+            raise RunControlError("integrity_error", "idempotency record is invalid") from exc
+        if content != canonical:
             _fail("integrity_error", "idempotency record is invalid")
         return target
 
@@ -1630,7 +1721,7 @@ class RunControl:
         """Per-run view of a request without events (no admission lock taken)."""
         token = run_id.removeprefix("run:")
         request = self._validated_request(
-            token, self._read_json(self._run_dir(run_id) / "request.json")
+            token, self._read_record(self._run_dir(run_id) / "request.json")
         )
         key_token = _safe_token(request.idempotency_key)
         index = self.durable_root / "idempotency" / f"{key_token}.json"
@@ -1642,7 +1733,7 @@ class RunControl:
         """Effect-free preflight over all retained claims (caller holds admission)."""
         claims: dict[str, _Claim] = {}
         for path in sorted(self.durable_root.glob("*/request.json")):
-            request = self._validated_request(path.parent.name, self._read_json(path))
+            request = self._validated_request(path.parent.name, self._read_record(path))
             events = self._admission_events(request.run_id)
             if events and events[0].state != "queued":
                 _fail("integrity_error", "run has no admission event")
@@ -1775,35 +1866,63 @@ class RunControl:
             _fail("invalid_transition", "run lifecycle transition is invalid")
 
     def _load_events(self, run_id: str) -> tuple[_Event, ...]:
+        """Replay a stored stream; the first defective file decides (ADR-0503 D2).
+
+        Per file: decode, object, envelope native types and finite values, chain
+        equalities and digest, then the first event is ``queued`` and every later
+        state is a RunState reached by an edge of ``_validate_transition``.
+        """
         events: list[_Event] = []
         predecessor: str | None = None
         for expected, path in enumerate(sorted((self._run_dir(run_id) / "events").glob("*.json")), 1):
-            value = self._read_json(path)
-            if not isinstance(value, Mapping):
-                _fail("integrity_error", "run event is invalid")
-            try:
-                body = dict(value)
-                supplied = str(body.pop("event_digest"))
-                computed = _sha256(b"unrest.run-event.v1\0" + _json_bytes(body))
-                if (
-                    value.get("run_id") != run_id
-                    or value.get("sequence") != expected
-                    or value.get("previous_event_digest") != predecessor
-                    or supplied != computed
-                    or not isinstance(value.get("details"), Mapping)
-                ):
-                    _fail("integrity_error", "run event chain is invalid")
-                event = _Event(
-                    expected,
-                    str(value["state"]),
-                    str(value["observed_at"]),
-                    supplied,
-                    predecessor,
-                    dict(value["details"]),
+            value = self._read_record(path)
+            if (
+                type(value) is not dict
+                or not _EVENT_REQUIRED_KEYS <= value.keys()
+                or type(value["run_id"]) is not str
+                or type(value["sequence"]) is not int
+                or (
+                    value["previous_event_digest"] is not None
+                    and type(value["previous_event_digest"]) is not str
                 )
-            except (KeyError, TypeError, ValueError) as exc:
+                or type(value["event_digest"]) is not str
+                or type(value["state"]) is not str
+                or type(value["observed_at"]) is not str
+                or type(value["details"]) is not dict
+                or ("schema_version" in value and type(value["schema_version"]) is not int)
+                or not _all_finite(value)
+            ):
+                _fail("integrity_error", "run event is invalid")
+            if (
+                value["run_id"] != run_id
+                or value["sequence"] != expected
+                or value["previous_event_digest"] != predecessor
+            ):
+                _fail("integrity_error", "run event chain is invalid")
+            body = dict(value)
+            supplied = body.pop("event_digest")
+            try:
+                computed = _sha256(b"unrest.run-event.v1\0" + _json_bytes(body))
+            except (RunControlError, RecursionError) as exc:
                 raise RunControlError("integrity_error", "run event is invalid") from exc
-            events.append(event)
+            if supplied != computed:
+                _fail("integrity_error", "run event chain is invalid")
+            state = value["state"]
+            if not events:
+                if state != "queued":
+                    _fail("integrity_error", "run has no admission event")
+            else:
+                if state not in _RUN_STATE_VALUES:
+                    _fail("integrity_error", "run event is invalid")
+                try:
+                    self._validate_transition(events[-1].state, state)
+                except RunControlError as exc:
+                    if exc.code != "invalid_transition":
+                        raise
+                    raise RunControlError("integrity_error", "run event chain is invalid") from exc
+            events.append(
+                _Event(expected, state, value["observed_at"], supplied, predecessor, dict(value["details"]))
+            )
             predecessor = supplied
         return tuple(events)
 

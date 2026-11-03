@@ -18,12 +18,14 @@ verified_by:
   - tests/test_documentation_contract.py
   - tests/test_run_admission_recovery.py
   - tests/test_run_receipt_golden.py
+  - tests/test_run_record_strictness.py
   - tests/test_run_stop_custody.py
   - tests/test_runtime_observability.py
   - tests/test_terminal_review.py
 related_decisions:
   - ADR-0500
   - ADR-0502
+  - ADR-0503
 schema_version: 1
 ---
 
@@ -632,6 +634,64 @@ admission and keeps the idempotency key binding durable.
   visibility, manual disposition, Linux and real crash evidence are separate
   activation gates. The v0.4.7 fixture corpus is admission-only.
 
+## 12. Run record integrity
+
+[ADR-0503](../decisions/ADR-0503-run-record-integrity.md) makes the shared
+request and event readers typed and replays the persisted lifecycle.
+
+- **Request.** Per-run reads apply the same raw ADR-0502 checks as admission
+  (64-hex directory, `run_id`, operation, non-empty key, fingerprint) and then
+  exact native types with no coercion: the five string fields are `str`,
+  `project_id` is `str` or null, `arguments` is an object, `generation` is a
+  non-bool `int` greater than zero, and an optional `schema_version` is any
+  native `int` (not a version-support claim). Strings are type-only; extra keys
+  are allowed. A well-typed foreign `resource_key` or another positive
+  generation is accepted.
+- **Events.** Every file must be an object with `str` `run_id`, `state`,
+  `observed_at` and `event_digest`, non-bool `int` `sequence`,
+  `previous_event_digest` as `str` or null, object `details` and an optional
+  native-int `schema_version`.
+  Then the chain equalities and the digest over the raw decoded body hold, the
+  first event is `queued`, every later state is a `RunState` and every edge is
+  allowed by `_validate_transition`, the single lifecycle table. Only this
+  persisted-edge boundary translates `invalid_transition` into
+  `integrity_error`; a requested invalid transition on a valid history stays
+  `invalid_transition`.
+- **Finite values.** Decoded request and event documents, extra keys and
+  nesting included, may not hold NaN or infinities. The check is an iterative
+  walk after `json.loads`, so duplicate keys keep last-wins semantics and no
+  new depth or magnitude limit exists. No decoder hooks are used.
+- **Containment.** Request/event decode failures beyond the shared reader
+  (integer digit limit, `RecursionError`) and digest serialization failures
+  become `integrity_error`; programmer errors and `MemoryError` are not caught.
+  The index reader keeps its exact-bytes I1-I4 check and only contains its own
+  decode/serialization failures. The shared `_read_json`, result, cursor, STOP
+  and foundation readers are unchanged.
+- **Messages.** `run record is invalid` (decode), `run request is invalid`,
+  `run event is invalid` (envelope, type, finite, unknown later state),
+  `run event chain is invalid` (identity, sequence, predecessor, digest, edge),
+  `run has no admission event` (first string state not `queued`),
+  `idempotency record is invalid`; all use `integrity_error`. A non-string
+  first state now reports `run event is invalid`. The wire enum and
+  `_ERROR_MAP` are unchanged.
+- **Read set.** Read order, locks and the surface-by-branch matrix are
+  preserved; there is no universal no-write claim. `resource_lock` and
+  `request_payload` do not read events; `worker_draining` does not read the
+  request and can append `draining`; the failure branch of
+  `worker_effect_complete` may write private evidence before the request is
+  refused; terminal `worker_succeeded`/`worker_cancelled` unlink the cursor
+  without reading the request. One corrupt record still blocks submit and
+  recovery globally.
+- **Limits.** Consistency is not authenticity, completeness or truncation
+  detection. Lone surrogates in type-only strings can still fail later
+  (resource-lock encoding; cancellation may write events, receipt and custody
+  before its journal fails), and well-typed malformed identity digests can
+  raise from receipt construction; both are tracked follow-ups. Existing
+  `applying` journals and receipts are not repaired. Synthetic lifecycle-legal
+  chains are tested separately from the byte-identical b307cc6 writer trees in
+  `tests/fixtures/rcr_b307cc6_events/`. Linux, crash and concurrency are not
+  claimed.
+
 ## Change protocol
 
 State transition, task selection, gate, resume, terminal-review, or storage
@@ -657,6 +717,8 @@ At a completed implementation slice, also run the milestone checks in the root
   cancellation and pending terminal receipt recovery.
 - [ADR-0502](../decisions/ADR-0502-admission-recovery.md): incomplete
   admission isolation and durable idempotency key binding.
+- [ADR-0503](../decisions/ADR-0503-run-record-integrity.md): typed integrity
+  of durable run requests and event histories.
 
 ## Known limitations
 

@@ -1,0 +1,4324 @@
+{
+ "baseline_commit": "b307cc619cc042f47161ba0b22fa4b5475729fff",
+ "cases": [
+  {
+   "case_id": "n01-submit-queued",
+   "class": "B-N",
+   "clock_ticks": 2,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/runs/698a20212459ebc5a5e90634a66d41169a43499b26c9e2f24e835606c010bf6a.lock",
+    ".unrest-runtime/runs/admission.lock"
+   ],
+   "pid_identity_queries": [],
+   "run_id": "run:5d905c52adb0a2ca45521b165f560a42b1037d9c7c8cd15953d860fde8d6f419",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    }
+   ]
+  },
+  {
+   "case_id": "n02-worker-success",
+   "class": "B-N",
+   "clock_ticks": 7,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/runs/19b1297dc6447c17b5b3d282df1d043a7ba07e7d792aa98652efe182174bb65f.lock",
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/locks/eba08969c1e66a06765c73d2d594b1e008aff1ae12473d902ad974832c539d20.lock"
+   ],
+   "pid_identity_queries": [],
+   "run_id": "run:6aa63a5d67c2402bf515dfc3eed89cd437a38da5915599cd25f32bba7c76d11c",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "effect_complete",
+    "report_complete",
+    "succeeded"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.inspect_run",
+     "outcome": "ok",
+     "state": "running"
+    },
+    {
+     "call": "worker.worker_effect_complete",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "worker.worker_report_complete",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "worker.worker_succeeded",
+     "outcome": "ok",
+     "value": null
+    }
+   ]
+  },
+  {
+   "case_id": "n03-worker-executor-failure",
+   "class": "B-N",
+   "clock_ticks": 5,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/f64a555ae897ebb5b92b0b3868e3f5639108c978f17e9f11d4318899dfb3ed87.lock",
+    ".unrest-runtime/runs/locks/868ec22054f3f39a889bd1bf7c007c362a549ff18e04ee7aef8707e3ac75256e.lock"
+   ],
+   "pid_identity_queries": [],
+   "run_id": "run:48e2236b0b3d087e40d4fe7298f2f0e53477521984f9118730593de6713dfcf3",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "failed"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.inspect_run",
+     "outcome": "ok",
+     "state": "running"
+    },
+    {
+     "call": "worker.worker_effect_complete",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "worker.worker_report_complete",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "worker.worker_succeeded",
+     "outcome": "ok",
+     "value": null
+    }
+   ]
+  },
+  {
+   "case_id": "n04-worker-exception",
+   "class": "B-N",
+   "clock_ticks": 5,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/runs/78a8d4c9959b86a82b383882c2efd67d21fdd28db8c2f6fdda8690d1e2a00d1c.lock",
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/locks/9d2a995368ae40898e8d3a1e4843a9c8d00ad7ddf7df650d5c6f951a738db166.lock"
+   ],
+   "pid_identity_queries": [],
+   "run_id": "run:ff9b7227867d346f9dc88adafcacf09ca09f9094da97effde62009290d12932b",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "attention"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker:Exception-branch",
+     "outcome": "executor raised (emulated)"
+    },
+    {
+     "call": "worker.worker_failed",
+     "outcome": "ok",
+     "value": null
+    }
+   ]
+  },
+  {
+   "case_id": "n05-cancel-queued",
+   "class": "B-N",
+   "clock_ticks": 5,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/foundation/public-mutations/76a22a708a06085965f32976893a9ed3d60c4589143952854017783685432e59.lock",
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/cd89ac3759fd227249bbe461946a5ce7f6efad74da708bb89ae119082f2cb6c2.lock",
+    ".unrest/foundation/public-mutations/76a22a708a06085965f32976893a9ed3d60c4589143952854017783685432e59.json"
+   ],
+   "pid_identity_queries": [],
+   "run_id": "run:f802edbe201536ed56b24d3f9d465485123e62b6a3ebba5b9fb524c364b92037",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "cancel_requested",
+    "draining",
+    "cancelled"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "server.cancel_run",
+     "outcome": "ok",
+     "state": "cancelled"
+    }
+   ]
+  },
+  {
+   "case_id": "n06-cancel-live-worker",
+   "class": "B-N",
+   "clock_ticks": 7,
+   "kills": [
+    [
+     424242,
+     0
+    ],
+    [
+     424242,
+     15
+    ]
+   ],
+   "omitted_not_copied": [
+    ".unrest-runtime/foundation/public-mutations/ccd194cd42f9324ee8ae078faaf1e783ad90c7e50c9011d7f7e84aad3a6d5333.lock",
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/c3a04659faa6dd34cff32e6c38d62e5cdff070c9fa3f4849f2aeb28276bb2eb3.lock",
+    ".unrest-runtime/runs/locks/b0d482b85dc086813bde1edc0967b150fccd75805056efe590233af1080d408e.lock",
+    ".unrest/foundation/public-mutations/ccd194cd42f9324ee8ae078faaf1e783ad90c7e50c9011d7f7e84aad3a6d5333.json"
+   ],
+   "pid_identity_queries": [
+    [
+     "getpgid",
+     424242
+    ],
+    [
+     "getsid",
+     424242
+    ]
+   ],
+   "run_id": "run:e3b8bbcdba5e39b1c6eb9f6cc0c81db52dcccbfb96e4908766e0d832f26ffcda",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "cancel_requested",
+    "draining",
+    "cancelled"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "server.cancel_run",
+     "outcome": "ok",
+     "state": "cancel_requested"
+    },
+    {
+     "call": "worker.inspect_run",
+     "outcome": "ok",
+     "state": "cancel_requested"
+    },
+    {
+     "call": "worker:WorkerCancelled-branch",
+     "outcome": "emulated"
+    },
+    {
+     "call": "worker.worker_draining",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "worker.worker_cancelled",
+     "outcome": "ok",
+     "value": null
+    }
+   ]
+  },
+  {
+   "case_id": "n07-cancel-dead-running",
+   "class": "B-N",
+   "clock_ticks": 7,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/foundation/public-mutations/708677cac9ecba79b959b874fea9899c71a7141cdb38f9fdd0752bb6da2717a9.lock",
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/b66abeb46b7e4143471e612611b6385d01789a773576edc8c7f164daf2cc239d.lock",
+    ".unrest-runtime/runs/locks/062e3f331bedfccc53461906808a16dbe1ffa48a409b20fa1d7f49cd2d189f0e.lock",
+    ".unrest/foundation/public-mutations/708677cac9ecba79b959b874fea9899c71a7141cdb38f9fdd0752bb6da2717a9.json"
+   ],
+   "pid_identity_queries": [
+    [
+     "getpgid",
+     424242
+    ]
+   ],
+   "run_id": "run:73b194fc51fb6d1662e956f00eaeda4f958dabed50e1a210730af7a677d64dab",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "cancel_requested",
+    "draining",
+    "cancelled"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "harness:worker-dies (pid no longer live)",
+     "outcome": "ok"
+    },
+    {
+     "call": "server.cancel_run",
+     "outcome": "ok",
+     "state": "cancelled"
+    }
+   ]
+  },
+  {
+   "case_id": "n08-cancel-after-effect-dead",
+   "class": "B-N",
+   "clock_ticks": 7,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/foundation/public-mutations/eaf48c3f7a77293f1e0329c040241d2e3262d891c0aa868ee05d4072bbdd6d7a.lock",
+    ".unrest-runtime/runs/3ba7df8369ced51e6851b83efcd302fea18906d82fde2b880d1e52c450dcebcc.lock",
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/locks/95f9e5850210d7762e615c5e412d6ff8f1fbc557bf3293c7268c28345082268d.lock",
+    ".unrest/foundation/public-mutations/eaf48c3f7a77293f1e0329c040241d2e3262d891c0aa868ee05d4072bbdd6d7a.json"
+   ],
+   "pid_identity_queries": [
+    [
+     "getpgid",
+     424242
+    ]
+   ],
+   "run_id": "run:226d390f743c0a0d120da79f407a15f909ae729404afc00063f909fd73e82fac",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "effect_complete",
+    "cancel_requested",
+    "attention"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_effect_complete",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "harness:worker-dies (pid no longer live)",
+     "outcome": "ok"
+    },
+    {
+     "call": "server.cancel_run",
+     "outcome": "ok",
+     "state": "attention"
+    }
+   ]
+  },
+  {
+   "case_id": "n09-cancel-after-report-dead",
+   "class": "B-N",
+   "clock_ticks": 8,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/foundation/public-mutations/bc0e9bd6d6dbf8ca5d40a5ddfb5fd09a590746873fe5324370950b7f572279a1.lock",
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/c71829e35912b2c05285dcca96e28a6b9f5c30e6f31f877cf4d88a3273cf9143.lock",
+    ".unrest-runtime/runs/locks/a1b6ad0de5b9ef4586aa5d7d07e56f199d813db27a1942f1f73c06f91ebcdd29.lock",
+    ".unrest/foundation/public-mutations/bc0e9bd6d6dbf8ca5d40a5ddfb5fd09a590746873fe5324370950b7f572279a1.json"
+   ],
+   "pid_identity_queries": [
+    [
+     "getpgid",
+     424242
+    ]
+   ],
+   "run_id": "run:7041286519c5f2badedb82055a14d231d0066565a912adacb6b97b6d180639f0",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "effect_complete",
+    "report_complete",
+    "cancel_requested",
+    "attention"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_effect_complete",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "worker.worker_report_complete",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "harness:worker-dies (pid no longer live)",
+     "outcome": "ok"
+    },
+    {
+     "call": "server.cancel_run",
+     "outcome": "ok",
+     "state": "attention"
+    }
+   ]
+  },
+  {
+   "case_id": "n10-cancel-after-effect-live",
+   "class": "B-N",
+   "clock_ticks": 8,
+   "kills": [
+    [
+     424242,
+     0
+    ],
+    [
+     424242,
+     15
+    ]
+   ],
+   "omitted_not_copied": [
+    ".unrest-runtime/foundation/public-mutations/785b6b2c3a819b3d949330861920f0ccaeed0f74372b90bbb6c1aa30c7a6e126.lock",
+    ".unrest-runtime/runs/0f2e547824e3c50a83a4af17627d4bdcfea3062292b53c49cf327d7e711a9854.lock",
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/locks/783e46f119b522c513dc64ff3c2fe1a8c2a53e22de3f3eb476a90859912d2eed.lock",
+    ".unrest/foundation/public-mutations/785b6b2c3a819b3d949330861920f0ccaeed0f74372b90bbb6c1aa30c7a6e126.json"
+   ],
+   "pid_identity_queries": [
+    [
+     "getpgid",
+     424242
+    ],
+    [
+     "getsid",
+     424242
+    ]
+   ],
+   "run_id": "run:4cfc7adeae5378bf52185b131a63fee7f8d300e1d8be59af7b99517171720d1d",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "effect_complete",
+    "cancel_requested",
+    "draining",
+    "attention"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.inspect_run",
+     "outcome": "ok",
+     "state": "running"
+    },
+    {
+     "call": "worker.worker_effect_complete",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "server.cancel_run",
+     "outcome": "ok",
+     "state": "cancel_requested"
+    },
+    {
+     "call": "worker:WorkerCancelled-branch",
+     "outcome": "emulated"
+    },
+    {
+     "call": "worker.worker_draining",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "worker.worker_cancelled",
+     "outcome": "ok",
+     "value": null
+    }
+   ]
+  },
+  {
+   "case_id": "n11-recover-queued",
+   "class": "B-N",
+   "clock_ticks": 2,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/runs/63ea28e2836ad17e17d1894588a15566f342e32e167e00c8efbb9da44b79bddc.lock",
+    ".unrest-runtime/runs/admission.lock"
+   ],
+   "pid_identity_queries": [],
+   "run_id": "run:90729575bcd28ce2f6765a1407ef572e6a961179e113b2c02c706d28ded07662",
+   "spawn_recorder_calls": 2,
+   "states": [
+    "queued"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "server.RunControl(recover=True)",
+     "outcome": "ok"
+    }
+   ]
+  },
+  {
+   "case_id": "n12-recover-running-dead",
+   "class": "B-N",
+   "clock_ticks": 5,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/runs/28edf7dc0920c643ad38871bd3d4c0c8e7b52b01e8c70da13896c1bc8ccf8021.lock",
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/locks/d5594187395a31d849a002ea640a8618a5d3b468ec50d34a6ad88bad4edf2dd5.lock"
+   ],
+   "pid_identity_queries": [
+    [
+     "getpgid",
+     424242
+    ]
+   ],
+   "run_id": "run:c90c81e1951e8ac52e6a414f06c54245afcb2eee1cb76399cbe58438c1b253a3",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "attention"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "harness:worker-dies (pid no longer live)",
+     "outcome": "ok"
+    },
+    {
+     "call": "server.RunControl(recover=True)",
+     "outcome": "ok"
+    }
+   ]
+  },
+  {
+   "case_id": "n13-recover-effect-complete",
+   "class": "B-N",
+   "clock_ticks": 7,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/runs/8dfd43395b4cd85b1500c4c8ab0061d16d42c49a0e3935d58a81d2532d629b99.lock",
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/locks/fa6fd3ba23d8e147c449c01c1a1c020daa1e14113b0512fb130061e8443e5e95.lock"
+   ],
+   "pid_identity_queries": [
+    [
+     "getpgid",
+     424242
+    ]
+   ],
+   "run_id": "run:7c0e5ad586e45fc8bd39e372b3ab10ffe67d3cb846cf42d09c841547ed89b531",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "effect_complete",
+    "report_complete",
+    "succeeded"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_effect_complete",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "harness:worker-dies (pid no longer live)",
+     "outcome": "ok"
+    },
+    {
+     "call": "server.RunControl(recover=True)",
+     "outcome": "ok"
+    }
+   ]
+  },
+  {
+   "case_id": "n14-recover-report-complete",
+   "class": "B-N",
+   "clock_ticks": 7,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/runs/505340afa6594ad2e8d77be679caae8cea811060881962cd1984c9bf0de5b95c.lock",
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/locks/9b27fad218436aa9040fcba40217a926eace8e299388c7d91bf6707755149a62.lock"
+   ],
+   "pid_identity_queries": [
+    [
+     "getpgid",
+     424242
+    ]
+   ],
+   "run_id": "run:93ac78861329b0fd345a26bd8958adf6dd09a552be20c5bceaf264c40fcf34bf",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "effect_complete",
+    "report_complete",
+    "succeeded"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_effect_complete",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "worker.worker_report_complete",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "harness:worker-dies (pid no longer live)",
+     "outcome": "ok"
+    },
+    {
+     "call": "server.RunControl(recover=True)",
+     "outcome": "ok"
+    }
+   ]
+  },
+  {
+   "case_id": "n15-recover-cancel-requested",
+   "class": "B-N",
+   "clock_ticks": 7,
+   "kills": [
+    [
+     424242,
+     0
+    ],
+    [
+     424242,
+     15
+    ]
+   ],
+   "omitted_not_copied": [
+    ".unrest-runtime/foundation/public-mutations/170ae1c63b7e549104f08fff188cb3443e033d9f9c199aa6b9ba40c86aec5838.lock",
+    ".unrest-runtime/runs/7ad2610d92b1c0976caa601e2c9d002678a509adb5d37875af8430ccbb2197cc.lock",
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/locks/4ccb62e2cbdc37939886ac81533e8155f31a9b90067732c02de6029f0f04b772.lock",
+    ".unrest/foundation/public-mutations/170ae1c63b7e549104f08fff188cb3443e033d9f9c199aa6b9ba40c86aec5838.json"
+   ],
+   "pid_identity_queries": [
+    [
+     "getpgid",
+     424242
+    ],
+    [
+     "getsid",
+     424242
+    ],
+    [
+     "getpgid",
+     424242
+    ]
+   ],
+   "run_id": "run:505a6cfea0b5c1882a11825a7195d980bd7797d61f407067b733193d37471142",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "cancel_requested",
+    "draining",
+    "cancelled"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "server.cancel_run",
+     "outcome": "ok",
+     "state": "cancel_requested"
+    },
+    {
+     "call": "harness:worker-dies (pid no longer live)",
+     "outcome": "ok"
+    },
+    {
+     "call": "server.RunControl(recover=True)",
+     "outcome": "ok"
+    }
+   ]
+  },
+  {
+   "case_id": "n16-recover-draining",
+   "class": "B-N",
+   "clock_ticks": 7,
+   "kills": [
+    [
+     424242,
+     0
+    ],
+    [
+     424242,
+     15
+    ]
+   ],
+   "omitted_not_copied": [
+    ".unrest-runtime/foundation/public-mutations/a630bad647025fabd247a19a5141cc4088e83c33c6ada46fe0d07c9c3b979a73.lock",
+    ".unrest-runtime/runs/339361bcdab9b48b947febfecd49bac156d5880274fdcab8508f3f7247644506.lock",
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/locks/469c7d1b1f3c180b9a74b4f37214736a6f340117f0619401c06d486e084baf81.lock",
+    ".unrest/foundation/public-mutations/a630bad647025fabd247a19a5141cc4088e83c33c6ada46fe0d07c9c3b979a73.json"
+   ],
+   "pid_identity_queries": [
+    [
+     "getpgid",
+     424242
+    ],
+    [
+     "getsid",
+     424242
+    ],
+    [
+     "getpgid",
+     424242
+    ]
+   ],
+   "run_id": "run:7e9e4a8ece838aa0ac634dacc5e102d91b391b851c867f1867ea702f2d81153e",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "cancel_requested",
+    "draining",
+    "attention"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "server.cancel_run",
+     "outcome": "ok",
+     "state": "cancel_requested"
+    },
+    {
+     "call": "worker:WorkerCancelled-branch",
+     "outcome": "emulated"
+    },
+    {
+     "call": "worker.worker_draining",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "harness:worker-dies (pid no longer live)",
+     "outcome": "ok"
+    },
+    {
+     "call": "server.RunControl(recover=True)",
+     "outcome": "ok"
+    }
+   ]
+  },
+  {
+   "case_id": "n17-spawn-oserror",
+   "class": "B-N",
+   "clock_ticks": 3,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/bfb74a41ad252336aa50ca774d49686fbd4d424446ea764c123ce61a0e7b89f6.lock"
+   ],
+   "pid_identity_queries": [],
+   "run_id": "run:af8bf4bca7ad04113c638d17fac9c46560efa93713d2f153fee12a8d8dd88ead",
+   "spawn_recorder_calls": 0,
+   "states": [
+    "queued",
+    "failed"
+   ],
+   "steps": [
+    {
+     "call": "harness:subprocess.Popen -> OSError (injected, no process)",
+     "outcome": "ok"
+    },
+    {
+     "call": "server.submit_run",
+     "code": "internal_error",
+     "outcome": "error"
+    }
+   ]
+  },
+  {
+   "case_id": "l01-external-signal-drain",
+   "class": "B-L",
+   "clock_ticks": 6,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/runs/97d0ebad79fe61b1a2bebe57cf5347fc883e02eceb7572dfeb3fcdcd797b209d.lock",
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/locks/ccadb094e707d06994ab77261ccb60d3929d7450a14a4ab4a099abda8cd139fa.lock"
+   ],
+   "pid_identity_queries": [],
+   "run_id": "run:25874b14ba0d14b4d1c38d3f1c610cd787155bf0844642925db0702e5771f345",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "draining",
+    "cancelled"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker:WorkerCancelled-branch",
+     "outcome": "emulated"
+    },
+    {
+     "call": "worker.worker_draining",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "worker.worker_cancelled",
+     "outcome": "ok",
+     "value": null
+    }
+   ]
+  },
+  {
+   "case_id": "l02-progress-after-draining",
+   "class": "B-L",
+   "clock_ticks": 8,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/deea45eb5d09cfd6edd6cf978b4812378bd02e11833fb78c4a96550fdf851003.lock",
+    ".unrest-runtime/runs/locks/93852bdb6944cd5c947c8dfe4327120b044d03fbdfdf103367c77502756b762b.lock"
+   ],
+   "pid_identity_queries": [],
+   "run_id": "run:8971f6e8881ca590f3bdb5e5c15777b2b11e6c9615c6642a88899123a2ca44f9",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "draining",
+    "effect_complete",
+    "report_complete",
+    "succeeded"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_draining",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "worker.worker_effect_complete",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "worker.worker_report_complete",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "worker.worker_succeeded",
+     "outcome": "ok",
+     "value": null
+    }
+   ]
+  },
+  {
+   "case_id": "l03-cancel-race-then-success",
+   "class": "B-L",
+   "clock_ticks": 8,
+   "kills": [
+    [
+     424242,
+     0
+    ],
+    [
+     424242,
+     15
+    ]
+   ],
+   "omitted_not_copied": [
+    ".unrest-runtime/foundation/public-mutations/8dade14d58d70310b203d2621de2f72e18a7d2be494ee43d47dc5bb3b6fea8ed.lock",
+    ".unrest-runtime/runs/85ae6e1038678e3956cc3380744e68031c6233b125412983f0e90159325f5be2.lock",
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/locks/bda4ccbc166e2d76a2b6f27ca034e11ac54a73f98d5306b4fc87d8dcc2d2da62.lock",
+    ".unrest/foundation/public-mutations/8dade14d58d70310b203d2621de2f72e18a7d2be494ee43d47dc5bb3b6fea8ed.json"
+   ],
+   "pid_identity_queries": [
+    [
+     "getpgid",
+     424242
+    ],
+    [
+     "getsid",
+     424242
+    ]
+   ],
+   "run_id": "run:f0a6400de32a3b21975e9288d806488be9e4ef25630b92de69182f20c63dee35",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "cancel_requested",
+    "effect_complete",
+    "report_complete",
+    "succeeded"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "server.cancel_run",
+     "outcome": "ok",
+     "state": "cancel_requested"
+    },
+    {
+     "call": "worker.worker_effect_complete",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "worker.worker_report_complete",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "worker.worker_succeeded",
+     "outcome": "ok",
+     "value": null
+    }
+   ]
+  },
+  {
+   "case_id": "l04-cancel-then-failure",
+   "class": "B-L",
+   "clock_ticks": 6,
+   "kills": [
+    [
+     424242,
+     0
+    ],
+    [
+     424242,
+     15
+    ]
+   ],
+   "omitted_not_copied": [
+    ".unrest-runtime/foundation/public-mutations/881d0f0aae4d35afee01232d75889a17762a85333ef09509409b57ac8afa9a03.lock",
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/bfbc4035703707ba19fc45739b91e2a66b309e3099bc6a8bc5368f4d441c0525.lock",
+    ".unrest-runtime/runs/locks/099fb595df30eab0c7f32068d2a636aff3b57c286bd8d01a1f03113e9f92bdd8.lock",
+    ".unrest/foundation/public-mutations/881d0f0aae4d35afee01232d75889a17762a85333ef09509409b57ac8afa9a03.json"
+   ],
+   "pid_identity_queries": [
+    [
+     "getpgid",
+     424242
+    ],
+    [
+     "getsid",
+     424242
+    ]
+   ],
+   "run_id": "run:03208b57494b4812ff40f988b47c768fcab960fd53566390f973b495057f3d53",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "cancel_requested",
+    "failed"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "server.cancel_run",
+     "outcome": "ok",
+     "state": "cancel_requested"
+    },
+    {
+     "call": "worker.worker_effect_complete",
+     "outcome": "ok",
+     "value": null
+    }
+   ]
+  },
+  {
+   "case_id": "l05-draining-then-failure",
+   "class": "B-L",
+   "clock_ticks": 6,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/runs/5aac70f12618246328a38a4c1975d4ec32ef06980a92a5661df95c098a0648c1.lock",
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/locks/b7aba9368a5caaefe1ff6cbf8da8da531446f685a3ce1fc5e5886336045cab2c.lock"
+   ],
+   "pid_identity_queries": [],
+   "run_id": "run:9766abc483d1f886eaa957aaa309af3bbfc31ba3d8ae299919bc00037a4a8dc4",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "draining",
+    "failed"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_draining",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "worker.worker_effect_complete",
+     "outcome": "ok",
+     "value": null
+    }
+   ]
+  },
+  {
+   "case_id": "l06-effect-then-failure",
+   "class": "B-L",
+   "clock_ticks": 6,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/b661a217ff91e7c22512cb041e4859f0962754e7d48eb42d97302c3138302f60.lock",
+    ".unrest-runtime/runs/locks/541ccd41c98f60c6a03a3671b17c959ceb6e1616574954d2c5d7138fd0465cd9.lock"
+   ],
+   "pid_identity_queries": [],
+   "run_id": "run:369aaf4c75a08542447016c79299c20326388a2081b8ba44c798e9ce69b549e7",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "effect_complete",
+    "failed"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_effect_complete",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "worker.worker_effect_complete",
+     "outcome": "ok",
+     "value": null
+    }
+   ]
+  },
+  {
+   "case_id": "l07-report-then-failure",
+   "class": "B-L",
+   "clock_ticks": 7,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/runs/0168562234445cbeba0959c013425254637c05fe5ad77fced0b4e18e2b12fdc7.lock",
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/locks/df787f809c7feb33203ab42662df696dfbf9f1ed1a51e30ffbbbabef566e1afe.lock"
+   ],
+   "pid_identity_queries": [],
+   "run_id": "run:77b5944710435e132dacbaeb3677efd9f23f901fcc46c58661ce407916badea9",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "effect_complete",
+    "report_complete",
+    "failed"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_effect_complete",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "worker.worker_report_complete",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "worker.worker_effect_complete",
+     "outcome": "ok",
+     "value": null
+    }
+   ]
+  },
+  {
+   "case_id": "l08-effect-then-worker-failed",
+   "class": "B-L",
+   "clock_ticks": 6,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/f4aa36b6a567193253c32f126633bd366530bbf7bf2d56ac30459c105a41ba1e.lock",
+    ".unrest-runtime/runs/locks/ecad343768a6c03488774ce6d0fca3dca522f44c339745ae67c44d596b0296e8.lock"
+   ],
+   "pid_identity_queries": [],
+   "run_id": "run:f41beee6e0af18f7081d7221d606497639c5926e1a806649a5ad7781f5bd42dd",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "effect_complete",
+    "attention"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.inspect_run",
+     "outcome": "ok",
+     "state": "running"
+    },
+    {
+     "call": "worker.worker_effect_complete",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "worker:Exception-branch",
+     "outcome": "worker failure after effect (emulated)"
+    },
+    {
+     "call": "worker.worker_failed",
+     "outcome": "ok",
+     "value": null
+    }
+   ]
+  },
+  {
+   "case_id": "l09-report-then-worker-failed",
+   "class": "B-L",
+   "clock_ticks": 7,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/fcc560b017eae9fba97c1a95fc76bb8c2a3ae06c30e0bc3587bc204fc67d2dac.lock",
+    ".unrest-runtime/runs/locks/785ea559d50a941a5e793fd67fff2422bdc3af13b7f6bb8ddd1b557a820a54a4.lock"
+   ],
+   "pid_identity_queries": [],
+   "run_id": "run:819acf0d4dcd1669f316bd87e10a584face927b1829beb19f60eaa0a379ee725",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "effect_complete",
+    "report_complete",
+    "attention"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.inspect_run",
+     "outcome": "ok",
+     "state": "running"
+    },
+    {
+     "call": "worker.worker_effect_complete",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "worker.worker_report_complete",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "worker:Exception-branch",
+     "outcome": "worker failure after report (emulated)"
+    },
+    {
+     "call": "worker.worker_failed",
+     "outcome": "ok",
+     "value": null
+    }
+   ]
+  },
+  {
+   "case_id": "l10-queued-worker-failed",
+   "class": "B-L",
+   "clock_ticks": 3,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/runs/2a7dfdcb1b5e37ba62d49d8dc07016ea492cccbfc5beed72ef15b95a658ad682.lock",
+    ".unrest-runtime/runs/admission.lock"
+   ],
+   "pid_identity_queries": [],
+   "run_id": "run:f47c3f2f8b50a0658edaf9fa55358e3c835bb7246d651f65340180f70183683d",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "failed"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_failed",
+     "outcome": "ok",
+     "value": null
+    }
+   ]
+  },
+  {
+   "case_id": "s01-snapshot-running",
+   "class": "B-N",
+   "clock_ticks": 4,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/runs/60c1c8f0deb11c56417a2194006c561e1b2d91d8ec3f077181431f487878d75a.lock",
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/locks/76fbc1686c78121c68300125026b88ce85d192d3f4878cbb768b40327b48aa55.lock"
+   ],
+   "pid_identity_queries": [],
+   "run_id": "run:d74aec7a106c9811c883bfdc8566c139feb58b102c494e23bee194e3aefad081",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    }
+   ]
+  },
+  {
+   "case_id": "s02-snapshot-effect-complete",
+   "class": "B-N",
+   "clock_ticks": 5,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/d42a38dd6244fe8fdb78145e11e97812284c9f1969f41c98d6a936635081f817.lock",
+    ".unrest-runtime/runs/locks/3c33877611149c9479240836f5c587b25f528f34bf2623be13bfe7993b9a2914.lock"
+   ],
+   "pid_identity_queries": [],
+   "run_id": "run:379c5be9f441bd95c9768888e5a3835e688ca9b67bb0736c4ee74c1ed27b704b",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "effect_complete"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_effect_complete",
+     "outcome": "ok",
+     "value": null
+    }
+   ]
+  },
+  {
+   "case_id": "s03-snapshot-report-complete",
+   "class": "B-N",
+   "clock_ticks": 6,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/runs/80bf55836bcb35943fb413182c2532d82d90e053122ff8e42d334df67f2fdb58.lock",
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/locks/d8ff872db95d4ecdc71044d4e15b498d38350223657f571ad9a4ac65fbcdceea.lock"
+   ],
+   "pid_identity_queries": [],
+   "run_id": "run:f16adef1f7b616369042c18117a22bb2aed70eed684a7b7662a495d4ac12b132",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "effect_complete",
+    "report_complete"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_effect_complete",
+     "outcome": "ok",
+     "value": null
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_report_complete",
+     "outcome": "ok",
+     "value": null
+    }
+   ]
+  },
+  {
+   "case_id": "s04-snapshot-cancel-requested-live",
+   "class": "B-N",
+   "clock_ticks": 5,
+   "kills": [
+    [
+     424242,
+     0
+    ],
+    [
+     424242,
+     15
+    ]
+   ],
+   "omitted_not_copied": [
+    ".unrest-runtime/foundation/public-mutations/af6923bc7e391aa0ba257b212927bb22834399688cf55fa4bbd7c61bb7e76ef0.lock",
+    ".unrest-runtime/runs/6af210cf2590387f88e82eb43fa71a69e547f041411060b775d8397dfab01a10.lock",
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/locks/624a7c10d7e4f9d95a01c90cbf8b91d4e53b0156330dcaa968e7ba155bf68f09.lock",
+    ".unrest/foundation/public-mutations/af6923bc7e391aa0ba257b212927bb22834399688cf55fa4bbd7c61bb7e76ef0.json"
+   ],
+   "pid_identity_queries": [
+    [
+     "getpgid",
+     424242
+    ],
+    [
+     "getsid",
+     424242
+    ]
+   ],
+   "run_id": "run:bc636f1d527ea4267b423ba19fb905eadea81111da4035537c3635108af52545",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "cancel_requested"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "server.cancel_run",
+     "outcome": "ok",
+     "state": "cancel_requested"
+    }
+   ]
+  },
+  {
+   "case_id": "s05-snapshot-draining-after-cancel",
+   "class": "B-N",
+   "clock_ticks": 6,
+   "kills": [
+    [
+     424242,
+     0
+    ],
+    [
+     424242,
+     15
+    ]
+   ],
+   "omitted_not_copied": [
+    ".unrest-runtime/foundation/public-mutations/874b049ab66faf3a53e814fe07432ebb047f01f423344d8406bfb3aaea13379e.lock",
+    ".unrest-runtime/runs/611b1bd4634c9fce7552b681ee834e86a23088faff587a2f12bb951fcc2dcb3d.lock",
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/locks/03cda8770d2a6cde6a989010cbfa27fbaa4867bde2a8db4bf1105969db336b71.lock",
+    ".unrest/foundation/public-mutations/874b049ab66faf3a53e814fe07432ebb047f01f423344d8406bfb3aaea13379e.json"
+   ],
+   "pid_identity_queries": [
+    [
+     "getpgid",
+     424242
+    ],
+    [
+     "getsid",
+     424242
+    ]
+   ],
+   "run_id": "run:2d9a3adde6db89c94d9d535bf9fad1d7e290c4ee5e2b66a2c4790cbb535dd51f",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "cancel_requested",
+    "draining"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "server.cancel_run",
+     "outcome": "ok",
+     "state": "cancel_requested"
+    },
+    {
+     "call": "worker:WorkerCancelled-branch",
+     "outcome": "emulated"
+    },
+    {
+     "call": "worker.worker_draining",
+     "outcome": "ok",
+     "value": null
+    }
+   ]
+  },
+  {
+   "case_id": "s06-snapshot-draining-external-signal",
+   "class": "B-L",
+   "clock_ticks": 5,
+   "kills": [],
+   "omitted_not_copied": [
+    ".unrest-runtime/runs/a336ec68e0813220bca3750b718946059c05f45b2c8dab99b292890017a2c5c7.lock",
+    ".unrest-runtime/runs/admission.lock",
+    ".unrest-runtime/runs/locks/b617013677a5b7e1638a65abf09c01a1466cf561814afb8db5bb1a72b1f7cc8b.lock"
+   ],
+   "pid_identity_queries": [],
+   "run_id": "run:cf7ef461408c5d3d6094a65a19a9c01f01b4170244547d4c3c63928ca43f387b",
+   "spawn_recorder_calls": 1,
+   "states": [
+    "queued",
+    "running",
+    "draining"
+   ],
+   "steps": [
+    {
+     "call": "server.submit_run",
+     "outcome": "ok",
+     "state": "queued"
+    },
+    {
+     "call": "worker.RunControl(recover=False)",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.resource_lock",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_start",
+     "outcome": "ok",
+     "value": true
+    },
+    {
+     "call": "worker.request_payload",
+     "outcome": "ok"
+    },
+    {
+     "call": "worker.worker_draining",
+     "outcome": "ok",
+     "value": null
+    }
+   ]
+  }
+ ],
+ "clock": "A",
+ "construction": {
+  "executor_ref": "lg2_fake_executor:execute (load_executor stubbed, never invoked)",
+  "operation": "abort_project {project_id: proj-<case_id>, reason: r}, key k-<case_id>",
+  "project_root": "<work>/cases/<case_id>/project (path not persisted in run files)",
+  "recover": "False everywhere except the listed server.RunControl(recover=True) cells",
+  "server_owner_id": "server:4242:0123456789ab",
+  "worker_owner_id": "worker:424242:1",
+  "worker_pid_pgid_fake": 424242
+ },
+ "files": [
+  {
+   "bytes": 125,
+   "path": "cases/l01-external-signal-drain/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "60b45661007f2312cd2515dae2fa534a909be5c881c304cc772342cfcfcdf2d3"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/l01-external-signal-drain/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/l01-external-signal-drain/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "35f243954233bcabc11caa04b416a075fcce27a367da2135ece88f315e541ff5"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/l01-external-signal-drain/tree/.unrest/foundation/identities/control_operation/adcacd7c83ef7da42cca3b5e4ed6091d3cf9482e5056146aae66a4cae81703d9.json",
+   "sha256": "480f62c6624f07573d68aa4bb6c3584b28acfb862628c9f028124c55af5df9b1"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/l01-external-signal-drain/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1255,
+   "path": "cases/l01-external-signal-drain/tree/.unrest/foundation/identities/run/d3529ac7be020ba34cd4275e65d7585e33eb40a66cea65867ffac23da442c9aa.json",
+   "sha256": "2ffa2aedc8e15ba75ea981059f8b320f5b172f7bb515c22a4b36722d196f5c52"
+  },
+  {
+   "bytes": 6130,
+   "path": "cases/l01-external-signal-drain/tree/.unrest/foundation/receipts/run_receipt.v1/0b0385c432ba00ae0045988b326668375b90b54ebf5160e5ac4c22f7b074cc3a.json",
+   "sha256": "7f7b8d671d7cb852d1245d3b58bcd45dd7386f1aa84ef775d320530477fb99a4"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/l01-external-signal-drain/tree/.unrest/runs/25874b14ba0d14b4d1c38d3f1c610cd787155bf0844642925db0702e5771f345/events/00000000000000000001.json",
+   "sha256": "535fe1a2539e5f12f7ae51df0c6f470736e1d3fdfc17efc969e67d36e40cf34d"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/l01-external-signal-drain/tree/.unrest/runs/25874b14ba0d14b4d1c38d3f1c610cd787155bf0844642925db0702e5771f345/events/00000000000000000002.json",
+   "sha256": "e57f993fc233294e6ed9bd37bd945c7414bf1b9e552d405d33b8c31ed908c660"
+  },
+  {
+   "bytes": 374,
+   "path": "cases/l01-external-signal-drain/tree/.unrest/runs/25874b14ba0d14b4d1c38d3f1c610cd787155bf0844642925db0702e5771f345/events/00000000000000000003.json",
+   "sha256": "748fbd18c77657cd1e6286d7a1b7e94f0d87425ab21be6fc645239038939d387"
+  },
+  {
+   "bytes": 570,
+   "path": "cases/l01-external-signal-drain/tree/.unrest/runs/25874b14ba0d14b4d1c38d3f1c610cd787155bf0844642925db0702e5771f345/events/00000000000000000004.json",
+   "sha256": "deb0dc5a80e8db13660a5acf20f17fbf6e57ae3eed78a5e0859253512f0f268f"
+  },
+  {
+   "bytes": 736,
+   "path": "cases/l01-external-signal-drain/tree/.unrest/runs/25874b14ba0d14b4d1c38d3f1c610cd787155bf0844642925db0702e5771f345/request.json",
+   "sha256": "236ad12ee0de68b20b5ba405fe183a88c043e7631fb3c1ff338a3806feab1c7e"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/l01-external-signal-drain/tree/.unrest/runs/idempotency/4a04b8fdd40b154e3e7f42de04139293f18ff9b226b648d5f1b5bff497e9416c.json",
+   "sha256": "212e0cee9a564402e4b1f5db70603468623a626001093181eb89d02316b2f745"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/l02-progress-after-draining/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "e3446784cba1e8dad7be7bfaefcca0d72862509cf9423df0d676326bdb88ad80"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/l02-progress-after-draining/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/l02-progress-after-draining/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "844840367a73ab8ec23322301cf280140f6f7bbb065f7ee031b40b46783fd814"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/l02-progress-after-draining/tree/.unrest/foundation/identities/control_operation/62750a5bbc1cf39f9041c60eb9bf98b5131f1fb1b4382fe96af7d3dc12c7fccb.json",
+   "sha256": "a5258d82d2fad4313f664f688f0e4a993f24940a08aa7131f4c08badff351520"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/l02-progress-after-draining/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/l02-progress-after-draining/tree/.unrest/foundation/identities/run/caafb5cd58e890d5051b2946f9ec56468639d28473be66a823b7cd2e58b24616.json",
+   "sha256": "7c69d154ba36a0d2305887253d776c80ca34a4dbbcaeadb771846d8a85deb10d"
+  },
+  {
+   "bytes": 6130,
+   "path": "cases/l02-progress-after-draining/tree/.unrest/foundation/receipts/run_receipt.v1/ee5e58d6a58ad2ffb1305b65cafb1f738a366c94255be30f58983ab2fc83207d.json",
+   "sha256": "2822a18c473c075688d47281d1583db11b8cdc12afcdcaf476851fc59126cd37"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/l02-progress-after-draining/tree/.unrest/runs/8971f6e8881ca590f3bdb5e5c15777b2b11e6c9615c6642a88899123a2ca44f9/events/00000000000000000001.json",
+   "sha256": "d477ee39c5f742524064536a69e90b152323443a0f87ef99f35a5b55537a0be3"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/l02-progress-after-draining/tree/.unrest/runs/8971f6e8881ca590f3bdb5e5c15777b2b11e6c9615c6642a88899123a2ca44f9/events/00000000000000000002.json",
+   "sha256": "6377328dca2a7ee0d72f892a85d20f82c8c5f673524683b85f063e061fe89d39"
+  },
+  {
+   "bytes": 374,
+   "path": "cases/l02-progress-after-draining/tree/.unrest/runs/8971f6e8881ca590f3bdb5e5c15777b2b11e6c9615c6642a88899123a2ca44f9/events/00000000000000000003.json",
+   "sha256": "2f26643ec6abf4f253cd8013041f26aca7286289bd29229959622c3494fdbedd"
+  },
+  {
+   "bytes": 470,
+   "path": "cases/l02-progress-after-draining/tree/.unrest/runs/8971f6e8881ca590f3bdb5e5c15777b2b11e6c9615c6642a88899123a2ca44f9/events/00000000000000000004.json",
+   "sha256": "50733b9906244bade9a0b7ca5ba1c899095a9a9d79bc017cf7f8d7f24222e9a0"
+  },
+  {
+   "bytes": 381,
+   "path": "cases/l02-progress-after-draining/tree/.unrest/runs/8971f6e8881ca590f3bdb5e5c15777b2b11e6c9615c6642a88899123a2ca44f9/events/00000000000000000005.json",
+   "sha256": "e063f49faf896e9809280b1072b78a56a038677d4118ccdd266c193ebeb8b49c"
+  },
+  {
+   "bytes": 570,
+   "path": "cases/l02-progress-after-draining/tree/.unrest/runs/8971f6e8881ca590f3bdb5e5c15777b2b11e6c9615c6642a88899123a2ca44f9/events/00000000000000000006.json",
+   "sha256": "af5270699a0badb31d191e94f3f44298253a04f2b1f6900a22b6195a3a3da721"
+  },
+  {
+   "bytes": 742,
+   "path": "cases/l02-progress-after-draining/tree/.unrest/runs/8971f6e8881ca590f3bdb5e5c15777b2b11e6c9615c6642a88899123a2ca44f9/request.json",
+   "sha256": "50db421649165d050d43b418bc45074ca6a5c893d3d09ccc24651521e6762bd5"
+  },
+  {
+   "bytes": 132,
+   "path": "cases/l02-progress-after-draining/tree/.unrest/runs/8971f6e8881ca590f3bdb5e5c15777b2b11e6c9615c6642a88899123a2ca44f9/result.json",
+   "sha256": "29ff21d819f7aa9b6bca50c9e03686174557127e79fc50d4ca6f4aaa37e373fe"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/l02-progress-after-draining/tree/.unrest/runs/idempotency/0e66089dd531818ca74f739e3c48d473ca227d3c29b28be84e42fd1260e8c134.json",
+   "sha256": "ed78d6060e719dce81b85e3022e241c04c6fbde90ed080ca28fca5eb2a3f5f42"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/l03-cancel-race-then-success/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "dd6773d2d11d902501a9addf7fc0cd8fe646192d5da71318a3415f18252a38ff"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/l03-cancel-race-then-success/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/l03-cancel-race-then-success/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "b92fd8a988f91385bbdb0b416714c689b5b1e486f5140112bee5406c73b3294d"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/l03-cancel-race-then-success/tree/.unrest/foundation/identities/control_operation/f2d804bdba4c37322aa5e99a61d72d2287e9a17db4264b5e165a539452091f19.json",
+   "sha256": "928b58b0b6202dbf93164a775ea2058caa4817a9cbdcbdee2ae0beac84d63ea1"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/l03-cancel-race-then-success/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/l03-cancel-race-then-success/tree/.unrest/foundation/identities/run/c83235b98ccec285b4fd1e70abda66b3f92f09066c842ce9584824aa74a73c49.json",
+   "sha256": "e95c9b51bf5cf1883287a2416ec4ae7462eb54dd460e94b91d8ca0c7756718b8"
+  },
+  {
+   "bytes": 6130,
+   "path": "cases/l03-cancel-race-then-success/tree/.unrest/foundation/receipts/run_receipt.v1/20025b5e688d98232f32410bba778bb6abe9f103760f1ae5b9ae180927b4ee91.json",
+   "sha256": "94e97045f381073d08ecb259d2f5e504857270339aeda45e7ee6b20b017d4c79"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/l03-cancel-race-then-success/tree/.unrest/runs/f0a6400de32a3b21975e9288d806488be9e4ef25630b92de69182f20c63dee35/events/00000000000000000001.json",
+   "sha256": "449269d0807bd5eedbba35f1344b9e15a00508833f6353839e51f1bc7d49ce2b"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/l03-cancel-race-then-success/tree/.unrest/runs/f0a6400de32a3b21975e9288d806488be9e4ef25630b92de69182f20c63dee35/events/00000000000000000002.json",
+   "sha256": "80293caf7f28640cbe601f2becf1e956f4ec0754c010b3ca4149ca9754ec176d"
+  },
+  {
+   "bytes": 573,
+   "path": "cases/l03-cancel-race-then-success/tree/.unrest/runs/f0a6400de32a3b21975e9288d806488be9e4ef25630b92de69182f20c63dee35/events/00000000000000000003.json",
+   "sha256": "7e59010147ce1741b000877e1749494397719531b2c1e04eb8cfdd098a7f2fcf"
+  },
+  {
+   "bytes": 470,
+   "path": "cases/l03-cancel-race-then-success/tree/.unrest/runs/f0a6400de32a3b21975e9288d806488be9e4ef25630b92de69182f20c63dee35/events/00000000000000000004.json",
+   "sha256": "a33754d4c8cc76746ef88784ab11f1d9ee6fcfb636828ecfe09e2a570bca647f"
+  },
+  {
+   "bytes": 381,
+   "path": "cases/l03-cancel-race-then-success/tree/.unrest/runs/f0a6400de32a3b21975e9288d806488be9e4ef25630b92de69182f20c63dee35/events/00000000000000000005.json",
+   "sha256": "04c381cab65789763f3c7cc451da8b05a535c1f939ee5e3360880e14791ef4b3"
+  },
+  {
+   "bytes": 570,
+   "path": "cases/l03-cancel-race-then-success/tree/.unrest/runs/f0a6400de32a3b21975e9288d806488be9e4ef25630b92de69182f20c63dee35/events/00000000000000000006.json",
+   "sha256": "86f8aa6b0da4d59fd29a148b5ba729fe394392534bae0b5e5165b881fc3b0e44"
+  },
+  {
+   "bytes": 745,
+   "path": "cases/l03-cancel-race-then-success/tree/.unrest/runs/f0a6400de32a3b21975e9288d806488be9e4ef25630b92de69182f20c63dee35/request.json",
+   "sha256": "97d8326abd14a219f62d16b4ec204afda897fb31d2518cbd5c0464f58fab2681"
+  },
+  {
+   "bytes": 132,
+   "path": "cases/l03-cancel-race-then-success/tree/.unrest/runs/f0a6400de32a3b21975e9288d806488be9e4ef25630b92de69182f20c63dee35/result.json",
+   "sha256": "29ff21d819f7aa9b6bca50c9e03686174557127e79fc50d4ca6f4aaa37e373fe"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/l03-cancel-race-then-success/tree/.unrest/runs/idempotency/e5654dd4eda42a85011748c8dacadbd3525436658fb9fabee82562ac177ee0c3.json",
+   "sha256": "5f00bc501759c64298e59147524f0321aea5f20e59dc473be3affb497de08d43"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/l04-cancel-then-failure/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "9e575708eb278ecb4f6482f78454463f9aa3224d5d4f94465f1abcd875c31119"
+  },
+  {
+   "bytes": 312,
+   "path": "cases/l04-cancel-then-failure/tree/.unrest-runtime/runs/bfbc4035703707ba19fc45739b91e2a66b309e3099bc6a8bc5368f4d441c0525.worker.json",
+   "sha256": "385dffd6d03eb6ee968d00fda0d97866de2e5a3a51a34842f3af09e004a87234"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/l04-cancel-then-failure/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/l04-cancel-then-failure/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "734fb3e76003c1efe22e63f4f18fd7ae3b30048a39dc0f50b2d2599e46ada77b"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/l04-cancel-then-failure/tree/.unrest/foundation/identities/control_operation/18ded3faa9f04bf261f52eef8c4751f99498beccfb8f3d2a08459e9860b36e85.json",
+   "sha256": "b2bb5e875af5d3de6e0dd80a224ec97ff591882a32f11f9f30cfe243a8f13ee7"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/l04-cancel-then-failure/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1254,
+   "path": "cases/l04-cancel-then-failure/tree/.unrest/foundation/identities/run/573185518d01a1ce5c18f7f0bf229e58c07d738146086b74c7ef8e3e31894e0a.json",
+   "sha256": "82e67820f49329db0fb8f0d29f207bb7766e7cc388d53487771437cb21773908"
+  },
+  {
+   "bytes": 6124,
+   "path": "cases/l04-cancel-then-failure/tree/.unrest/foundation/receipts/run_receipt.v1/43d5d2d8507d92c23a9e3eec0b901e0050c2a1f7d90f5eac899a6b1f7618b06f.json",
+   "sha256": "f10336435eab5b51defee9cf74e2820945bbd50563ed11aa475cab05e5c8c491"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/l04-cancel-then-failure/tree/.unrest/runs/03208b57494b4812ff40f988b47c768fcab960fd53566390f973b495057f3d53/events/00000000000000000001.json",
+   "sha256": "980fb569b9f8d6d11620e6b33ed39a86857402145fd7aec94c8111a8c4afd65a"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/l04-cancel-then-failure/tree/.unrest/runs/03208b57494b4812ff40f988b47c768fcab960fd53566390f973b495057f3d53/events/00000000000000000002.json",
+   "sha256": "f4025265d1f0b937e63c8726984e56b92cf77f9391c2d1f360112adb3b36e604"
+  },
+  {
+   "bytes": 573,
+   "path": "cases/l04-cancel-then-failure/tree/.unrest/runs/03208b57494b4812ff40f988b47c768fcab960fd53566390f973b495057f3d53/events/00000000000000000003.json",
+   "sha256": "d61ca4d6c43c8ca8dbe987c8ef5c6e7ac1161e8f7a232bcb39b932f6aa9a6f0d"
+  },
+  {
+   "bytes": 642,
+   "path": "cases/l04-cancel-then-failure/tree/.unrest/runs/03208b57494b4812ff40f988b47c768fcab960fd53566390f973b495057f3d53/events/00000000000000000004.json",
+   "sha256": "2eefe22d08f8deefd1663027189661cffee083437497751884ddd6c282b55837"
+  },
+  {
+   "bytes": 79,
+   "path": "cases/l04-cancel-then-failure/tree/.unrest/runs/03208b57494b4812ff40f988b47c768fcab960fd53566390f973b495057f3d53/private/tool-error.json",
+   "sha256": "4e6f54196f537a2e037b92f2500e751b9a0b52ccbbbaf8a549da2a2705784b97"
+  },
+  {
+   "bytes": 730,
+   "path": "cases/l04-cancel-then-failure/tree/.unrest/runs/03208b57494b4812ff40f988b47c768fcab960fd53566390f973b495057f3d53/request.json",
+   "sha256": "9a48aafa13376eb54fed3d862ca80ddbe512f19ed2ba893a956058c3ff3d8980"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/l04-cancel-then-failure/tree/.unrest/runs/idempotency/4f1eb0d7779d7eb2f38526f3c925cb7dab2920117f97bc4f7e26eb28fc99a1c1.json",
+   "sha256": "ad6b76acd6e9762a8eece36c76edca3c5ef295b07f6a9714c296ac226aeebfb8"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/l05-draining-then-failure/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "c9e20a1d1d8bdab79719e6ea91290eb608d1741ac421f4f05e8d9a23aa778a53"
+  },
+  {
+   "bytes": 312,
+   "path": "cases/l05-draining-then-failure/tree/.unrest-runtime/runs/5aac70f12618246328a38a4c1975d4ec32ef06980a92a5661df95c098a0648c1.worker.json",
+   "sha256": "ced031625e64f3e96ad2f82b334a49fd5a78adf27abc90d9e1c9f15409dd469b"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/l05-draining-then-failure/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/l05-draining-then-failure/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "3857c03f313ecd42e446e48973525a139f04834e538a908d48ed3e3f099d79b7"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/l05-draining-then-failure/tree/.unrest/foundation/identities/control_operation/6ca09144dd943d27451af92881a45996ef7d24f02ed541f55335edf3cf5b373a.json",
+   "sha256": "5328263213aec8f87954ee7a49372afe8da941eea3256fa8f0c0e85b43f0b3d4"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/l05-draining-then-failure/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/l05-draining-then-failure/tree/.unrest/foundation/identities/run/0ea79f2bc5a76cb5715c5207dfdaae2c81438a3936df72e893e68bcb43ae731a.json",
+   "sha256": "60c217913ea26397952d0db3a414bc49a3951606ba900f7b76df88bac73ff155"
+  },
+  {
+   "bytes": 6124,
+   "path": "cases/l05-draining-then-failure/tree/.unrest/foundation/receipts/run_receipt.v1/63a4d254ab88c0b206b7e5231fae1af58f27aaee37283fd8117e9734a166c324.json",
+   "sha256": "937fe081fb522abbdb29b34b133f5b5b0897a99f53fe2d61a630d69a4a30b110"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/l05-draining-then-failure/tree/.unrest/runs/9766abc483d1f886eaa957aaa309af3bbfc31ba3d8ae299919bc00037a4a8dc4/events/00000000000000000001.json",
+   "sha256": "4ad0f2ff5e38d22d10282b04e5b0e07bbe5b78d5ad58fd3336dbefa50014340b"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/l05-draining-then-failure/tree/.unrest/runs/9766abc483d1f886eaa957aaa309af3bbfc31ba3d8ae299919bc00037a4a8dc4/events/00000000000000000002.json",
+   "sha256": "480b3a5a894eb245e15a3e0342c2214b8bd13bd893ffdf626afd5ba7a8aab52e"
+  },
+  {
+   "bytes": 374,
+   "path": "cases/l05-draining-then-failure/tree/.unrest/runs/9766abc483d1f886eaa957aaa309af3bbfc31ba3d8ae299919bc00037a4a8dc4/events/00000000000000000003.json",
+   "sha256": "6e729241b38acb5270408f0bb4898fadaa40889d4d28d280af7df4da48e32587"
+  },
+  {
+   "bytes": 642,
+   "path": "cases/l05-draining-then-failure/tree/.unrest/runs/9766abc483d1f886eaa957aaa309af3bbfc31ba3d8ae299919bc00037a4a8dc4/events/00000000000000000004.json",
+   "sha256": "eed4bfaa2d1f2c86c0a3a03d151be0c246f625a5f538af5b546f6c65690a619a"
+  },
+  {
+   "bytes": 79,
+   "path": "cases/l05-draining-then-failure/tree/.unrest/runs/9766abc483d1f886eaa957aaa309af3bbfc31ba3d8ae299919bc00037a4a8dc4/private/tool-error.json",
+   "sha256": "4e6f54196f537a2e037b92f2500e751b9a0b52ccbbbaf8a549da2a2705784b97"
+  },
+  {
+   "bytes": 736,
+   "path": "cases/l05-draining-then-failure/tree/.unrest/runs/9766abc483d1f886eaa957aaa309af3bbfc31ba3d8ae299919bc00037a4a8dc4/request.json",
+   "sha256": "838624d3e2061a822927140d2c09359cf857f114820aa57ec98f5d430a501224"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/l05-draining-then-failure/tree/.unrest/runs/idempotency/03ff5c558a182233538702c670bdd06e435c7380c03e425e37ec0548ac4bc9ba.json",
+   "sha256": "174f16748c16ad0b00c6ccd0e6a14dbd8cdabeca35e6e930a7c9e445e17fa067"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/l06-effect-then-failure/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "9906d7f8d580d175e9d6ece0bebd456d17bfb7ce6caeb964f31b605ec084722b"
+  },
+  {
+   "bytes": 312,
+   "path": "cases/l06-effect-then-failure/tree/.unrest-runtime/runs/b661a217ff91e7c22512cb041e4859f0962754e7d48eb42d97302c3138302f60.worker.json",
+   "sha256": "d85af6b24f240de67d499823f1143594f0f0332a066a64680d5e9e65ab534646"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/l06-effect-then-failure/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/l06-effect-then-failure/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "fa582f509084871e32a68209f79f248872cbf77b1c6b58fe923a2ded4ebc6066"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/l06-effect-then-failure/tree/.unrest/foundation/identities/control_operation/310e27b6aa9301bbd1163643657354aee4aca32991f653cb9d9534db63d383e4.json",
+   "sha256": "98d34dc0b48a344cc62cc8be51a872d1fc45b9219ba0a2b1038f0a7f87a12758"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/l06-effect-then-failure/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1255,
+   "path": "cases/l06-effect-then-failure/tree/.unrest/foundation/identities/run/2482834952c312d28a81fded32689d8e07204e3ed6cc13192126ef9eb49261f2.json",
+   "sha256": "4effd33ef40fcc241ec401100c75f360f937ab279f489644ab7ddf4eee2ecc27"
+  },
+  {
+   "bytes": 6124,
+   "path": "cases/l06-effect-then-failure/tree/.unrest/foundation/receipts/run_receipt.v1/52b00a6618d85056f2b832ecad91bcf6f0cfef0b478eae5f0b085cad22a63b5e.json",
+   "sha256": "cae4aa89b95371ac7f837e802263294f8d044e16f427aa0328d33d757e81f5c7"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/l06-effect-then-failure/tree/.unrest/runs/369aaf4c75a08542447016c79299c20326388a2081b8ba44c798e9ce69b549e7/events/00000000000000000001.json",
+   "sha256": "c595055977e50e7c9317ea2a3e852919bbac9b334849ac5c6c456db5f790f114"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/l06-effect-then-failure/tree/.unrest/runs/369aaf4c75a08542447016c79299c20326388a2081b8ba44c798e9ce69b549e7/events/00000000000000000002.json",
+   "sha256": "e4beaa67cb3c2fb30378855ee55387e23b5ebfa31c1d02720b09e558b10d8646"
+  },
+  {
+   "bytes": 470,
+   "path": "cases/l06-effect-then-failure/tree/.unrest/runs/369aaf4c75a08542447016c79299c20326388a2081b8ba44c798e9ce69b549e7/events/00000000000000000003.json",
+   "sha256": "46814f3cb3ec484c0d9a1f2cbde5660261954528bba9b344ba0ddf1adbea1438"
+  },
+  {
+   "bytes": 642,
+   "path": "cases/l06-effect-then-failure/tree/.unrest/runs/369aaf4c75a08542447016c79299c20326388a2081b8ba44c798e9ce69b549e7/events/00000000000000000004.json",
+   "sha256": "37488e0f180cbaa434725dfef3c67676094bee949894b2b92a230e79f3cba0c9"
+  },
+  {
+   "bytes": 79,
+   "path": "cases/l06-effect-then-failure/tree/.unrest/runs/369aaf4c75a08542447016c79299c20326388a2081b8ba44c798e9ce69b549e7/private/tool-error.json",
+   "sha256": "4e6f54196f537a2e037b92f2500e751b9a0b52ccbbbaf8a549da2a2705784b97"
+  },
+  {
+   "bytes": 730,
+   "path": "cases/l06-effect-then-failure/tree/.unrest/runs/369aaf4c75a08542447016c79299c20326388a2081b8ba44c798e9ce69b549e7/request.json",
+   "sha256": "e365123ac1befe2f9cef9f65e9e5567ce29376f885e7d15184ed00756d7c3e55"
+  },
+  {
+   "bytes": 132,
+   "path": "cases/l06-effect-then-failure/tree/.unrest/runs/369aaf4c75a08542447016c79299c20326388a2081b8ba44c798e9ce69b549e7/result.json",
+   "sha256": "29ff21d819f7aa9b6bca50c9e03686174557127e79fc50d4ca6f4aaa37e373fe"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/l06-effect-then-failure/tree/.unrest/runs/idempotency/6487da4c22cdeb389b9c837cd5240c4fb3af18ebbff397326f79f4a0f8f14b58.json",
+   "sha256": "748be4ed19fe7bb875b6f71c5f826a93fe6a0a3f4a4d6835b1531422c1428bf7"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/l07-report-then-failure/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "c29b4e6e6e0586f0cad39daf4a9a50dc5b801674eb72d944f58e1fec402375f8"
+  },
+  {
+   "bytes": 312,
+   "path": "cases/l07-report-then-failure/tree/.unrest-runtime/runs/0168562234445cbeba0959c013425254637c05fe5ad77fced0b4e18e2b12fdc7.worker.json",
+   "sha256": "19e57d95555c75b5fad1fe072205b72063f506fcc8e1a5ec64ebebfdd8ca0106"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/l07-report-then-failure/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/l07-report-then-failure/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "fe4c86a9c18a53138f37845a422d8e9ee38f476368b9299987db72a338e4b51d"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/l07-report-then-failure/tree/.unrest/foundation/identities/control_operation/2ac19aecb87584311e6a2e024b6abb535eed756c085da3bf4efe8fed1b498db7.json",
+   "sha256": "bd56c8338c569fe26dc4eed45d2eb6e4e45bade6d2db39f59ff39e48dcc0994a"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/l07-report-then-failure/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/l07-report-then-failure/tree/.unrest/foundation/identities/run/d03b850b982d73889e11d431910702ad56a278f0cebbf1fe376e5a7afc2f0864.json",
+   "sha256": "c866c8fe683a3dc0da2cdd29235333abecfee3e3c6c5124d68b6c23925d240be"
+  },
+  {
+   "bytes": 6124,
+   "path": "cases/l07-report-then-failure/tree/.unrest/foundation/receipts/run_receipt.v1/82befa9ee164ee256160e0f63755e4a760b941cd47e3b642b5168946104abf91.json",
+   "sha256": "99715377d540de87928ee314d7e801704c87ef8938d7bbc497c76ec96fccc4da"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/l07-report-then-failure/tree/.unrest/runs/77b5944710435e132dacbaeb3677efd9f23f901fcc46c58661ce407916badea9/events/00000000000000000001.json",
+   "sha256": "b3b50b14126949a085384483c455153d9b33372893aca5bdcd756448f5672ffe"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/l07-report-then-failure/tree/.unrest/runs/77b5944710435e132dacbaeb3677efd9f23f901fcc46c58661ce407916badea9/events/00000000000000000002.json",
+   "sha256": "9e0d85370df71f1bea83a1bdee5f4957d99f0d100c7fac56534af330d8498188"
+  },
+  {
+   "bytes": 470,
+   "path": "cases/l07-report-then-failure/tree/.unrest/runs/77b5944710435e132dacbaeb3677efd9f23f901fcc46c58661ce407916badea9/events/00000000000000000003.json",
+   "sha256": "0803de2a24fc02f58dfa05ebe045824e083445ec8b5250ce41fd54084e40e53e"
+  },
+  {
+   "bytes": 381,
+   "path": "cases/l07-report-then-failure/tree/.unrest/runs/77b5944710435e132dacbaeb3677efd9f23f901fcc46c58661ce407916badea9/events/00000000000000000004.json",
+   "sha256": "04c633c8d38b62d5a635fc078d2747f683f79b282114cef763b01304ffd2b29d"
+  },
+  {
+   "bytes": 642,
+   "path": "cases/l07-report-then-failure/tree/.unrest/runs/77b5944710435e132dacbaeb3677efd9f23f901fcc46c58661ce407916badea9/events/00000000000000000005.json",
+   "sha256": "2d97f2a1bc63f900b8c7f490049343333f656147919991d688f0afed7c4cafba"
+  },
+  {
+   "bytes": 79,
+   "path": "cases/l07-report-then-failure/tree/.unrest/runs/77b5944710435e132dacbaeb3677efd9f23f901fcc46c58661ce407916badea9/private/tool-error.json",
+   "sha256": "4e6f54196f537a2e037b92f2500e751b9a0b52ccbbbaf8a549da2a2705784b97"
+  },
+  {
+   "bytes": 730,
+   "path": "cases/l07-report-then-failure/tree/.unrest/runs/77b5944710435e132dacbaeb3677efd9f23f901fcc46c58661ce407916badea9/request.json",
+   "sha256": "19759fbbd49aafeebc07836611c4956a5b79fcadd4a55c7a20e17bce2aa19511"
+  },
+  {
+   "bytes": 132,
+   "path": "cases/l07-report-then-failure/tree/.unrest/runs/77b5944710435e132dacbaeb3677efd9f23f901fcc46c58661ce407916badea9/result.json",
+   "sha256": "29ff21d819f7aa9b6bca50c9e03686174557127e79fc50d4ca6f4aaa37e373fe"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/l07-report-then-failure/tree/.unrest/runs/idempotency/e46cae564c377fd9ee59725d7909cc8fdbb7dbfb4722578ad48184d32e8b20ee.json",
+   "sha256": "42292477bc03874eaf51eeb37e958c921019b9004e17866a96dc71f9afa9131e"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/l08-effect-then-worker-failed/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "b90faf3319a897c356ca48553426f3d5e7a6236c1c309b37d43fd96a8c0eefdf"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/l08-effect-then-worker-failed/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/l08-effect-then-worker-failed/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "8f933fc102df4a1f9eb63a76849aaa580417b74a3cd1e15d26d5574693592ce7"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/l08-effect-then-worker-failed/tree/.unrest/foundation/identities/control_operation/1ba7df43a73d912634c1d7329806a24cbce3d53ca08c370e1d18e00a26d67994.json",
+   "sha256": "4a668fb9ab3b9512aff062b993c57f856adcee99bdb7e78ee27aabed79fefe59"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/l08-effect-then-worker-failed/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/l08-effect-then-worker-failed/tree/.unrest/foundation/identities/run/73f3e754db05e2d3ec18e224667b90f0907faa020e10e26cd5368e7a7c88f659.json",
+   "sha256": "1c05b2106db78394cae3e0a795de863a5ac22265955d154190345ebb868e21a3"
+  },
+  {
+   "bytes": 6126,
+   "path": "cases/l08-effect-then-worker-failed/tree/.unrest/foundation/receipts/run_receipt.v1/3e189bc2404fd3d2d6a0250739ad0a2ef36d8e70dc385d6ca85bc65c92b14601.json",
+   "sha256": "c687fb01d55594a57be627b6fbf5ed19834d11fc730aafb55a3f774c9c68eee8"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/l08-effect-then-worker-failed/tree/.unrest/runs/f41beee6e0af18f7081d7221d606497639c5926e1a806649a5ad7781f5bd42dd/events/00000000000000000001.json",
+   "sha256": "c298343ff5b3a6997425b574b76c3ce6edc8b586c3e533f18d0e17e0d1f2be9f"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/l08-effect-then-worker-failed/tree/.unrest/runs/f41beee6e0af18f7081d7221d606497639c5926e1a806649a5ad7781f5bd42dd/events/00000000000000000002.json",
+   "sha256": "4c32527b3a7e4ddcc5e04667aea805405c25d378487b95896cd98c32fcda04a9"
+  },
+  {
+   "bytes": 470,
+   "path": "cases/l08-effect-then-worker-failed/tree/.unrest/runs/f41beee6e0af18f7081d7221d606497639c5926e1a806649a5ad7781f5bd42dd/events/00000000000000000003.json",
+   "sha256": "19cb1ea6920fc168955813b4caea9348210d371f74e13be3379d969d3b67ed8a"
+  },
+  {
+   "bytes": 644,
+   "path": "cases/l08-effect-then-worker-failed/tree/.unrest/runs/f41beee6e0af18f7081d7221d606497639c5926e1a806649a5ad7781f5bd42dd/events/00000000000000000004.json",
+   "sha256": "076543d55f574d5010616db45eca207b139950df8419baa598155ff24c232532"
+  },
+  {
+   "bytes": 748,
+   "path": "cases/l08-effect-then-worker-failed/tree/.unrest/runs/f41beee6e0af18f7081d7221d606497639c5926e1a806649a5ad7781f5bd42dd/request.json",
+   "sha256": "838d31f2b3062b260c9f3d97ec1537703d51cb2e2a37943d1e67b4e00de4e8b0"
+  },
+  {
+   "bytes": 132,
+   "path": "cases/l08-effect-then-worker-failed/tree/.unrest/runs/f41beee6e0af18f7081d7221d606497639c5926e1a806649a5ad7781f5bd42dd/result.json",
+   "sha256": "29ff21d819f7aa9b6bca50c9e03686174557127e79fc50d4ca6f4aaa37e373fe"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/l08-effect-then-worker-failed/tree/.unrest/runs/idempotency/2c1e5ee5825613239d380a8277c4883848e7300a5047e35681e20fe166cbf02b.json",
+   "sha256": "51b8d86ee9968a0c775c79a96db5448f7569ad07f81b85488700a55b2a79e09c"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/l09-report-then-worker-failed/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "6be4f3deb2593d11ac1497cfd12621e982cd0a687f0fde555edc3a742d6b6008"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/l09-report-then-worker-failed/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/l09-report-then-worker-failed/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "0add70a285033552ae8812a91566ef77ff089e077c797b8d26d2e978a5404b56"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/l09-report-then-worker-failed/tree/.unrest/foundation/identities/control_operation/47a452c9f0edb146e43eba37ac13323528740839bf99d1c7d5f2faed1987767c.json",
+   "sha256": "6fb78887e4f99fc464defce981fe091e81432a8e89dc369070004425e067d26d"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/l09-report-then-worker-failed/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/l09-report-then-worker-failed/tree/.unrest/foundation/identities/run/40b891aeee8c126a18894fa1bea94df3f5364bb6a37817d1d9a6cecad52b500e.json",
+   "sha256": "a286e9c2dd6375a7a876f9049716e0d6fb6e5d6a43e1f37ee9f62da7754c02c5"
+  },
+  {
+   "bytes": 6126,
+   "path": "cases/l09-report-then-worker-failed/tree/.unrest/foundation/receipts/run_receipt.v1/790c3c47b975d3f1b5d35b3e846cf12a0ed49a04d267abe31fb571e2efe13ece.json",
+   "sha256": "de72662293db967525feb6ea29524bc15fc9a2cf3a1b4826942b41c180c20742"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/l09-report-then-worker-failed/tree/.unrest/runs/819acf0d4dcd1669f316bd87e10a584face927b1829beb19f60eaa0a379ee725/events/00000000000000000001.json",
+   "sha256": "c7c7d8c73ebf120ec04eb7dcc6c2a86a16b5a88e38047c8fe16cc083c3d88f26"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/l09-report-then-worker-failed/tree/.unrest/runs/819acf0d4dcd1669f316bd87e10a584face927b1829beb19f60eaa0a379ee725/events/00000000000000000002.json",
+   "sha256": "45ab45c1cdd2b91205343265e4c4bcfbc6b66090c6e97ddee2cc00e5d16cca51"
+  },
+  {
+   "bytes": 470,
+   "path": "cases/l09-report-then-worker-failed/tree/.unrest/runs/819acf0d4dcd1669f316bd87e10a584face927b1829beb19f60eaa0a379ee725/events/00000000000000000003.json",
+   "sha256": "790f20518243be3cf9e4ab826184ddc3c0b04922ad3fdd066df02cce3c2cc80a"
+  },
+  {
+   "bytes": 381,
+   "path": "cases/l09-report-then-worker-failed/tree/.unrest/runs/819acf0d4dcd1669f316bd87e10a584face927b1829beb19f60eaa0a379ee725/events/00000000000000000004.json",
+   "sha256": "527402f2300dbf7287be3226a5857a1d2d0d3a7df7fce46d2bc8a809b0dfc3a2"
+  },
+  {
+   "bytes": 644,
+   "path": "cases/l09-report-then-worker-failed/tree/.unrest/runs/819acf0d4dcd1669f316bd87e10a584face927b1829beb19f60eaa0a379ee725/events/00000000000000000005.json",
+   "sha256": "f92d05f051c8fb4f6382181e3386cfbbe86e863d550059cbd2a4c81bbb45b9af"
+  },
+  {
+   "bytes": 748,
+   "path": "cases/l09-report-then-worker-failed/tree/.unrest/runs/819acf0d4dcd1669f316bd87e10a584face927b1829beb19f60eaa0a379ee725/request.json",
+   "sha256": "d22a6b828f879ab308f60895841b389ed443f8164665baa5853c091cf5efedd3"
+  },
+  {
+   "bytes": 132,
+   "path": "cases/l09-report-then-worker-failed/tree/.unrest/runs/819acf0d4dcd1669f316bd87e10a584face927b1829beb19f60eaa0a379ee725/result.json",
+   "sha256": "29ff21d819f7aa9b6bca50c9e03686174557127e79fc50d4ca6f4aaa37e373fe"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/l09-report-then-worker-failed/tree/.unrest/runs/idempotency/44e01f2a6e79f631e819e2034ded6867725f5784f45034695f2b62ab4c3e0c4a.json",
+   "sha256": "f5d2bfca53522c8f51355f5f3bbf07bbecd7084542392e27d4bc893bd5a42885"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/l10-queued-worker-failed/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "93cc92d3076fef1a108738d5d2e76a1c4632e80ce7266f4624e62a4919ad4226"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/l10-queued-worker-failed/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/l10-queued-worker-failed/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "5338a33b1b4dd13bec9c9ba23233c93169ad2f046845d29f6b2ca56121da8b52"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/l10-queued-worker-failed/tree/.unrest/foundation/identities/control_operation/7e3d50bba41caa377b026060e037731c2209bbc8f8a739034fed743520770279.json",
+   "sha256": "8242681a9a844616e80cb83d0387ae212e14e4558f9e2db2b597aaab4ddd075e"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/l10-queued-worker-failed/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/l10-queued-worker-failed/tree/.unrest/foundation/identities/run/7ad2ea529828c8c2e5c39a3018ed3512d3bf602f6e0d939f52367bda6bc44e59.json",
+   "sha256": "c6704a527dbf435522e7b96ff6954859c771fb64e7a8bf22caaf39ff0e485105"
+  },
+  {
+   "bytes": 6124,
+   "path": "cases/l10-queued-worker-failed/tree/.unrest/foundation/receipts/run_receipt.v1/e3735d9ee0ada8bc8f4db7d20036514101a34ee79a4b44e46f490b900f1370fa.json",
+   "sha256": "d856a8c7e3d119dfda152e83db6df5677ea701e5cec88a086c0e1047d581abef"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/l10-queued-worker-failed/tree/.unrest/runs/f47c3f2f8b50a0658edaf9fa55358e3c835bb7246d651f65340180f70183683d/events/00000000000000000001.json",
+   "sha256": "4b113c402f40b63c079ee8ad5854fa4586ed427e885b8c6ecb0ce575b24c7cd1"
+  },
+  {
+   "bytes": 641,
+   "path": "cases/l10-queued-worker-failed/tree/.unrest/runs/f47c3f2f8b50a0658edaf9fa55358e3c835bb7246d651f65340180f70183683d/events/00000000000000000002.json",
+   "sha256": "a0f2fb07b11fcf399e706b626c6f5507c5d2067f9f56e992093a132bd6380348"
+  },
+  {
+   "bytes": 733,
+   "path": "cases/l10-queued-worker-failed/tree/.unrest/runs/f47c3f2f8b50a0658edaf9fa55358e3c835bb7246d651f65340180f70183683d/request.json",
+   "sha256": "2ce4ae2e5bb79bf2c6a6757de4c9056cc1bd0a2b7903b185d6ea4a8249d7a7fc"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/l10-queued-worker-failed/tree/.unrest/runs/idempotency/05e3583892fcee7801036417940d6cd5247549417577023611d18434d79a286b.json",
+   "sha256": "c0059f02be670bf10276cb615af231b61967cdafab715867896f927b5ec75b08"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/n01-submit-queued/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/n01-submit-queued/tree/.unrest/foundation/identities/control_operation/f9953f4bc1f9777fe7d3faf358beff559d94aa2ebc9f354047cb3a6ddb6725a5.json",
+   "sha256": "eaf3b2bf97a6d4849c95ff6d614d1d8f660898db4128c84137f6a935aa855741"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/n01-submit-queued/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/n01-submit-queued/tree/.unrest/foundation/identities/run/860a740dce3d56683c3d148b24a05f782a610c7c1f64d212caf70d586baa1e96.json",
+   "sha256": "446752df94fcf7161b1cd45ddb59e0b11eec6aafe4f5f94ef1072cd0137420ea"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/n01-submit-queued/tree/.unrest/runs/5d905c52adb0a2ca45521b165f560a42b1037d9c7c8cd15953d860fde8d6f419/events/00000000000000000001.json",
+   "sha256": "ed7dcc14c4972b7862495b2dd49e1b3d756896a1d99a012351ff9e2716ee1c5e"
+  },
+  {
+   "bytes": 712,
+   "path": "cases/n01-submit-queued/tree/.unrest/runs/5d905c52adb0a2ca45521b165f560a42b1037d9c7c8cd15953d860fde8d6f419/request.json",
+   "sha256": "f64a522bc69ec6bc2d7fff5577bea89d86f68d57dc4bfb00075673271fd670b5"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/n01-submit-queued/tree/.unrest/runs/idempotency/953f37fd2e4c45b595591119333544b2d3f00675985a577b660984290ee69ab5.json",
+   "sha256": "896dfd9cc07a6c9b68c0eb8e2fe58cce29eaabbae9549b15bedcc7bc0c896a85"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/n02-worker-success/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "0dee45ee48420cd912822a8b22d71838348f0432993de69cb613a1bdd9f56762"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/n02-worker-success/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/n02-worker-success/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "4ab291fef1ebddc3d9cff3404868b2521e6954b73d84ba27ce68169e3d8d57b1"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/n02-worker-success/tree/.unrest/foundation/identities/control_operation/54c62b531341c4501d650882a31ca34873c4699b2a5988e19e9f2e200d7e1d48.json",
+   "sha256": "ad2b2853e8882c06ad45e42f3602f8afe47548634a81102db678290a8b98b12d"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/n02-worker-success/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/n02-worker-success/tree/.unrest/foundation/identities/run/298aca769bda02241b56b09a99310d436964036f086f99e5b7de4ce7e64026ff.json",
+   "sha256": "901840006583612f1b96688c311d3c79c2b7d98cb9bd9ac0d509bdddde9f1314"
+  },
+  {
+   "bytes": 6130,
+   "path": "cases/n02-worker-success/tree/.unrest/foundation/receipts/run_receipt.v1/6b258bf6e3752eeaeef1290cdc41a7b61566c8dacf3722590057c2bcdfb58488.json",
+   "sha256": "bfc48a8a069c7f2e9ad4897fc67692d12e795ebce68543a6697064fd8ac6872f"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/n02-worker-success/tree/.unrest/runs/6aa63a5d67c2402bf515dfc3eed89cd437a38da5915599cd25f32bba7c76d11c/events/00000000000000000001.json",
+   "sha256": "42f40d59c74c4f43bf35d8d2d19988bca7c5612aa65abda1d8139534be5e0509"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/n02-worker-success/tree/.unrest/runs/6aa63a5d67c2402bf515dfc3eed89cd437a38da5915599cd25f32bba7c76d11c/events/00000000000000000002.json",
+   "sha256": "f990927e7449e84f1128505285f7b31a9a797fba9da9bac33519af282ee67d8f"
+  },
+  {
+   "bytes": 470,
+   "path": "cases/n02-worker-success/tree/.unrest/runs/6aa63a5d67c2402bf515dfc3eed89cd437a38da5915599cd25f32bba7c76d11c/events/00000000000000000003.json",
+   "sha256": "014e8f5856f40ebea9ccafeb3b4e7bae3178d95d24ae370bff12d48770965889"
+  },
+  {
+   "bytes": 381,
+   "path": "cases/n02-worker-success/tree/.unrest/runs/6aa63a5d67c2402bf515dfc3eed89cd437a38da5915599cd25f32bba7c76d11c/events/00000000000000000004.json",
+   "sha256": "25b90b6876590503f4ab9d8003f95ea47fbb9c56ed8b2fff2f650deb2ef47749"
+  },
+  {
+   "bytes": 570,
+   "path": "cases/n02-worker-success/tree/.unrest/runs/6aa63a5d67c2402bf515dfc3eed89cd437a38da5915599cd25f32bba7c76d11c/events/00000000000000000005.json",
+   "sha256": "583e9c403b1f6128932e770927219b74897f75afebb38b3e6b2e305a0328f126"
+  },
+  {
+   "bytes": 715,
+   "path": "cases/n02-worker-success/tree/.unrest/runs/6aa63a5d67c2402bf515dfc3eed89cd437a38da5915599cd25f32bba7c76d11c/request.json",
+   "sha256": "7fddb26b87e83806358634bf9aa5327f41c3b72c37669704a1934518273aec34"
+  },
+  {
+   "bytes": 132,
+   "path": "cases/n02-worker-success/tree/.unrest/runs/6aa63a5d67c2402bf515dfc3eed89cd437a38da5915599cd25f32bba7c76d11c/result.json",
+   "sha256": "29ff21d819f7aa9b6bca50c9e03686174557127e79fc50d4ca6f4aaa37e373fe"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/n02-worker-success/tree/.unrest/runs/idempotency/5cbe8d64f09e43fd2ef4cc177b7ac535a4103f421306d2fa6a889084e1313102.json",
+   "sha256": "2fa05c7f7f51820bdaeb21b66bca74c9f5ab6ad94b0e4be6cb9b7581c0bd9595"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/n03-worker-executor-failure/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "74a5bb4d855e20ba646785b82e08b172cc698c0318bed1d95bae13997f13299f"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/n03-worker-executor-failure/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/n03-worker-executor-failure/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "65117491bcfbd8f6686f3deb40c0d87dfa9657379eaaf3bcfed758d224799fad"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/n03-worker-executor-failure/tree/.unrest/foundation/identities/control_operation/8706fc1d3865899426495f5d47ed5f96f0167ea10c1977299aef8fb791d3bf5c.json",
+   "sha256": "52666d5dafd2a1286cb2e7f6f870a89b394900bbb59970a107d83cb1c8175046"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/n03-worker-executor-failure/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1255,
+   "path": "cases/n03-worker-executor-failure/tree/.unrest/foundation/identities/run/08f4c58605d7ca4aeae1d74045beb71ff896a789b09d0496b4e28c941d907639.json",
+   "sha256": "4a750362b7bffee580b72c009394b3164e8b455b256e9e22aea5a9a4eb78244e"
+  },
+  {
+   "bytes": 6124,
+   "path": "cases/n03-worker-executor-failure/tree/.unrest/foundation/receipts/run_receipt.v1/eff5eebff3ae8bb1052c493bef53d06a350b0c1ea971b9177044ea404daff2bd.json",
+   "sha256": "fdd3b3f277b7d65a166aa5a234ff179410326684d14e40aff92791cba526d1dd"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/n03-worker-executor-failure/tree/.unrest/runs/48e2236b0b3d087e40d4fe7298f2f0e53477521984f9118730593de6713dfcf3/events/00000000000000000001.json",
+   "sha256": "bda2ba0bf892455f3747be3119b98638e9631d4c66a79002cbc4602490475586"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/n03-worker-executor-failure/tree/.unrest/runs/48e2236b0b3d087e40d4fe7298f2f0e53477521984f9118730593de6713dfcf3/events/00000000000000000002.json",
+   "sha256": "51695e5c8e48e60aae2e70b4ce6fe1d977bf6f811bfa8ab52d4c6e05947649bc"
+  },
+  {
+   "bytes": 642,
+   "path": "cases/n03-worker-executor-failure/tree/.unrest/runs/48e2236b0b3d087e40d4fe7298f2f0e53477521984f9118730593de6713dfcf3/events/00000000000000000003.json",
+   "sha256": "ec028ad3ccfb6bd9116738d8d3c9fab13fa49fc99c359df6d11b672020ca565b"
+  },
+  {
+   "bytes": 79,
+   "path": "cases/n03-worker-executor-failure/tree/.unrest/runs/48e2236b0b3d087e40d4fe7298f2f0e53477521984f9118730593de6713dfcf3/private/tool-error.json",
+   "sha256": "4e6f54196f537a2e037b92f2500e751b9a0b52ccbbbaf8a549da2a2705784b97"
+  },
+  {
+   "bytes": 742,
+   "path": "cases/n03-worker-executor-failure/tree/.unrest/runs/48e2236b0b3d087e40d4fe7298f2f0e53477521984f9118730593de6713dfcf3/request.json",
+   "sha256": "b11b5fae184297639a5f21dfe87173e8c3ef8ca69a1907f5fabcb477f36de522"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/n03-worker-executor-failure/tree/.unrest/runs/idempotency/d5f994b102db325b11ec1f5bcad3f1f7886c95ee9c267466ec66d76e50d1c3fc.json",
+   "sha256": "147dd8a530f3305e09264aa1eaa7a40d89fc59682759f3659c7a720e290b0b18"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/n04-worker-exception/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "67168b33c3657fda6e3e40b4cbe11db473da86756beb40b1dffcb88581a1736c"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/n04-worker-exception/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/n04-worker-exception/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "c8955eb2037f9ddbbbda7f43d48552651a8f7918bbc966b34509f4cc07c71165"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/n04-worker-exception/tree/.unrest/foundation/identities/control_operation/1a958668b20cd8e5bf5a26968ccbfe957bdf1074ba1e6a0e24d539fbd356a451.json",
+   "sha256": "6d2009b8bd0fd81aec8fa737461b912cc926c1bca7c541c75287f6422989197e"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/n04-worker-exception/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/n04-worker-exception/tree/.unrest/foundation/identities/run/eecfcf43807719e764f6d697a6d66986cc2ac7eb0938a9345e2ab86fd4d054b4.json",
+   "sha256": "9287ba517ac5411301f2a5d6998190f8000f2c373ca52673b2d3743f24b59879"
+  },
+  {
+   "bytes": 6126,
+   "path": "cases/n04-worker-exception/tree/.unrest/foundation/receipts/run_receipt.v1/9509bb27b2f6003b7124827cc007d11ae0cd915ad835a4ae19e390de80eebc62.json",
+   "sha256": "94e030d9c49397a330ea6a14b5181d98e5c323ad4c6d7e99273718702692514e"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/n04-worker-exception/tree/.unrest/runs/ff9b7227867d346f9dc88adafcacf09ca09f9094da97effde62009290d12932b/events/00000000000000000001.json",
+   "sha256": "39cb31c713e0eb5af3961cab60af5a64ac06b5f5a746707211102030e942f0f3"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/n04-worker-exception/tree/.unrest/runs/ff9b7227867d346f9dc88adafcacf09ca09f9094da97effde62009290d12932b/events/00000000000000000002.json",
+   "sha256": "32e5732c2f6de93d6fd79dccbda50e82a90284aeb635bd789a040b360ea70725"
+  },
+  {
+   "bytes": 644,
+   "path": "cases/n04-worker-exception/tree/.unrest/runs/ff9b7227867d346f9dc88adafcacf09ca09f9094da97effde62009290d12932b/events/00000000000000000003.json",
+   "sha256": "180ced9c797bba26efe3323da05331a69cfbdca5fced6ebbd9c55f71b4eb2ccc"
+  },
+  {
+   "bytes": 721,
+   "path": "cases/n04-worker-exception/tree/.unrest/runs/ff9b7227867d346f9dc88adafcacf09ca09f9094da97effde62009290d12932b/request.json",
+   "sha256": "99541b08443375abfa3b658f13764049a859eaf25fc6bc6ac5c0266ef687a5dd"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/n04-worker-exception/tree/.unrest/runs/idempotency/2a1432214b2e27dbddfaceb4c87c2047d54cc1b5e919ceb77f3c825c99c4d596.json",
+   "sha256": "cf890da294e16d21c6f742b8d6af26f0f6bc6878b8901fe0454ee0182b360c28"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/n05-cancel-queued/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "f2de25b32b081b883835f4ebf52102093b48035e15059b163c4d9cb25a53c0f1"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/n05-cancel-queued/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/n05-cancel-queued/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "fcc52faf775a25bbe60671eda677bb4342eda6160989c0705d78044e8f9b0133"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/n05-cancel-queued/tree/.unrest/foundation/identities/control_operation/ec2deccbf3bc49cb513c268da6f9d02f65f029aacb37119b5caf8c1807e1dd5a.json",
+   "sha256": "a09e12c39db6baf474995063c282a8b3d59b86ce8bfd59fb64fb7974b4ae6543"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/n05-cancel-queued/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/n05-cancel-queued/tree/.unrest/foundation/identities/run/69d5f2e7bc07aae1d330d27039c56f9dcabd90ff4aeda7d90b70e674077d7e43.json",
+   "sha256": "b42622ad63d1f7fe40302320e82d1983f2194a4cde2dea46ad985bba58e2aa03"
+  },
+  {
+   "bytes": 6130,
+   "path": "cases/n05-cancel-queued/tree/.unrest/foundation/receipts/run_receipt.v1/58e763c881104517aba0900c00810125f23aa0505de150d1025abd474e94603c.json",
+   "sha256": "a45bf0ba103218ed569573ba41d9170301ef827fd58f1b82d12921f5addf6a8a"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/n05-cancel-queued/tree/.unrest/runs/f802edbe201536ed56b24d3f9d465485123e62b6a3ebba5b9fb524c364b92037/events/00000000000000000001.json",
+   "sha256": "01d469e2a90238c2b53a4e6af0d6b5568d9c45027171571152cf015e26fe5edd"
+  },
+  {
+   "bytes": 573,
+   "path": "cases/n05-cancel-queued/tree/.unrest/runs/f802edbe201536ed56b24d3f9d465485123e62b6a3ebba5b9fb524c364b92037/events/00000000000000000002.json",
+   "sha256": "4362ecbfce47783bf19ebefec53a0fc6dfaf1bea97b228f09b118ef79ff1196d"
+  },
+  {
+   "bytes": 374,
+   "path": "cases/n05-cancel-queued/tree/.unrest/runs/f802edbe201536ed56b24d3f9d465485123e62b6a3ebba5b9fb524c364b92037/events/00000000000000000003.json",
+   "sha256": "f18097907cb50cabea269d757c52d5907c79480b7797d3f71d2a8eefe6ce69f4"
+  },
+  {
+   "bytes": 570,
+   "path": "cases/n05-cancel-queued/tree/.unrest/runs/f802edbe201536ed56b24d3f9d465485123e62b6a3ebba5b9fb524c364b92037/events/00000000000000000004.json",
+   "sha256": "3d0a3de3c98a281eca949b75571499d03a5219dc3ba5cfc7f587b581ed2b15ea"
+  },
+  {
+   "bytes": 712,
+   "path": "cases/n05-cancel-queued/tree/.unrest/runs/f802edbe201536ed56b24d3f9d465485123e62b6a3ebba5b9fb524c364b92037/request.json",
+   "sha256": "b5ae305a96ed54def69b276a6a375e11a1c9b15e60402c1d0e99a2747d10957c"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/n05-cancel-queued/tree/.unrest/runs/idempotency/25285c9b4edaef13b25bd081c60f4850aa9f8c70f115a4f0e826dc560ee60800.json",
+   "sha256": "4fd82151f6d7262d4c824fa4945f75d0f62aae17a383d4455f48a9c6dcb2607b"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/n06-cancel-live-worker/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "a860704fd28ba536c8b1832366bf71e00f255b2a275364a4fd017e027d68dd32"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/n06-cancel-live-worker/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/n06-cancel-live-worker/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "6a75eb5ea9a59e01030a2076b68963fe171152386a26bb281381b055b0c633cb"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/n06-cancel-live-worker/tree/.unrest/foundation/identities/control_operation/bd456a238d082c685378bc89c5574104b1bbb152031d364bced1b8679bb5112a.json",
+   "sha256": "4b8ec722c9bafd5466c22d93890d4274de544a50526fdea12986370ffdb6884c"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/n06-cancel-live-worker/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/n06-cancel-live-worker/tree/.unrest/foundation/identities/run/c8aa204b32ba565657334d9fa6582eeb4531f340f5e1ba5204d1ec81a9a67ddf.json",
+   "sha256": "212b5c0039ee95a0cfbc862e2747d5118fb8c284ee1c37f31a3b2563116f39aa"
+  },
+  {
+   "bytes": 6130,
+   "path": "cases/n06-cancel-live-worker/tree/.unrest/foundation/receipts/run_receipt.v1/194436d1ddfadc41f4a2b58e33fd0af958827d66d003b0a4b931afbda3a3f1fc.json",
+   "sha256": "7f9862768f1105cf4ae173b8e1f59967abefb29afb80211f28538b8ea0653b0c"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/n06-cancel-live-worker/tree/.unrest/runs/e3b8bbcdba5e39b1c6eb9f6cc0c81db52dcccbfb96e4908766e0d832f26ffcda/events/00000000000000000001.json",
+   "sha256": "713732ebb403ee72ea7b1bb22955cb64b6324ce7e91be77f3b2f53befd982fdf"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/n06-cancel-live-worker/tree/.unrest/runs/e3b8bbcdba5e39b1c6eb9f6cc0c81db52dcccbfb96e4908766e0d832f26ffcda/events/00000000000000000002.json",
+   "sha256": "e3fdcef8e90a466b698c0f17c4bcc3bfea33d443e4f0b9476a9ad07c195ab7de"
+  },
+  {
+   "bytes": 573,
+   "path": "cases/n06-cancel-live-worker/tree/.unrest/runs/e3b8bbcdba5e39b1c6eb9f6cc0c81db52dcccbfb96e4908766e0d832f26ffcda/events/00000000000000000003.json",
+   "sha256": "2481c96802b1d2030972a99f2b74b92dc4cc84e480d45a6a81cfdc397a6774ec"
+  },
+  {
+   "bytes": 374,
+   "path": "cases/n06-cancel-live-worker/tree/.unrest/runs/e3b8bbcdba5e39b1c6eb9f6cc0c81db52dcccbfb96e4908766e0d832f26ffcda/events/00000000000000000004.json",
+   "sha256": "c8c573aa4119df42418e03df72a11daffaf00f688c97b391f928297741257736"
+  },
+  {
+   "bytes": 570,
+   "path": "cases/n06-cancel-live-worker/tree/.unrest/runs/e3b8bbcdba5e39b1c6eb9f6cc0c81db52dcccbfb96e4908766e0d832f26ffcda/events/00000000000000000005.json",
+   "sha256": "af975e1b8089b334953007465fce0dacf75332f249d741654df479bbbd3ae89d"
+  },
+  {
+   "bytes": 727,
+   "path": "cases/n06-cancel-live-worker/tree/.unrest/runs/e3b8bbcdba5e39b1c6eb9f6cc0c81db52dcccbfb96e4908766e0d832f26ffcda/request.json",
+   "sha256": "bd4aefb56032e12db45c00ae8ff3a01ebe6cb8e67a558a0356a15d6d3987742c"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/n06-cancel-live-worker/tree/.unrest/runs/idempotency/b9af7a4b4b2c8b25ef26eb2693146a64050e809208b1ee03f4ea1882c8de8f19.json",
+   "sha256": "0174402af79993680ba8436aa535e01523b5987049b3d8350020669da9fa4070"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/n07-cancel-dead-running/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "2be597160902a44b8ba255c193e5ec18616e8f87d703214e38c03e1b15c372ef"
+  },
+  {
+   "bytes": 312,
+   "path": "cases/n07-cancel-dead-running/tree/.unrest-runtime/runs/b66abeb46b7e4143471e612611b6385d01789a773576edc8c7f164daf2cc239d.worker.json",
+   "sha256": "2f251f7af5178c0ddd5d349bef6b011c4cc10395d73642f9e51a719efe5429b4"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/n07-cancel-dead-running/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/n07-cancel-dead-running/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "8251101c548e234e06def414b3412002756068275704ae2c2d182b1fbbcea668"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/n07-cancel-dead-running/tree/.unrest/foundation/identities/control_operation/bc9e21e741a2ea31f07170f5a9b76444140f7b5bc5a56105adf9a1630978680e.json",
+   "sha256": "849cead81b741c22f18e42b2794f1398be0702590dd2a4c509b031305bef2a17"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/n07-cancel-dead-running/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/n07-cancel-dead-running/tree/.unrest/foundation/identities/run/aef35ba214b5303ea83ffa3f6bcfb9b66e8b4311c4b8a1d93d423b23fff985fe.json",
+   "sha256": "ec5e4035f6845f37809713b80fb7d1eebd0b54f47388043a705227f06be0f4c2"
+  },
+  {
+   "bytes": 6130,
+   "path": "cases/n07-cancel-dead-running/tree/.unrest/foundation/receipts/run_receipt.v1/63c6423cf3f0be438b32e029bcef8d94a1c529cd4eb91600d5a140ea03ee43b5.json",
+   "sha256": "5d7029b167a7a2ac2b475f19c33d861fbe88aaba8902895ca6cb352ada7195bc"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/n07-cancel-dead-running/tree/.unrest/runs/73b194fc51fb6d1662e956f00eaeda4f958dabed50e1a210730af7a677d64dab/events/00000000000000000001.json",
+   "sha256": "c59307fa5f819af8595d137684746276838a711df9f0ff7ce1554e3ba31ae9d4"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/n07-cancel-dead-running/tree/.unrest/runs/73b194fc51fb6d1662e956f00eaeda4f958dabed50e1a210730af7a677d64dab/events/00000000000000000002.json",
+   "sha256": "8cf1520177e6cb42f323e0e5c420d11952874aeddfad760bff9ae5673d082ee8"
+  },
+  {
+   "bytes": 573,
+   "path": "cases/n07-cancel-dead-running/tree/.unrest/runs/73b194fc51fb6d1662e956f00eaeda4f958dabed50e1a210730af7a677d64dab/events/00000000000000000003.json",
+   "sha256": "347bf259838ccce89e3a98db07dfd8251b9f91d5332da1337d3fc0749362e9e0"
+  },
+  {
+   "bytes": 374,
+   "path": "cases/n07-cancel-dead-running/tree/.unrest/runs/73b194fc51fb6d1662e956f00eaeda4f958dabed50e1a210730af7a677d64dab/events/00000000000000000004.json",
+   "sha256": "b91748e35cc333bcf0eda8d8949ce63dd1bbb3ae2ec52ef0730060bd11bb8a1a"
+  },
+  {
+   "bytes": 570,
+   "path": "cases/n07-cancel-dead-running/tree/.unrest/runs/73b194fc51fb6d1662e956f00eaeda4f958dabed50e1a210730af7a677d64dab/events/00000000000000000005.json",
+   "sha256": "2894b8144c0efa34a7ac588a7e09746715aecfe92dd34068872ebcaf62c70566"
+  },
+  {
+   "bytes": 730,
+   "path": "cases/n07-cancel-dead-running/tree/.unrest/runs/73b194fc51fb6d1662e956f00eaeda4f958dabed50e1a210730af7a677d64dab/request.json",
+   "sha256": "83644745335e8adac5da6ebd0006199c072922322a1a28d5440e9d456d88f5d8"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/n07-cancel-dead-running/tree/.unrest/runs/idempotency/29a508506957e372b0c8fde5b1d3e75e4151131b951677372102cc61ee7ccc58.json",
+   "sha256": "6daa4087a14eb805f426585b00af6dd2cbbe7909dbab1bfa7d00bd5ec7f36abc"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/n08-cancel-after-effect-dead/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "ac03d53442dd102061e92d986be9cee3ef9b1529259c1565e579b53a3c799ba7"
+  },
+  {
+   "bytes": 312,
+   "path": "cases/n08-cancel-after-effect-dead/tree/.unrest-runtime/runs/3ba7df8369ced51e6851b83efcd302fea18906d82fde2b880d1e52c450dcebcc.worker.json",
+   "sha256": "ddd10bc7b53d4a5010eda989aee205f9c534313a47c1f8cf9538457972ea99e0"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/n08-cancel-after-effect-dead/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/n08-cancel-after-effect-dead/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "9379c564397576dc3bfba29fd64786c1ff221db109f6e09ada0eaa74304517b7"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/n08-cancel-after-effect-dead/tree/.unrest/foundation/identities/control_operation/978b3792f1426f1caedc546f505c7dcdbea38a321a6875e854285ddc4f13c0f4.json",
+   "sha256": "1c1d32616aade8b582045738360bddc5f34c3c1a8d2b380ae406dca062f526ea"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/n08-cancel-after-effect-dead/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1255,
+   "path": "cases/n08-cancel-after-effect-dead/tree/.unrest/foundation/identities/run/951706376b03a458b9ba3f2a934717b17b667a592521e455a20d755a190018a8.json",
+   "sha256": "ef2daaf17025f8342facaf788868fb7ae20966928f8169773ac61e45924bc5bf"
+  },
+  {
+   "bytes": 6126,
+   "path": "cases/n08-cancel-after-effect-dead/tree/.unrest/foundation/receipts/run_receipt.v1/311769f79837786e8ebc1d6876d866476b6dfe19206f60b4c9349e61e99e8bc9.json",
+   "sha256": "0662e409f8e5125cb599cc49bade50f7754087f82205b4a5f2cd295379b5af9a"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/n08-cancel-after-effect-dead/tree/.unrest/runs/226d390f743c0a0d120da79f407a15f909ae729404afc00063f909fd73e82fac/events/00000000000000000001.json",
+   "sha256": "7151118313153777516db58602b887402659b0da2ddfd21164ebdefe0d80af43"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/n08-cancel-after-effect-dead/tree/.unrest/runs/226d390f743c0a0d120da79f407a15f909ae729404afc00063f909fd73e82fac/events/00000000000000000002.json",
+   "sha256": "f749934c1481db4b599d72e54aba119b29a6c310423eb2684d5b383f6cf22581"
+  },
+  {
+   "bytes": 470,
+   "path": "cases/n08-cancel-after-effect-dead/tree/.unrest/runs/226d390f743c0a0d120da79f407a15f909ae729404afc00063f909fd73e82fac/events/00000000000000000003.json",
+   "sha256": "67761f7f9470b765d04162ffd69618bcd78679109ac19ff49351f68e2464d600"
+  },
+  {
+   "bytes": 573,
+   "path": "cases/n08-cancel-after-effect-dead/tree/.unrest/runs/226d390f743c0a0d120da79f407a15f909ae729404afc00063f909fd73e82fac/events/00000000000000000004.json",
+   "sha256": "4255450fe7accc5ae223872394fbf4b01e945e94361d42cd030cdf6965e2403c"
+  },
+  {
+   "bytes": 662,
+   "path": "cases/n08-cancel-after-effect-dead/tree/.unrest/runs/226d390f743c0a0d120da79f407a15f909ae729404afc00063f909fd73e82fac/events/00000000000000000005.json",
+   "sha256": "88fec783abc07c10130fafcb6693b11900822fd1c40185428225bc61eac48623"
+  },
+  {
+   "bytes": 745,
+   "path": "cases/n08-cancel-after-effect-dead/tree/.unrest/runs/226d390f743c0a0d120da79f407a15f909ae729404afc00063f909fd73e82fac/request.json",
+   "sha256": "990e4803b1c3907abdec8410505658439325fb2db59de598f4c044d70adf8733"
+  },
+  {
+   "bytes": 132,
+   "path": "cases/n08-cancel-after-effect-dead/tree/.unrest/runs/226d390f743c0a0d120da79f407a15f909ae729404afc00063f909fd73e82fac/result.json",
+   "sha256": "29ff21d819f7aa9b6bca50c9e03686174557127e79fc50d4ca6f4aaa37e373fe"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/n08-cancel-after-effect-dead/tree/.unrest/runs/idempotency/0ca10fd27d76681c5a1b79eccafec3463e918deaefd3a108c14f97cf9af03d20.json",
+   "sha256": "9607059f84345422c5baf84d02258e4bb1ad41b79f1611754ab9b89f52548783"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/n09-cancel-after-report-dead/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "f3195ec81153ec3eeee6d6c47a1b6f1f229c425a8c0cdb2a12cecc0c9a085e22"
+  },
+  {
+   "bytes": 312,
+   "path": "cases/n09-cancel-after-report-dead/tree/.unrest-runtime/runs/c71829e35912b2c05285dcca96e28a6b9f5c30e6f31f877cf4d88a3273cf9143.worker.json",
+   "sha256": "e313b4605e5c1283b75b7bb07c4cf12a5f16f3f7057c3b420f5646f9499dfd09"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/n09-cancel-after-report-dead/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/n09-cancel-after-report-dead/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "75c94af3549bed1f78deeedb987ab29749327fb344e238e224fbc5d9eb35bcc4"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/n09-cancel-after-report-dead/tree/.unrest/foundation/identities/control_operation/9cdc2176bb96eabacee353cbc0f411d051cef40d562a4d54dfff29d515a3f048.json",
+   "sha256": "98d32f738c2677ccc3840801c7369b978ef85d766e75619391e1540775fb1e34"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/n09-cancel-after-report-dead/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/n09-cancel-after-report-dead/tree/.unrest/foundation/identities/run/7e0fbd745f6fc8f709f38f8892702f595ce0f609a5d8535579c708297530e092.json",
+   "sha256": "4a7e3ffd210a096f7555cdc85d4b65cef5777557a47e938ba858679d1471d804"
+  },
+  {
+   "bytes": 6126,
+   "path": "cases/n09-cancel-after-report-dead/tree/.unrest/foundation/receipts/run_receipt.v1/8697a6194fa009c49cb0299f02a4be7e23458ae0cea2b4b5273d38a28b358de2.json",
+   "sha256": "7f68b75b6a2b36c2329ef0b9d53526c244246bfd2b03e45da1292ed6e5fd6ab7"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/n09-cancel-after-report-dead/tree/.unrest/runs/7041286519c5f2badedb82055a14d231d0066565a912adacb6b97b6d180639f0/events/00000000000000000001.json",
+   "sha256": "31cdca3ce2168a2e5b5961f8a67f2b2e27bfa0c39b6dcba98a53ec04baa87b42"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/n09-cancel-after-report-dead/tree/.unrest/runs/7041286519c5f2badedb82055a14d231d0066565a912adacb6b97b6d180639f0/events/00000000000000000002.json",
+   "sha256": "8948c3aa2787772e9c51059a2bb5a6ae8b94772d98110ff669816ac1f3029ec1"
+  },
+  {
+   "bytes": 470,
+   "path": "cases/n09-cancel-after-report-dead/tree/.unrest/runs/7041286519c5f2badedb82055a14d231d0066565a912adacb6b97b6d180639f0/events/00000000000000000003.json",
+   "sha256": "6cd99bf9996f16659cda5d857acdf6b4db7452a352cabe6d5aab0746bf5819e2"
+  },
+  {
+   "bytes": 381,
+   "path": "cases/n09-cancel-after-report-dead/tree/.unrest/runs/7041286519c5f2badedb82055a14d231d0066565a912adacb6b97b6d180639f0/events/00000000000000000004.json",
+   "sha256": "595b8232848eb290ecf4cad17556a28d4122392a16045d8165f516d9a010d0dd"
+  },
+  {
+   "bytes": 573,
+   "path": "cases/n09-cancel-after-report-dead/tree/.unrest/runs/7041286519c5f2badedb82055a14d231d0066565a912adacb6b97b6d180639f0/events/00000000000000000005.json",
+   "sha256": "67c921b93f8f27944c87b64415998bb9cae07822dd8670607f713cad9a85c340"
+  },
+  {
+   "bytes": 662,
+   "path": "cases/n09-cancel-after-report-dead/tree/.unrest/runs/7041286519c5f2badedb82055a14d231d0066565a912adacb6b97b6d180639f0/events/00000000000000000006.json",
+   "sha256": "de92fc268df66e080c05629ced5735d214161c1c02b7595d3bf3661e11317045"
+  },
+  {
+   "bytes": 745,
+   "path": "cases/n09-cancel-after-report-dead/tree/.unrest/runs/7041286519c5f2badedb82055a14d231d0066565a912adacb6b97b6d180639f0/request.json",
+   "sha256": "a589934a8e28687f295c47aa2afcca385fac284ee3f7c3c19eae19d5d0c1d15d"
+  },
+  {
+   "bytes": 132,
+   "path": "cases/n09-cancel-after-report-dead/tree/.unrest/runs/7041286519c5f2badedb82055a14d231d0066565a912adacb6b97b6d180639f0/result.json",
+   "sha256": "29ff21d819f7aa9b6bca50c9e03686174557127e79fc50d4ca6f4aaa37e373fe"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/n09-cancel-after-report-dead/tree/.unrest/runs/idempotency/c02d5b32810b68f1b155912b90732ff8fd11bd89c3bf1597b2524c52d818cde8.json",
+   "sha256": "e7685c6153075f62cb54deaeda2383b5a80b42f822740757c6c69492e218e9af"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/n10-cancel-after-effect-live/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "233cfe7d99e94b1d5ed7b268039150cd527f40225ba7a87e195ac8447e1a44e0"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/n10-cancel-after-effect-live/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/n10-cancel-after-effect-live/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "4ca34295db8a27eee7ca6d339d18585ff72d832b7577969c196012cc48e9f308"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/n10-cancel-after-effect-live/tree/.unrest/foundation/identities/control_operation/11ca68dcaa6127e7e61f549bafb89290e3a7392fce6b3ae7a028436821d33b51.json",
+   "sha256": "fbb6e422aa5c2851156bdc719f473cdd39fb02b8384d50821394c43bdc63eaa0"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/n10-cancel-after-effect-live/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1255,
+   "path": "cases/n10-cancel-after-effect-live/tree/.unrest/foundation/identities/run/84a883a86fe7381c03fe30b756568aaebba05b42cb273ee6bc60b01c6e2cad2c.json",
+   "sha256": "274ae4298229f37e8a96c1270d4d4c9f9a4894fb822cdf616c27c523f9f6da6e"
+  },
+  {
+   "bytes": 6126,
+   "path": "cases/n10-cancel-after-effect-live/tree/.unrest/foundation/receipts/run_receipt.v1/507723f776a71bb099be89aa740a82312bb8bbc402e5cad3f525e1fd79b07a5c.json",
+   "sha256": "1f621aa73a0abd11c908d5ba5c34976e9d0c1cf06cbb24ec4c4cafd9b5d79485"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/n10-cancel-after-effect-live/tree/.unrest/runs/4cfc7adeae5378bf52185b131a63fee7f8d300e1d8be59af7b99517171720d1d/events/00000000000000000001.json",
+   "sha256": "bf347a7f12ef9162a0eb9d9459e903090c35a6eff0ad4151122af4239b3c5a7c"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/n10-cancel-after-effect-live/tree/.unrest/runs/4cfc7adeae5378bf52185b131a63fee7f8d300e1d8be59af7b99517171720d1d/events/00000000000000000002.json",
+   "sha256": "58cf18ce9e51773fb34af829fd453978c71c76f3af3c27441dcc7b19f5b5c0e4"
+  },
+  {
+   "bytes": 470,
+   "path": "cases/n10-cancel-after-effect-live/tree/.unrest/runs/4cfc7adeae5378bf52185b131a63fee7f8d300e1d8be59af7b99517171720d1d/events/00000000000000000003.json",
+   "sha256": "e38e57c8e9d193f6d3684cf03504292e0df2e0d8d3b19fafec16a168518d4a00"
+  },
+  {
+   "bytes": 573,
+   "path": "cases/n10-cancel-after-effect-live/tree/.unrest/runs/4cfc7adeae5378bf52185b131a63fee7f8d300e1d8be59af7b99517171720d1d/events/00000000000000000004.json",
+   "sha256": "5bf2cccfe2e4a7c1eba9b13664366fb83a6c69e8946b9aa8798ef430ef264e7a"
+  },
+  {
+   "bytes": 374,
+   "path": "cases/n10-cancel-after-effect-live/tree/.unrest/runs/4cfc7adeae5378bf52185b131a63fee7f8d300e1d8be59af7b99517171720d1d/events/00000000000000000005.json",
+   "sha256": "a3248731edeec5e2b5a8260bbee03bce065e0013d99490db4fc17a83c992b4a3"
+  },
+  {
+   "bytes": 662,
+   "path": "cases/n10-cancel-after-effect-live/tree/.unrest/runs/4cfc7adeae5378bf52185b131a63fee7f8d300e1d8be59af7b99517171720d1d/events/00000000000000000006.json",
+   "sha256": "fd8cf1674d8909a8830827182c18145dd989c78bed9aec4af4b8e358424668f6"
+  },
+  {
+   "bytes": 745,
+   "path": "cases/n10-cancel-after-effect-live/tree/.unrest/runs/4cfc7adeae5378bf52185b131a63fee7f8d300e1d8be59af7b99517171720d1d/request.json",
+   "sha256": "c40cd0aedf2a58b68c562de9da050648955e67d538c69543470e042000def047"
+  },
+  {
+   "bytes": 132,
+   "path": "cases/n10-cancel-after-effect-live/tree/.unrest/runs/4cfc7adeae5378bf52185b131a63fee7f8d300e1d8be59af7b99517171720d1d/result.json",
+   "sha256": "29ff21d819f7aa9b6bca50c9e03686174557127e79fc50d4ca6f4aaa37e373fe"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/n10-cancel-after-effect-live/tree/.unrest/runs/idempotency/61ffa0a04402d0f9716628e905cbfe72223ece9bffbb1a1ac3d5b032c3abd063.json",
+   "sha256": "2477aa8eb45a25bd9763bc98b29a9a76a93e79ae16e07b99829c7a9e99f4f371"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/n11-recover-queued/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/n11-recover-queued/tree/.unrest/foundation/identities/control_operation/b90dca326e2ecf454721fd9dfe701087b96fa7939c822fc15305c78a17be2aa4.json",
+   "sha256": "d5e3511117eedbdf6301a0696fa19461d412462b86128d66609a6ac26cbb175e"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/n11-recover-queued/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/n11-recover-queued/tree/.unrest/foundation/identities/run/2bff724946b505243c0bf9c219f82ff0d2d0e22400665c853e43bf5d7de76fe3.json",
+   "sha256": "fecdf019002c37d533d3e2f57013d11333416ae3cab5920e97cafc61ab73e2f4"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/n11-recover-queued/tree/.unrest/runs/90729575bcd28ce2f6765a1407ef572e6a961179e113b2c02c706d28ded07662/events/00000000000000000001.json",
+   "sha256": "10d859617ee92b7d2e5d903e316d4ef7dcb3e52ddf4bbde234347af37211e6ad"
+  },
+  {
+   "bytes": 715,
+   "path": "cases/n11-recover-queued/tree/.unrest/runs/90729575bcd28ce2f6765a1407ef572e6a961179e113b2c02c706d28ded07662/request.json",
+   "sha256": "2e130cbf9116222690e29e190ae2222ee596c0774632770e91d45e0c0e08c251"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/n11-recover-queued/tree/.unrest/runs/idempotency/9f8b40ab31ac373bcd1d136e5a3adb715e047c0d972069a56f8ab1e01f124ddc.json",
+   "sha256": "1f76eeb958b427dd3607a0cd056d76c6dc0c0f18ffc2b011f293ff8a8c15577d"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/n12-recover-running-dead/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "c5c2a6eb57c247c457e08c3b12f6139dd086f92337ff3bfa98d54237a41bdf39"
+  },
+  {
+   "bytes": 312,
+   "path": "cases/n12-recover-running-dead/tree/.unrest-runtime/runs/28edf7dc0920c643ad38871bd3d4c0c8e7b52b01e8c70da13896c1bc8ccf8021.worker.json",
+   "sha256": "cc75c3948f5aed60e42f9bf4e0bb4606e7563675432eaf9fc0bdcb3de6ec4f55"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/n12-recover-running-dead/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/n12-recover-running-dead/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "1c1709971ef3da6ccde2e26bf6ee5cad09204e24248d90734984a1a5287603eb"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/n12-recover-running-dead/tree/.unrest/foundation/identities/control_operation/98218ef7d35fb311b5dcbabbef423d2ff8399a367c7afe8d4b8e25c16bf31f1c.json",
+   "sha256": "e5593316903ac7a41c5a38a28a7c56eb9001c31c003729dcff9f4606598cd225"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/n12-recover-running-dead/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/n12-recover-running-dead/tree/.unrest/foundation/identities/run/1648956574b731d3646d2dea5202631d2df40a19f1a36b0e8147415d719ea9c0.json",
+   "sha256": "c377bebd3c4dfc11054984c22eab7f72c7a4d02f59e18d74deec876df268495f"
+  },
+  {
+   "bytes": 6126,
+   "path": "cases/n12-recover-running-dead/tree/.unrest/foundation/receipts/run_receipt.v1/47943666ed350518dd459142116ff65a82e335fd9a0348b37c7d66482991dcfa.json",
+   "sha256": "5aae674f34f461377376da0da04a71304ad1a2260351861544c0b0c040f3e9eb"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/n12-recover-running-dead/tree/.unrest/runs/c90c81e1951e8ac52e6a414f06c54245afcb2eee1cb76399cbe58438c1b253a3/events/00000000000000000001.json",
+   "sha256": "480138d1e78891b607ec686cda672d23209756ceef27c58ef80957b9bf42e6bb"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/n12-recover-running-dead/tree/.unrest/runs/c90c81e1951e8ac52e6a414f06c54245afcb2eee1cb76399cbe58438c1b253a3/events/00000000000000000002.json",
+   "sha256": "eb2c030be574b7e1596f780e6b368a9a4d8e974a38e7aa5fe6a3026bf6cc5231"
+  },
+  {
+   "bytes": 666,
+   "path": "cases/n12-recover-running-dead/tree/.unrest/runs/c90c81e1951e8ac52e6a414f06c54245afcb2eee1cb76399cbe58438c1b253a3/events/00000000000000000003.json",
+   "sha256": "a50273aba49c1fd35279ceef9202678d0858702f3f575f47437ba6ab3a1e43b9"
+  },
+  {
+   "bytes": 733,
+   "path": "cases/n12-recover-running-dead/tree/.unrest/runs/c90c81e1951e8ac52e6a414f06c54245afcb2eee1cb76399cbe58438c1b253a3/request.json",
+   "sha256": "aa80d03ab49b1aa8610fcca81f7f5374064a708b7d2e43544c44367650158552"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/n12-recover-running-dead/tree/.unrest/runs/idempotency/3da64a3ad556120a03c6c2911065f33bec3a820186c6f8476e776b8336c2c53f.json",
+   "sha256": "e3bcffbf85eb7368a96adcf4d6f8523e9b124c8a887ae42a5478df6902740fa9"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/n13-recover-effect-complete/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "306d624bb7680430178a41aa1c9ac065e17b179e73de3bc9e5fc63f976553824"
+  },
+  {
+   "bytes": 312,
+   "path": "cases/n13-recover-effect-complete/tree/.unrest-runtime/runs/8dfd43395b4cd85b1500c4c8ab0061d16d42c49a0e3935d58a81d2532d629b99.worker.json",
+   "sha256": "fe5387a955203abe07d3bb5677a299a631c34936094f706217c5ed2d9e1425fd"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/n13-recover-effect-complete/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/n13-recover-effect-complete/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "885969e69c83f6ce95368d43b87ed5b4860b5be94b10477f7c1994afb0d3af71"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/n13-recover-effect-complete/tree/.unrest/foundation/identities/control_operation/58ee1fe7853e0aa8d12f8804e2c63b13dcf9ccd257ceaa25b74e5e48f169a9d5.json",
+   "sha256": "e09782751ce5e88df5f93b17a1697613d09b5a176bb2d058eb87104f32f19237"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/n13-recover-effect-complete/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/n13-recover-effect-complete/tree/.unrest/foundation/identities/run/24d34108da60cd478426d67ab8228cbc83bebbf29bca183c8abf6157418f08a6.json",
+   "sha256": "e730385c2aa466346c131a5326be65003f01747f30f7ed0554c50cc8997bdd5a"
+  },
+  {
+   "bytes": 6130,
+   "path": "cases/n13-recover-effect-complete/tree/.unrest/foundation/receipts/run_receipt.v1/e0f667779c304ed9f2b74893b4ec30dd0e08ae03806c6ea5e1046e3e6f1c583c.json",
+   "sha256": "a8d26449fd3ce251e429c59665919ee02b101b6b8671b276491d926384e1500b"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/n13-recover-effect-complete/tree/.unrest/runs/7c0e5ad586e45fc8bd39e372b3ab10ffe67d3cb846cf42d09c841547ed89b531/events/00000000000000000001.json",
+   "sha256": "9fe281dc8425eb4a8725ccdbb8953dc71a2ae0ab01033366bab13375256def97"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/n13-recover-effect-complete/tree/.unrest/runs/7c0e5ad586e45fc8bd39e372b3ab10ffe67d3cb846cf42d09c841547ed89b531/events/00000000000000000002.json",
+   "sha256": "4675b877f913aaacde833ed2d6cd31f18f7f4e70e76f0deb7317c88ad8c51cfd"
+  },
+  {
+   "bytes": 470,
+   "path": "cases/n13-recover-effect-complete/tree/.unrest/runs/7c0e5ad586e45fc8bd39e372b3ab10ffe67d3cb846cf42d09c841547ed89b531/events/00000000000000000003.json",
+   "sha256": "985a7e3b4d6072c7780c3ba11b8a52bea8d2e559981310ba692baeabeea74d48"
+  },
+  {
+   "bytes": 397,
+   "path": "cases/n13-recover-effect-complete/tree/.unrest/runs/7c0e5ad586e45fc8bd39e372b3ab10ffe67d3cb846cf42d09c841547ed89b531/events/00000000000000000004.json",
+   "sha256": "a8bec3fdddcc8bfcaadbe3bdf5824a17eb372f87a5f00a18ce914c2965fcba4a"
+  },
+  {
+   "bytes": 570,
+   "path": "cases/n13-recover-effect-complete/tree/.unrest/runs/7c0e5ad586e45fc8bd39e372b3ab10ffe67d3cb846cf42d09c841547ed89b531/events/00000000000000000005.json",
+   "sha256": "2706b51dba95b7f424af480ab4f0ddf10ae18f82bf428d31cef2130bf53e76d4"
+  },
+  {
+   "bytes": 742,
+   "path": "cases/n13-recover-effect-complete/tree/.unrest/runs/7c0e5ad586e45fc8bd39e372b3ab10ffe67d3cb846cf42d09c841547ed89b531/request.json",
+   "sha256": "77981732b78abe37716d116e69a7b7362c36b5fe1aa5a55a54ba0d9b9f3b8eea"
+  },
+  {
+   "bytes": 132,
+   "path": "cases/n13-recover-effect-complete/tree/.unrest/runs/7c0e5ad586e45fc8bd39e372b3ab10ffe67d3cb846cf42d09c841547ed89b531/result.json",
+   "sha256": "29ff21d819f7aa9b6bca50c9e03686174557127e79fc50d4ca6f4aaa37e373fe"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/n13-recover-effect-complete/tree/.unrest/runs/idempotency/f600c538a0c9413b211eebc46726f735140c5d066d94745ec77f98893945aeef.json",
+   "sha256": "114828f397c3b610ef931ba3345760e68ce9ab545270271deb609d45f075c9ed"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/n14-recover-report-complete/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "244aba019be154c7a5bcbe173409f2180a6b8a5cbb5c524c2a5fa67728e42fd1"
+  },
+  {
+   "bytes": 312,
+   "path": "cases/n14-recover-report-complete/tree/.unrest-runtime/runs/505340afa6594ad2e8d77be679caae8cea811060881962cd1984c9bf0de5b95c.worker.json",
+   "sha256": "cc93e0f1e51189ff4fabd7de5f8224c47ba88b6fc2df4884f9a118b0b81b25f8"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/n14-recover-report-complete/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/n14-recover-report-complete/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "a593596a244ba7e020f64098e3aa0043dd81a4231cc49580e46e9eb8a75e941e"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/n14-recover-report-complete/tree/.unrest/foundation/identities/control_operation/1e74da73672a231a5b89b5bc882e4b817a9066f9020be721abd49fd6dca156d3.json",
+   "sha256": "07dc3c6f445830026891079ae5c9c47b771d07ce6fdeaa2afacf2773de421b98"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/n14-recover-report-complete/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/n14-recover-report-complete/tree/.unrest/foundation/identities/run/76edb9b2c8b9c47815aec778ea8e8f736e48e8d8645271caea417a77296f9a95.json",
+   "sha256": "926fe5f1f0dfbc017e3d70f4dd824a344677f089670b59a987c7d53eb2d7e879"
+  },
+  {
+   "bytes": 6130,
+   "path": "cases/n14-recover-report-complete/tree/.unrest/foundation/receipts/run_receipt.v1/cf0debb9e415acec222ad68d88dbe4bd135cb8a87d6edf33807139c895ad2b68.json",
+   "sha256": "126c2cf4231b615ac32057b0ef7f462fa925f3e6cd132f5e9f8b91291f3c35cf"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/n14-recover-report-complete/tree/.unrest/runs/93ac78861329b0fd345a26bd8958adf6dd09a552be20c5bceaf264c40fcf34bf/events/00000000000000000001.json",
+   "sha256": "49483e3748a8b52e02adfa21f6a7bdb5a0659afd8f06af089d598fef0da2f71b"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/n14-recover-report-complete/tree/.unrest/runs/93ac78861329b0fd345a26bd8958adf6dd09a552be20c5bceaf264c40fcf34bf/events/00000000000000000002.json",
+   "sha256": "d1bfe5eee9800f99989444fe0107651b71d9ac49430368d33ec5fa7b8b47d6ed"
+  },
+  {
+   "bytes": 470,
+   "path": "cases/n14-recover-report-complete/tree/.unrest/runs/93ac78861329b0fd345a26bd8958adf6dd09a552be20c5bceaf264c40fcf34bf/events/00000000000000000003.json",
+   "sha256": "f6cde678a41f29000cbe304836fa3518d7671c122f0582c3c6ad9687a820d286"
+  },
+  {
+   "bytes": 381,
+   "path": "cases/n14-recover-report-complete/tree/.unrest/runs/93ac78861329b0fd345a26bd8958adf6dd09a552be20c5bceaf264c40fcf34bf/events/00000000000000000004.json",
+   "sha256": "d4c4735ac78c21205bafd6eb9919ccde7af6ef8099d33637880b8cea071e06b5"
+  },
+  {
+   "bytes": 570,
+   "path": "cases/n14-recover-report-complete/tree/.unrest/runs/93ac78861329b0fd345a26bd8958adf6dd09a552be20c5bceaf264c40fcf34bf/events/00000000000000000005.json",
+   "sha256": "74e2c5b8ef6bd78c42901c323a63e189a56bedf9ca09267f31c0d41cf4fa182a"
+  },
+  {
+   "bytes": 742,
+   "path": "cases/n14-recover-report-complete/tree/.unrest/runs/93ac78861329b0fd345a26bd8958adf6dd09a552be20c5bceaf264c40fcf34bf/request.json",
+   "sha256": "6cb0306b033d0ce364b04f7f1c00e894f5079d1be43d30bb8ca910421f303db9"
+  },
+  {
+   "bytes": 132,
+   "path": "cases/n14-recover-report-complete/tree/.unrest/runs/93ac78861329b0fd345a26bd8958adf6dd09a552be20c5bceaf264c40fcf34bf/result.json",
+   "sha256": "29ff21d819f7aa9b6bca50c9e03686174557127e79fc50d4ca6f4aaa37e373fe"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/n14-recover-report-complete/tree/.unrest/runs/idempotency/81d9e4a444c56853d090962bf91b36b3e5ca2e7a27c18ec6383c1faa8855ce43.json",
+   "sha256": "e4f875d9aefc4f14ee6526b90de0ded375d51f7d12f1ecfdf09629a80cae8d41"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/n15-recover-cancel-requested/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "4b393c5c92e43155e49ca460dd5107f34c0822e3200a0320e2e7ac426bccc6f6"
+  },
+  {
+   "bytes": 312,
+   "path": "cases/n15-recover-cancel-requested/tree/.unrest-runtime/runs/7ad2610d92b1c0976caa601e2c9d002678a509adb5d37875af8430ccbb2197cc.worker.json",
+   "sha256": "bd7092b816488ee7cae5ab8a027ed3445fca9cbc906fe8ed2b8ea7c24c470b12"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/n15-recover-cancel-requested/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/n15-recover-cancel-requested/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "a350e1a476e80872dd63898ebf4015e2d1cc4beb89f5d357f86670119736ad1a"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/n15-recover-cancel-requested/tree/.unrest/foundation/identities/control_operation/9753135d1fd4e423a9e5eb9d32427065254788f36b5cd31c4e088db814f45793.json",
+   "sha256": "007ec540cc864fa542b11808f573e1320a615aa44b6db30683b28367136da1c6"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/n15-recover-cancel-requested/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1255,
+   "path": "cases/n15-recover-cancel-requested/tree/.unrest/foundation/identities/run/5f3d5416650542f29c08a5d871721db3685d68aab8be114212a64d7113016256.json",
+   "sha256": "2c039c22966fb771d9d38a1eb431ab9b83c42fccaecf94028f9ac451957c3bdb"
+  },
+  {
+   "bytes": 6130,
+   "path": "cases/n15-recover-cancel-requested/tree/.unrest/foundation/receipts/run_receipt.v1/c5e492efa13e58f1abf68220740e54a765dddbbea1174e1dd6b9c4dcc11e22d1.json",
+   "sha256": "60d99132d9cc7c2f81ae3058d2076466c3c941eff1aef8ccf04684416eb51c15"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/n15-recover-cancel-requested/tree/.unrest/runs/505a6cfea0b5c1882a11825a7195d980bd7797d61f407067b733193d37471142/events/00000000000000000001.json",
+   "sha256": "6f786b56e940f9e909ff21ba0ceede2aa870b3bc53e6b8043845237dfb523d7c"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/n15-recover-cancel-requested/tree/.unrest/runs/505a6cfea0b5c1882a11825a7195d980bd7797d61f407067b733193d37471142/events/00000000000000000002.json",
+   "sha256": "c5424a97fb0d97e0ee56479acb549bedb3e4dbe5bfb7f8f514b4d27f48994296"
+  },
+  {
+   "bytes": 573,
+   "path": "cases/n15-recover-cancel-requested/tree/.unrest/runs/505a6cfea0b5c1882a11825a7195d980bd7797d61f407067b733193d37471142/events/00000000000000000003.json",
+   "sha256": "a4eb5b81b4f11994b0a0dbcd64b17ca88df9dd5baa3e8b6ab9658a06533bbec1"
+  },
+  {
+   "bytes": 374,
+   "path": "cases/n15-recover-cancel-requested/tree/.unrest/runs/505a6cfea0b5c1882a11825a7195d980bd7797d61f407067b733193d37471142/events/00000000000000000004.json",
+   "sha256": "9277b59b56f6c2e278fab6e9393169a365f34999f0dcb98caef0789896a26354"
+  },
+  {
+   "bytes": 570,
+   "path": "cases/n15-recover-cancel-requested/tree/.unrest/runs/505a6cfea0b5c1882a11825a7195d980bd7797d61f407067b733193d37471142/events/00000000000000000005.json",
+   "sha256": "408187d8884ba64d95e64da117fbedf99417a04962f109e07dd502b50d3ef09b"
+  },
+  {
+   "bytes": 745,
+   "path": "cases/n15-recover-cancel-requested/tree/.unrest/runs/505a6cfea0b5c1882a11825a7195d980bd7797d61f407067b733193d37471142/request.json",
+   "sha256": "ed0d17e5136393b14440f47e41ac0e89fccb6f118bcc81537b5be7f419fcfe96"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/n15-recover-cancel-requested/tree/.unrest/runs/idempotency/731fa288b576ba2b0d2551993b5796d2942421cfdd18d8a07aaa9fe94b544961.json",
+   "sha256": "610e8cb96017a164ab1be630126177a5667f4a79aec8004066c6bb5df037ceb7"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/n16-recover-draining/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "bacb11b619453a8a8021c771d0ebb323f684d6bfa04ba35331ea958ea3be9334"
+  },
+  {
+   "bytes": 312,
+   "path": "cases/n16-recover-draining/tree/.unrest-runtime/runs/339361bcdab9b48b947febfecd49bac156d5880274fdcab8508f3f7247644506.worker.json",
+   "sha256": "98b1abe9fd946752472f998a999418bc99712649ed8a51d61c08b69b6d4b6dfb"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/n16-recover-draining/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/n16-recover-draining/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "12244db3e1f2c2a9e3cf05404347e78dc9a52d3a2557cb28d4a09db7f7f67268"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/n16-recover-draining/tree/.unrest/foundation/identities/control_operation/08dc8e505f57c7515efb5bfdf219213f80e30d7696efc76b913c19eab911a6f1.json",
+   "sha256": "2110356becb9b190c6bb8253649ec18850c6487e9170d6f6335b83937cc628e1"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/n16-recover-draining/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/n16-recover-draining/tree/.unrest/foundation/identities/run/773563e3178623ab3d9d5a5fd15310112399d0ea100386df2b3a5dafba9d51f4.json",
+   "sha256": "8e1acc699b1fe765a3c4d96b669b851beb0cf8f87efd6a552195e5cb46ab9ebc"
+  },
+  {
+   "bytes": 6126,
+   "path": "cases/n16-recover-draining/tree/.unrest/foundation/receipts/run_receipt.v1/e5c367cbf9b376f5c8bedcbe703c0cd46f8dde1f054cdf61f73d7d2abfd84168.json",
+   "sha256": "aece63e0d86b9c357a1722d82c24c0a13f81d73e7ea34c249e50396518a11240"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/n16-recover-draining/tree/.unrest/runs/7e9e4a8ece838aa0ac634dacc5e102d91b391b851c867f1867ea702f2d81153e/events/00000000000000000001.json",
+   "sha256": "328c7c2ed730d149781084151537fa311ac4c72ccc568ecde4c0f78c900c5e66"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/n16-recover-draining/tree/.unrest/runs/7e9e4a8ece838aa0ac634dacc5e102d91b391b851c867f1867ea702f2d81153e/events/00000000000000000002.json",
+   "sha256": "e5557836bd4bb6abb8f2aeb4382a5780540fe23ca66d859e39cd38b48b91872b"
+  },
+  {
+   "bytes": 573,
+   "path": "cases/n16-recover-draining/tree/.unrest/runs/7e9e4a8ece838aa0ac634dacc5e102d91b391b851c867f1867ea702f2d81153e/events/00000000000000000003.json",
+   "sha256": "351ab45df24637f6981dbe0756875befd4667233a666b8808886736c3c262b88"
+  },
+  {
+   "bytes": 374,
+   "path": "cases/n16-recover-draining/tree/.unrest/runs/7e9e4a8ece838aa0ac634dacc5e102d91b391b851c867f1867ea702f2d81153e/events/00000000000000000004.json",
+   "sha256": "02198dc2cd9f118dd9426a27df9b998b06453ed06fe7f32d3012b9e61ce5d2ac"
+  },
+  {
+   "bytes": 666,
+   "path": "cases/n16-recover-draining/tree/.unrest/runs/7e9e4a8ece838aa0ac634dacc5e102d91b391b851c867f1867ea702f2d81153e/events/00000000000000000005.json",
+   "sha256": "f0652cb6dc4e1e0036e019cda5b9178e0678e3d23c2b2613676d691f089a4f86"
+  },
+  {
+   "bytes": 721,
+   "path": "cases/n16-recover-draining/tree/.unrest/runs/7e9e4a8ece838aa0ac634dacc5e102d91b391b851c867f1867ea702f2d81153e/request.json",
+   "sha256": "596d898a7f5c107e262b353f299f76dde8fe87fcece07a463756442ddf6e9781"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/n16-recover-draining/tree/.unrest/runs/idempotency/1824b1b73be48c971f4cb1f1192f51fa4878e88f763321bb5ac67d88b2538f3b.json",
+   "sha256": "bc62eff049fe54bcd7a61ae4c34ddc5492aca03ff77160c25c1618d9c7658714"
+  },
+  {
+   "bytes": 125,
+   "path": "cases/n17-spawn-oserror/tree/.unrest-runtime/foundation/custody-head.json",
+   "sha256": "063a8058882f6df414ab58df3c5d357bd1c676f32adfc963b952eb419fe33d2f"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/n17-spawn-oserror/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 525,
+   "path": "cases/n17-spawn-oserror/tree/.unrest/foundation/custody/00000000000000000001.json",
+   "sha256": "4624063bb32cfe4a414a75691657c083d49c959701c6a7cb62366d37716591bf"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/n17-spawn-oserror/tree/.unrest/foundation/identities/control_operation/253e676c631d57fcb139f474ca4179efa84192e5197f5bddc954297750825161.json",
+   "sha256": "2d54bfa0943be3ed63f981d620040d4f69e9b0767fb45c596fa7951d01d3a7f3"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/n17-spawn-oserror/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/n17-spawn-oserror/tree/.unrest/foundation/identities/run/844ee081dde5ed0f46456c8787f4a3836d3675f467b1da2eec22f860d3ec935c.json",
+   "sha256": "ec5abeac48326daf5553f2692fd8e3fa9a7574d0a9462200810d252e700240d6"
+  },
+  {
+   "bytes": 6124,
+   "path": "cases/n17-spawn-oserror/tree/.unrest/foundation/receipts/run_receipt.v1/ae028e83ad2fed45500ac3823d67be79789eba30de254d3ae4dda58d89798ce4.json",
+   "sha256": "45fb3efb0347ac227b1b384d7be928a788b2ed4d1aed4e19e203721932a1d849"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/n17-spawn-oserror/tree/.unrest/runs/af8bf4bca7ad04113c638d17fac9c46560efa93713d2f153fee12a8d8dd88ead/events/00000000000000000001.json",
+   "sha256": "f68957489008634d341bcb5844eff0ef381593bf459285d49362152c8749d9ec"
+  },
+  {
+   "bytes": 650,
+   "path": "cases/n17-spawn-oserror/tree/.unrest/runs/af8bf4bca7ad04113c638d17fac9c46560efa93713d2f153fee12a8d8dd88ead/events/00000000000000000002.json",
+   "sha256": "81bd88ddc67a2cbbbf6b78b46e8f51d013263a1cd09ea307ae1e4524ef63fa31"
+  },
+  {
+   "bytes": 712,
+   "path": "cases/n17-spawn-oserror/tree/.unrest/runs/af8bf4bca7ad04113c638d17fac9c46560efa93713d2f153fee12a8d8dd88ead/request.json",
+   "sha256": "acdb726332ef4bdced801d5f651f35c37fb991f1caf4c069c33a4906413c1c98"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/n17-spawn-oserror/tree/.unrest/runs/idempotency/028474df8060f63538cd6d1dbe86af57855a3d210cf917c6a01e6e716b3c6d7f.json",
+   "sha256": "e24d262286f1c2879d86ccec7a5c658add65b7b0966390a11721a62411bce0de"
+  },
+  {
+   "bytes": 312,
+   "path": "cases/s01-snapshot-running/tree/.unrest-runtime/runs/60c1c8f0deb11c56417a2194006c561e1b2d91d8ec3f077181431f487878d75a.worker.json",
+   "sha256": "3b7be01a7b1a420ba3ac65412d49a2cf4b98cd01277497f8e30592587077b44d"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/s01-snapshot-running/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/s01-snapshot-running/tree/.unrest/foundation/identities/control_operation/1521b2da10af804ff480f7a516c37aa9326effc2a98756697886de01f73dbad7.json",
+   "sha256": "aaec87b83d38487a6e87ec428f988b619c286a5372aa6894b0010005b24048a1"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/s01-snapshot-running/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/s01-snapshot-running/tree/.unrest/foundation/identities/run/a4818409d6647511d008507bd27e85c36f28f69e5fc1e6c18bffbf2c5af78d30.json",
+   "sha256": "64b37c8eac2a70cac0338f561f4e50236e9870edd51f0f85cb37a0c0e5fd2dec"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/s01-snapshot-running/tree/.unrest/runs/d74aec7a106c9811c883bfdc8566c139feb58b102c494e23bee194e3aefad081/events/00000000000000000001.json",
+   "sha256": "e07f2376856e77f58b3dff3ad9bdfa84c4b1acbe19ac1b048e40afa9efa4c0f9"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/s01-snapshot-running/tree/.unrest/runs/d74aec7a106c9811c883bfdc8566c139feb58b102c494e23bee194e3aefad081/events/00000000000000000002.json",
+   "sha256": "c9c51f880e9a7f52094e5c43d39efcdd3fefb5f1f4d8fe30697e99c7c657e4e8"
+  },
+  {
+   "bytes": 721,
+   "path": "cases/s01-snapshot-running/tree/.unrest/runs/d74aec7a106c9811c883bfdc8566c139feb58b102c494e23bee194e3aefad081/request.json",
+   "sha256": "43dcbb8431f88d15855235860090ea4bd512605e587d5c0644cf993f46119738"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/s01-snapshot-running/tree/.unrest/runs/idempotency/8e8cb0ce44d9a89088bea24272466e33ba0305124b9de6b228fa81082ed1414b.json",
+   "sha256": "5327473abb9c75636c970321287b382653018ebb31859b2e521577b36f2181c5"
+  },
+  {
+   "bytes": 312,
+   "path": "cases/s02-snapshot-effect-complete/tree/.unrest-runtime/runs/d42a38dd6244fe8fdb78145e11e97812284c9f1969f41c98d6a936635081f817.worker.json",
+   "sha256": "8d607aa1a9c4aec1b809cbff2ebf525ed31522a32fa59eb4bfefcdf8e19027a4"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/s02-snapshot-effect-complete/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/s02-snapshot-effect-complete/tree/.unrest/foundation/identities/control_operation/39d5ae314be03f5fad8ac48ec1a5263640641f0fb0c3e2db678a750cfbb62ad7.json",
+   "sha256": "036b9bc67124bb73bbf7574e1a1ac0e3b35118f18c8d0d02d53017e91e14040f"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/s02-snapshot-effect-complete/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1255,
+   "path": "cases/s02-snapshot-effect-complete/tree/.unrest/foundation/identities/run/da155142d33c05e838f26d43045c1838f8142b7135d3427d7cb46322738eb18f.json",
+   "sha256": "702e022aadccc5c0ec153a5efcf6525ebb527b64038d550694b5cd9728c50735"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/s02-snapshot-effect-complete/tree/.unrest/runs/379c5be9f441bd95c9768888e5a3835e688ca9b67bb0736c4ee74c1ed27b704b/events/00000000000000000001.json",
+   "sha256": "93d211c12c7a60953aa35a23da8ef4ce96be3ec2fb609895e3067b2d0f2a0d5b"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/s02-snapshot-effect-complete/tree/.unrest/runs/379c5be9f441bd95c9768888e5a3835e688ca9b67bb0736c4ee74c1ed27b704b/events/00000000000000000002.json",
+   "sha256": "4cb73af994a1e934efed6d9dd2b24560db5e7e9e13fc2827976b6176276ad939"
+  },
+  {
+   "bytes": 470,
+   "path": "cases/s02-snapshot-effect-complete/tree/.unrest/runs/379c5be9f441bd95c9768888e5a3835e688ca9b67bb0736c4ee74c1ed27b704b/events/00000000000000000003.json",
+   "sha256": "16c4f613ef0b6c745361bcfd6950a0fa2d10337a73082898786fb4a281fbef85"
+  },
+  {
+   "bytes": 745,
+   "path": "cases/s02-snapshot-effect-complete/tree/.unrest/runs/379c5be9f441bd95c9768888e5a3835e688ca9b67bb0736c4ee74c1ed27b704b/request.json",
+   "sha256": "3e6c94f3adf377c5cb7235e59b7083de37fcc43b6070445791aa82142ddf515f"
+  },
+  {
+   "bytes": 132,
+   "path": "cases/s02-snapshot-effect-complete/tree/.unrest/runs/379c5be9f441bd95c9768888e5a3835e688ca9b67bb0736c4ee74c1ed27b704b/result.json",
+   "sha256": "29ff21d819f7aa9b6bca50c9e03686174557127e79fc50d4ca6f4aaa37e373fe"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/s02-snapshot-effect-complete/tree/.unrest/runs/idempotency/419f9e539bda1e338ee39045b2dd1111a7ead1e4be03cdad4b277b64af44cd28.json",
+   "sha256": "438df78707f811ba080fd2f56d675ff668526ca0614932cfb9323ca85c6cbbcc"
+  },
+  {
+   "bytes": 312,
+   "path": "cases/s03-snapshot-report-complete/tree/.unrest-runtime/runs/80bf55836bcb35943fb413182c2532d82d90e053122ff8e42d334df67f2fdb58.worker.json",
+   "sha256": "0493be99c554fac33fab8f0fbce5567f1ae15564ec1ce5acb8b12ca098a85cb1"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/s03-snapshot-report-complete/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/s03-snapshot-report-complete/tree/.unrest/foundation/identities/control_operation/bce6b07a7ee17064c10a905252890ee6c4c2c85dcdf0142757ae7df3e8540192.json",
+   "sha256": "eac162bda4f4fe4bb1430f3015e0293b6ad7c339088ebff37f768e92e58ac3c2"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/s03-snapshot-report-complete/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/s03-snapshot-report-complete/tree/.unrest/foundation/identities/run/89195108af03eac416395c84dee6dfb13b1e2fd7e6bda359a65e26d842904a19.json",
+   "sha256": "d7af5476103f2308cafaec3a09cada4dd82e4c7f249de57ee3392197d97c1378"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/s03-snapshot-report-complete/tree/.unrest/runs/f16adef1f7b616369042c18117a22bb2aed70eed684a7b7662a495d4ac12b132/events/00000000000000000001.json",
+   "sha256": "b28092beb58035abbc0537ad728368c4e59d304b70937fd31a49bf1346a13162"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/s03-snapshot-report-complete/tree/.unrest/runs/f16adef1f7b616369042c18117a22bb2aed70eed684a7b7662a495d4ac12b132/events/00000000000000000002.json",
+   "sha256": "7523634a7bafb52af8098800b857f256fcde5304982a61cb3fb6d7c6b84c6396"
+  },
+  {
+   "bytes": 470,
+   "path": "cases/s03-snapshot-report-complete/tree/.unrest/runs/f16adef1f7b616369042c18117a22bb2aed70eed684a7b7662a495d4ac12b132/events/00000000000000000003.json",
+   "sha256": "935279c887213e4665ece25b378fc4c4d92e048c6c771de3748f209ee221dedc"
+  },
+  {
+   "bytes": 381,
+   "path": "cases/s03-snapshot-report-complete/tree/.unrest/runs/f16adef1f7b616369042c18117a22bb2aed70eed684a7b7662a495d4ac12b132/events/00000000000000000004.json",
+   "sha256": "c78793ba86548a2b560721429faf235c7cfb7b4bd941ac8e6a17e7988a39f135"
+  },
+  {
+   "bytes": 745,
+   "path": "cases/s03-snapshot-report-complete/tree/.unrest/runs/f16adef1f7b616369042c18117a22bb2aed70eed684a7b7662a495d4ac12b132/request.json",
+   "sha256": "cf30577d58fb2233b5e91731d28191f8c529f8021dab1faa9d417c1886a52ce6"
+  },
+  {
+   "bytes": 132,
+   "path": "cases/s03-snapshot-report-complete/tree/.unrest/runs/f16adef1f7b616369042c18117a22bb2aed70eed684a7b7662a495d4ac12b132/result.json",
+   "sha256": "29ff21d819f7aa9b6bca50c9e03686174557127e79fc50d4ca6f4aaa37e373fe"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/s03-snapshot-report-complete/tree/.unrest/runs/idempotency/753bbce99225e0457fecf266b20e09e64330f60f8285f491d78f9cae5f818f63.json",
+   "sha256": "33d0d0ee73fd20a35205d90e16d249fa1e39c8e5148de802dcbde030cf3df8bb"
+  },
+  {
+   "bytes": 312,
+   "path": "cases/s04-snapshot-cancel-requested-live/tree/.unrest-runtime/runs/6af210cf2590387f88e82eb43fa71a69e547f041411060b775d8397dfab01a10.worker.json",
+   "sha256": "f4374102a10addaf311c394b5850b1b7e7c29d66efabb094be99a35a77066c93"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/s04-snapshot-cancel-requested-live/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/s04-snapshot-cancel-requested-live/tree/.unrest/foundation/identities/control_operation/a47d91d61936b18e34b406cc41039f6ccd6cf2091e4e7d50fc0aaeadc04a2f2e.json",
+   "sha256": "173b7233458b4abd6ca08d4ed463b9f99f6c2e69552abba9a34f55ca616e532c"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/s04-snapshot-cancel-requested-live/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/s04-snapshot-cancel-requested-live/tree/.unrest/foundation/identities/run/39eb796dec75c7e6b7f9cbed448206d10dd058258427781c6b01cb4a27dc904d.json",
+   "sha256": "5ebd7d5656d17297ed2ee7f76dc6eb6f91e4a997d33a37b0ba3947be74824c5e"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/s04-snapshot-cancel-requested-live/tree/.unrest/runs/bc636f1d527ea4267b423ba19fb905eadea81111da4035537c3635108af52545/events/00000000000000000001.json",
+   "sha256": "1ca4d78cd81c043a94061f8c67990dfeddbc93ba97001214bfd7bb0a4233b413"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/s04-snapshot-cancel-requested-live/tree/.unrest/runs/bc636f1d527ea4267b423ba19fb905eadea81111da4035537c3635108af52545/events/00000000000000000002.json",
+   "sha256": "ec8bab6cc21db95125d5c3cc24efc04ecce7f7e9c3e9563dfaa0bfd7e4c66631"
+  },
+  {
+   "bytes": 573,
+   "path": "cases/s04-snapshot-cancel-requested-live/tree/.unrest/runs/bc636f1d527ea4267b423ba19fb905eadea81111da4035537c3635108af52545/events/00000000000000000003.json",
+   "sha256": "a538b8f949a566bac2b6d1ea4bead65c9edd5b1ecded71356b69027382d0a2b3"
+  },
+  {
+   "bytes": 763,
+   "path": "cases/s04-snapshot-cancel-requested-live/tree/.unrest/runs/bc636f1d527ea4267b423ba19fb905eadea81111da4035537c3635108af52545/request.json",
+   "sha256": "6f5b717b42bba5667fedfc104aaeb9551de84dd17aca30901c94a93105f37d30"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/s04-snapshot-cancel-requested-live/tree/.unrest/runs/idempotency/f236b0d3cf187c4e22850726ee004368ab25f192489708442dd881b185fc6b4c.json",
+   "sha256": "3aa55e313508ccb1e84d786ff5ddebc290ac861221b4410f2f2ba816b43788b4"
+  },
+  {
+   "bytes": 312,
+   "path": "cases/s05-snapshot-draining-after-cancel/tree/.unrest-runtime/runs/611b1bd4634c9fce7552b681ee834e86a23088faff587a2f12bb951fcc2dcb3d.worker.json",
+   "sha256": "3d1d76f8a0da38efc9c74ba0ee91e0412f042ccc0736c61bcd4b640294f8a907"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/s05-snapshot-draining-after-cancel/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/s05-snapshot-draining-after-cancel/tree/.unrest/foundation/identities/control_operation/8d73923150483a2ddb94a3fd2bc8f922fde52fd1471c4da8d9e2edddfb33baec.json",
+   "sha256": "c14ba807d05c22ad1ff3f091da76cbcf070bf33489ff60e001c08fb19458e33a"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/s05-snapshot-draining-after-cancel/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1255,
+   "path": "cases/s05-snapshot-draining-after-cancel/tree/.unrest/foundation/identities/run/ceab59acf28d40f6cc3b4d00fd5991662666dc9d6739e07bade55fa1d58323ec.json",
+   "sha256": "6aeb352f6adb9e1b34c892c8c817b70f2840ca774c40bde0ea681b70c8ea03d8"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/s05-snapshot-draining-after-cancel/tree/.unrest/runs/2d9a3adde6db89c94d9d535bf9fad1d7e290c4ee5e2b66a2c4790cbb535dd51f/events/00000000000000000001.json",
+   "sha256": "cf254e1acd3836ee93a84252c129808dbf3be2151d627c7d37811b35e7216800"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/s05-snapshot-draining-after-cancel/tree/.unrest/runs/2d9a3adde6db89c94d9d535bf9fad1d7e290c4ee5e2b66a2c4790cbb535dd51f/events/00000000000000000002.json",
+   "sha256": "48b5c470f2a7394c9ed05907e13cd7f033ab4a65a49f543df720843d33c2923d"
+  },
+  {
+   "bytes": 573,
+   "path": "cases/s05-snapshot-draining-after-cancel/tree/.unrest/runs/2d9a3adde6db89c94d9d535bf9fad1d7e290c4ee5e2b66a2c4790cbb535dd51f/events/00000000000000000003.json",
+   "sha256": "763afda15ac54001ab812d0bc3abfa0534deb5ce7dad96ff7432c92a03623a33"
+  },
+  {
+   "bytes": 374,
+   "path": "cases/s05-snapshot-draining-after-cancel/tree/.unrest/runs/2d9a3adde6db89c94d9d535bf9fad1d7e290c4ee5e2b66a2c4790cbb535dd51f/events/00000000000000000004.json",
+   "sha256": "007c7658718f15136f17a99f888df15bce654ee880873757e257fe5616336187"
+  },
+  {
+   "bytes": 763,
+   "path": "cases/s05-snapshot-draining-after-cancel/tree/.unrest/runs/2d9a3adde6db89c94d9d535bf9fad1d7e290c4ee5e2b66a2c4790cbb535dd51f/request.json",
+   "sha256": "89099e18af6223d65ceb089e32160c5c00a17c123acb8a91c3b69b43e9a335c1"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/s05-snapshot-draining-after-cancel/tree/.unrest/runs/idempotency/93f7ded8b9a1078b0ca9c7d5f5db80dc5c5c71a6ab4998165ee279c4e9a64a9c.json",
+   "sha256": "67d59b8154d80adcb1cccfd32d2b9fd0aec4fa8035e61b45f8772f7d8768c93c"
+  },
+  {
+   "bytes": 312,
+   "path": "cases/s06-snapshot-draining-external-signal/tree/.unrest-runtime/runs/a336ec68e0813220bca3750b718946059c05f45b2c8dab99b292890017a2c5c7.worker.json",
+   "sha256": "c53c4071660a19501e7032bbda39807b8e7e433045a9dfeef2a7a64194647054"
+  },
+  {
+   "bytes": 66,
+   "path": "cases/s06-snapshot-draining-external-signal/tree/.unrest/foundation/custody-root.json",
+   "sha256": "0081cff38d12a852eed56ab122492e78cfcea7ebd02e2dec458c8255a6cae4a5"
+  },
+  {
+   "bytes": 332,
+   "path": "cases/s06-snapshot-draining-external-signal/tree/.unrest/foundation/identities/control_operation/9cf7366eca0dc92eda95e362f57062df29a098516f8753e21dc69e3655719ce8.json",
+   "sha256": "5ed4e9cea73f2306eae8c250d658fdfda8d7739dfae901d3e613d9cf2a695435"
+  },
+  {
+   "bytes": 240,
+   "path": "cases/s06-snapshot-draining-external-signal/tree/.unrest/foundation/identities/provider_configuration/c5cecf773e4d687c08bd3a29442b546c623b209c352774aa88c619d37fb7605c.json",
+   "sha256": "b3b195846c034d9abb03cf0414abd75b9e27e304964405ddbf79fa9c6693fc46"
+  },
+  {
+   "bytes": 1256,
+   "path": "cases/s06-snapshot-draining-external-signal/tree/.unrest/foundation/identities/run/042643e15af62cb5b9dff0847c50c510c79540e3ba72e166426315f8088f3159.json",
+   "sha256": "72d1dde827f5a2b1fe2e8184a8c323a5ef75f10e2d7027c1154bdc7b5a4c8ee1"
+  },
+  {
+   "bytes": 340,
+   "path": "cases/s06-snapshot-draining-external-signal/tree/.unrest/runs/cf7ef461408c5d3d6094a65a19a9c01f01b4170244547d4c3c63928ca43f387b/events/00000000000000000001.json",
+   "sha256": "d4e3c1fee37cc985a55c3357abdf93763d47930726234ea26acf83bca16a21e9"
+  },
+  {
+   "bytes": 443,
+   "path": "cases/s06-snapshot-draining-external-signal/tree/.unrest/runs/cf7ef461408c5d3d6094a65a19a9c01f01b4170244547d4c3c63928ca43f387b/events/00000000000000000002.json",
+   "sha256": "21b955fa116475f6ca7e1ca6daffa0ced696fd2a05842e7334f0f95572f14eea"
+  },
+  {
+   "bytes": 374,
+   "path": "cases/s06-snapshot-draining-external-signal/tree/.unrest/runs/cf7ef461408c5d3d6094a65a19a9c01f01b4170244547d4c3c63928ca43f387b/events/00000000000000000003.json",
+   "sha256": "168fe4512d9ede122803f331db64b25bbdd51c85151dbd167d7556ff682a8cd3"
+  },
+  {
+   "bytes": 772,
+   "path": "cases/s06-snapshot-draining-external-signal/tree/.unrest/runs/cf7ef461408c5d3d6094a65a19a9c01f01b4170244547d4c3c63928ca43f387b/request.json",
+   "sha256": "47dfd72a90244ac1c0fa32873e1fe1928b8dc6d8a90c9beec036103b02c6ce2c"
+  },
+  {
+   "bytes": 188,
+   "path": "cases/s06-snapshot-draining-external-signal/tree/.unrest/runs/idempotency/f88f01019ee4da8a942dfcdf10463fcb8fd14a0226e53837f7793cccc69a47c7.json",
+   "sha256": "22918cd4ee15dc3d7705a630f08df2c6d393b20a892e2ca0db5a491bdb860244"
+  }
+ ],
+ "isolation": {
+  "executor_loads": [
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute",
+   "lg2_fake_executor:execute"
+  ],
+  "forbidden_attempts": [],
+  "guard_self_test": [
+   "audit:subprocess.Popen:refused",
+   "audit:os.fork:refused",
+   "audit:os.kill:refused",
+   "audit:socket.connect:refused",
+   "audit:os.posix_spawn:refused",
+   "stub:subprocess.Popen:refused",
+   "stub:os.fork:refused",
+   "stub:os.kill:refused",
+   "stub:os.system:refused",
+   "stub:_posixsubprocess.fork_exec:refused",
+   "stub:signal.signal:refused",
+   "stub:os.killpg:refused",
+   "scope:write-outside:refused"
+  ],
+  "kill_recorder_total": 16,
+  "loaded_unrest_harness_modules": [
+   "unrest_harness",
+   "unrest_harness.canonical_identity",
+   "unrest_harness.foundation_store",
+   "unrest_harness.mutation_journal",
+   "unrest_harness.receipts",
+   "unrest_harness.run_control"
+  ],
+  "scope_violations": [],
+  "site_packages_modules": [],
+  "spawn_recorder_total": 33
+ },
+ "platform": "darwin",
+ "python": "3.13.12",
+ "schema": "rcr-lg2-legacy-corpus-run/1"
+}

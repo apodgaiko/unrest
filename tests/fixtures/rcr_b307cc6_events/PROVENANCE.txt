@@ -1,0 +1,10 @@
+# provenance: git --no-optional-locks ls-tree -l b307cc619cc042f47161ba0b22fa4b5475729fff <path>; extracted via git cat-file blob <blob> (read-only; worktree untouched)
+100644 blob a50387f2485cbf401ccc735c811640d51ba0af74      97	src/unrest_harness/__init__.py  sha256=74850da5471db9efec89961960c9568c05a8f38787e8e624b3c9f7800e4841fb
+100644 blob f8808db0bc7a51d8234dad26c9b9370ce1819468   60212	src/unrest_harness/run_control.py  sha256=a019923a30ed4cbffb2895a4108af58313631f75f1466ddedcc180ad64b82c58
+100644 blob 80ca3d47e1eeade295fc640f4b27d2d21ce1b1e4   13507	src/unrest_harness/canonical_identity.py  sha256=1d3dcb3f912d8d1e2907ac7661a0149755258e554cfa00754e4984adc405448f
+100644 blob b39a22a5e218e94a01fc8c51fb0e8d4baf2179e3   15902	src/unrest_harness/foundation_store.py  sha256=a2711c368eecfde7c1d01d984ab7157b91a3e02819c95812a9cc1b188b856640
+100644 blob 00270c585f002c6070f9a96ac325c4107a5de6e8   22612	src/unrest_harness/mutation_journal.py  sha256=0af4de63ca6909954df4cce8ffaab99f2f6d5b30ee77012c7b3850d9e72ebe75
+100644 blob 869ede94938500545e823900c8a43cb88704d373   23307	src/unrest_harness/receipts.py  sha256=b9c5531d806c4850b493ab6d69484f2647febf6ed6d3a837be885d11fca8e7cd
+100644 blob 6149835dc4c3b7a087a14ecc7f6571e82352f239    8778	src/unrest_harness/bundled/foundation/identity-catalog.v2.json  sha256=b0c0883cec63648c20f9c9c4ff9ff4079654177d544fff0ee475416a83e6248f
+100644 blob a0e64c42d790ff1ddfc07ea5163587dcf925174c   14391	src/unrest_harness/bundled/foundation/receipt-catalog.v1.json  sha256=e452e90cc617fd9acbf770c4ae1bdab6fb932f411815dc34c57ef3dcedde3915
+100644 blob 15185ce9c436ebb97a5bf9e9474d26f017de3a78    6970	src/unrest_harness/run_worker.py  -> reference/run_worker.py.txt (NOT importable; static citation of the worker call sequence)  sha256=3bfb02f401caa7c09d121a4aaca29ee47646587ac42590db38ad37321ece0043
