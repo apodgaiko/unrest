@@ -26,6 +26,7 @@ Provide the canonical registry for repository ADR IDs and accepted status.
 - [ADR-0305: Preserve the v0.2 compatibility and rollback perimeter](ADR-0305-compatibility.md)
 - [ADR-0500: Bound manual run cancellation and pending terminal receipt recovery](ADR-0500-run-stop-custody.md)
 - [ADR-0501: Bound inert recovery reservation accounting and snapshot custody](ADR-0501-recovery-reservation-custody.md)
+- [ADR-0502: Isolate incomplete admission and preserve durable key binding](ADR-0502-admission-recovery.md)
 
 ## Public contract
 
