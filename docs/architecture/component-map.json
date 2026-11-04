@@ -118,14 +118,17 @@
       "invariants": [],
       "paths": [
         "src/unrest_harness/continuation_reservations.py",
+        "src/unrest_harness/continuation_state.py",
         "src/unrest_harness/continuation_types.py"
       ],
       "specifications": [
         "docs/architecture/continuation-reservations.md",
+        "docs/architecture/continuation-state.md",
         "docs/architecture/continuation-types.md"
       ],
       "tests": [
         "tests/test_continuation_reservations.py",
+        "tests/test_continuation_state.py",
         "tests/test_continuation_types.py"
       ]
     },

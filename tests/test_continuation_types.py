@@ -1111,13 +1111,13 @@ def test_val09_import_allowlist_and_no_effectful_calls() -> None:
                         "socket", "hashlib", "pickle", "threading", "signal"}
 
 
-def test_val09_module_has_zero_runtime_importers() -> None:
+def test_val09_module_has_only_the_inert_state_importer() -> None:
     importers = [
         path.relative_to(ROOT).as_posix()
         for path in sorted((ROOT / "src/unrest_harness").rglob("*.py"))
         if path != MODULE_PATH and "continuation_types" in path.read_text(encoding="utf-8")
     ]
-    assert importers == []
+    assert importers == ["src/unrest_harness/continuation_state.py"]
 
 
 def test_val09_fresh_import_has_no_effects_and_restores_identity(
@@ -1193,14 +1193,17 @@ def test_val10_component_and_index_registration() -> None:
             "invariants": [],
             "paths": [
                 "src/unrest_harness/continuation_reservations.py",
+                "src/unrest_harness/continuation_state.py",
                 "src/unrest_harness/continuation_types.py",
             ],
             "specifications": [
                 "docs/architecture/continuation-reservations.md",
+                "docs/architecture/continuation-state.md",
                 "docs/architecture/continuation-types.md",
             ],
             "tests": [
                 "tests/test_continuation_reservations.py",
+                "tests/test_continuation_state.py",
                 "tests/test_continuation_types.py",
             ],
         }
