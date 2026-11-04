@@ -29,6 +29,7 @@ Provide the canonical registry for repository ADR IDs and accepted status.
 - [ADR-0502: Isolate incomplete admission and preserve durable key binding](ADR-0502-admission-recovery.md)
 - [ADR-0503: Enforce typed integrity of durable run records](ADR-0503-run-record-integrity.md)
 - [ADR-0504: Classify bound work-unit state without execution authority](ADR-0504-continuation-state.md)
+- [ADR-0505: Observe one explicit task without continuation classification](ADR-0505-continuation-preflight.md)
 
 ## Public contract
 
