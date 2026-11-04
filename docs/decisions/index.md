@@ -28,6 +28,7 @@ Provide the canonical registry for repository ADR IDs and accepted status.
 - [ADR-0501: Bound inert recovery reservation accounting and snapshot custody](ADR-0501-recovery-reservation-custody.md)
 - [ADR-0502: Isolate incomplete admission and preserve durable key binding](ADR-0502-admission-recovery.md)
 - [ADR-0503: Enforce typed integrity of durable run records](ADR-0503-run-record-integrity.md)
+- [ADR-0504: Classify bound work-unit state without execution authority](ADR-0504-continuation-state.md)
 
 ## Public contract
 
