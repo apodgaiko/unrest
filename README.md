@@ -92,6 +92,13 @@ scheduling, and detail aliases. Consumers must switch atomically: there is no
 legacy output flag or version negotiation. Existing persisted project and
 mission records remain schema version 1 and require no data migration.
 
+`unrest continuation-preflight --project PROJECT_ID --mission MISSION_ID --task
+TASK_ID` is an experimental preflight: it prints one closed JSON report of
+recorded facts, presence and provenance for one explicit task from the same
+read-only cursor capture. Its `assessment` is always `unavailable`; exit 0 means
+only that a report was built, not readiness or permission to run work. See
+[continuation preflight](docs/architecture/continuation-preflight.md).
+
 ## v0.4.0 composition adapters
 
 Unrest v0.4.0 adds three bounded composition surfaces over the existing

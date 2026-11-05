@@ -1076,6 +1076,81 @@ def observe_project_cmd(
 
 
 # ---------------------------------------------------------------------------
+# continuation-preflight
+# ---------------------------------------------------------------------------
+
+
+@cli.command("continuation-preflight")
+@click.option("--project", "project_id", required=True)
+@click.option("--mission", "mission_id", required=True)
+@click.option("--task", "task_id", required=True)
+def continuation_preflight_cmd(project_id: str, mission_id: str, task_id: str) -> None:
+    """Print an experimental read-only preflight report for one explicit task.
+
+    Reads only captured project runtime cursors and never evaluates continuation
+    state: assessment is always unavailable in schema version 1. Capture is
+    limited to 4 MiB per file, 16 MiB total, 4,096 selected files or entries,
+    depth 6, and three snapshot attempts, for the whole selected mission. Limit
+    violations report unsafe_cursor.
+    """
+
+    # Phase 1 binds every name used by the phase-2 handlers before they can be
+    # evaluated; an import failure therefore stays inside the closed envelope.
+    try:
+        from .continuation_preflight import (
+            ERROR_CODES,
+            PreflightError,
+            PreflightSubject,
+            build_preflight,
+            render_preflight,
+            validate_subject_arguments,
+        )
+    except Exception:
+        raise click.ClickException("internal_error") from None
+    code: str | None = None
+    rendered = ""
+    try:
+        validate_subject_arguments(project_id, mission_id, task_id)
+        try:
+            for path_variable in ("UNREST_HOME", "UNREST_PROJECTS_DIR"):
+                ambient_path = os.environ.get(path_variable)
+                if ambient_path is not None and (
+                    len(ambient_path) > 4096 or not ambient_path.isprintable()
+                ):
+                    raise ValueError("invalid ambient path")
+            ambient_parallelism = os.environ.get("UNREST_MAX_PARALLEL_NODES")
+            if ambient_parallelism is not None:
+                parsed_parallelism = int(ambient_parallelism)
+                if parsed_parallelism <= 0:
+                    raise ValueError("invalid ambient parallelism")
+            ambient_worker_model = os.environ.get("UNREST_WORKER_MODEL")
+            if ambient_worker_model is not None and (
+                not ambient_worker_model.strip()
+                or len(ambient_worker_model) > 256
+                or not ambient_worker_model.isprintable()
+            ):
+                raise ValueError("invalid ambient worker model")
+            config = HarnessConfig.discover()
+            config.validate_capability_support()
+            store = _observation_store(config)
+        except (OSError, RuntimeError, ValueError):
+            raise PreflightError("invalid_configuration") from None
+        subject = PreflightSubject(project_id, mission_id, task_id)
+        rendered = render_preflight(build_preflight(store, subject))
+    except PreflightError as error:
+        code = error.code
+    except click.ClickException as error:
+        code = error.message
+    except Exception:
+        code = "internal_error"
+    if code is not None:
+        if code not in ERROR_CODES:
+            code = "internal_error"
+        raise click.ClickException(code)
+    click.echo(rendered, nl=False)
+
+
+# ---------------------------------------------------------------------------
 # inspect-tasks
 # ---------------------------------------------------------------------------
 

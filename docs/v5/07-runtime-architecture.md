@@ -344,6 +344,20 @@ The CLI imports the status implementation only after `observe-project` is
 selected (including its command help). Global help, initialization, ordinary
 project operations, and MCP startup do not load it.
 
+### Experimental continuation preflight
+
+`unrest continuation-preflight --project PROJECT_ID --mission MISSION_ID
+--task TASK_ID` projects one explicit task from the same bounded cursor capture
+into a closed schema-v1 JSON report with per-fact presence and provenance. It
+never classifies continuation state: `assessment` is always `unavailable`. The
+CLI imports its implementation only when the command executes; its static help,
+global help and other commands do not load it. It claims no coherence between
+roots and reads no durable records, run-control records or supervision
+snapshots. Unlike `observe-project`, it parses `contract-state.json` whenever
+captured, so a broken file refuses with `malformed_cursor` even for a task
+without targets; `observe-project` is unchanged. See
+[continuation preflight](../architecture/continuation-preflight.md).
+
 ## Deferred iteration-speed work
 
 This change reduces observation cost without changing runtime authority.

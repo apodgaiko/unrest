@@ -8,7 +8,7 @@ from pathlib import Path
 
 from content_manifest import Refused as Refused, refuse_if
 from git_policy import image
-from launch_policy import build_expected,source_unit,literal,render_string
+from launch_policy import build_expected,source_unit,literal,render_string,assignment
 from speed_inline import CASES as SPEED_CASES, PRELUDE, CLI_CASE, cli_expected
 from nested_pytest import CASE as NESTED_CASE, NODES, PYTEST_PIN, CASES as NESTED_CASES, HERMETIC, hermetic
 
@@ -40,6 +40,20 @@ OBSERVATION_ARGUMENTS = {
     'observe-positive': ('["observe-project", "--help"]','0'),
 }
 PINS[OBSERVATION_TEST] = 'bc4977de515c9f3a3b3ccab626a245525deccd9a6449fce8ad02253d220af305'
+PREFLIGHT_TEST = 'tests/test_continuation_preflight.py'
+PREFLIGHT_CASES = (PREFLIGHT_TEST+'::test_pf12a_pristine_import_boundary',
+                   PREFLIGHT_TEST+'::test_pf20b_pristine_lazy_module_loading')
+PREFLIGHT_ARGUMENTS = {
+    'g1': ('continuation-preflight','G1_ARGS'),
+    'g2': ('continuation-preflight','G2_ARGS'),
+    'x1': ('continuation-preflight','G1_ARGS'),
+    'm18': ('continuation-preflight','G1_ARGS'),
+    'help': ('continuation-preflight','--help'),
+    'root-help': ('--help',),
+    'list': ('list-projects',),
+    'observe-help': ('observe-project','--help'),
+}
+PINS[PREFLIGHT_TEST] = '1a7f4389c22f7b0467064d586c00b436db5c634d7d003716216beb0ee9eee410'
 JOURNAL_TEST='tests/test_mutation_journal.py'
 JOURNAL_CASE=JOURNAL_TEST+'::test_live_foreign_owner_is_busy_and_record_is_unchanged'
 PINS[JOURNAL_TEST]='dbaec57f5937ce7583c1de5819ee87b55dd30f45d8e4a3cc0c2d8d9b1607ea49'
@@ -61,9 +75,11 @@ ISOLATED = {RELOAD_CASE:'reload', DETACHED_CASE:'detached', **dict(zip(METHOD_CA
 DRAIN_TEST='tests/test_lean_provider_security_runtime.py'
 DRAIN_CASE=DRAIN_TEST+'::test_chatty_child_pipes_are_continuously_drained_bounded_and_reaped'
 PINS[DRAIN_TEST]='f0984a07bd8bb410c3f6046afd4578cb3dad6d10137aceff09fb696b8880183e'
-CASES = (DRAIN_CASE,*IMPORT_CASES,*STDIO,OBSERVATION_CASE,CLI_CASE,*NESTED_CASES,JOURNAL_CASE,MEASUREMENT_CASE,*STORAGE_CASES,*INSPECTION_CASES,*COMPLETION_CASES,*ISOLATED)
+CASES = (DRAIN_CASE,*IMPORT_CASES,*STDIO,OBSERVATION_CASE,*PREFLIGHT_CASES,CLI_CASE,*NESTED_CASES,JOURNAL_CASE,MEASUREMENT_CASE,*STORAGE_CASES,*INSPECTION_CASES,*COMPLETION_CASES,*ISOLATED)
 SEQUENCES.update({case:('startup',) for case in STDIO})
 SEQUENCES[OBSERVATION_CASE] = OBSERVATION_OPERATIONS
+SEQUENCES[PREFLIGHT_CASES[0]] = ('g1','g2','x1','m18','help')
+SEQUENCES[PREFLIGHT_CASES[1]] = ('root-help','list','observe-help','help','g1')
 SEQUENCES[CLI_CASE] = tuple('run-'+str(i) for i in range(5))
 SEQUENCES.update({case:('pytest',) for case in NESTED_CASES})
 SEQUENCES.update({case:('read0','read1') if case==STORAGE_DIRECTORY else ('read0',) for case in STORAGE_CASES})
@@ -114,7 +130,7 @@ def script(checkout, operation, root=None):
 
 
 def expected(case, operation, native, pin, checkout, environment, *, root=None):
-    refuse_if(type(case) is not str or case not in (*IMPORT_CASES,OBSERVATION_CASE,CLI_CASE,JOURNAL_CASE,*NESTED_CASES,*ISOLATED) or type(operation) is not str or operation not in SEQUENCES[case], 'fixed inline closed operation')
+    refuse_if(type(case) is not str or case not in (*IMPORT_CASES,OBSERVATION_CASE,*PREFLIGHT_CASES,CLI_CASE,JOURNAL_CASE,*NESTED_CASES,*ISOLATED) or type(operation) is not str or operation not in SEQUENCES[case], 'fixed inline closed operation')
     if case==JOURNAL_CASE:
         owner=source_unit(checkout,JOURNAL_TEST,PINS[JOURNAL_TEST],(JOURNAL_CASE.split('::')[-1],))
         calls=[node for node in ast.walk(owner) if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr=='Popen']
@@ -144,6 +160,14 @@ def expected(case, operation, native, pin, checkout, environment, *, root=None):
             tuple(sorted(environment.items())),
             str(checkout), 'python-command',
         )
+    if case in PREFLIGHT_CASES:
+        tree=source_unit(checkout,PREFLIGHT_TEST,PINS[PREFLIGHT_TEST])
+        names=assignment(tree,'FORBIDDEN_MODULES').args[0]
+        forbidden=[render_string(names.elt,(('name',-1,name),)) for name in ast.literal_eval(names.generators[0].iter)]
+        arguments=[part for item in PREFLIGHT_ARGUMENTS[operation] for part in (ast.literal_eval(assignment(tree,item)) if item.endswith('_ARGS') else (item,))]
+        home=(root/operation if case==PREFLIGHT_CASES[0] else root)/'home'
+        argv=(native,'-c',literal(tree,'PRISTINE_SCRIPT'),json.dumps(arguments),json.dumps(forbidden))
+        return build_expected(case,native,pin,argv,tuple(sorted({**environment,'UNREST_HOME':str(home)}.items())),str(checkout),'python-command')
     body = script(checkout, operation)
     tail = (json.dumps(REMOVED),) if operation == 'mcp' else (json.dumps(() if operation == 'check' else REMOVED), json.dumps(ARGUMENTS[operation]))
     return build_expected(case,native,pin,(native,'-c',body,*tail),

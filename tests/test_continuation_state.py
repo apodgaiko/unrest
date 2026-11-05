@@ -1942,7 +1942,7 @@ PINNED = {
     "src/unrest_harness/server.py":
         "d1abbe2f76ff874849d113919777efe1ccb8fee0a6327d5eaf27e87892fd886f",
     "src/unrest_harness/cli.py":
-        "3c29151a7d66a33a6b269db7cfece6c2cb23c69a1f046b63989e5ce97dc0b648",
+        "2ca82d15f3ad4bbc877971bfde90f20bcea8a4a1631641584f7077e785bc0b87",
     "tests/test_run_control.py":
         "13ad6766039059c212f53d615e7521e67fce69bfd0e329c4ae63ea28a7b88fcf",
     "tests/test_mutation_journal.py":

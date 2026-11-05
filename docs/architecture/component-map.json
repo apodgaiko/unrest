@@ -292,13 +292,16 @@
         "ARCH-OBSERVE-001"
       ],
       "paths": [
+        "src/unrest_harness/continuation_preflight.py",
         "src/unrest_harness/runtime_observability.py"
       ],
       "specifications": [
+        "docs/architecture/continuation-preflight.md",
         "docs/v5/07-runtime-architecture.md"
       ],
       "tests": [
         "tests/test_cli.py",
+        "tests/test_continuation_preflight.py",
         "tests/test_runtime_observability.py"
       ]
     },

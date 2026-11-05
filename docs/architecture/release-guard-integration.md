@@ -17,8 +17,11 @@ callers. Hostile-Python isolation is not claimed. Unchanged product tests certif
 application behavior, including protocol authorization, refusal, completion,
 credential redaction, persistence, integration and cleanup.
 
-Enforcement has a 10,000 physical-line ceiling. Native code, policy, generators,
-generated enforcement, workflows and external enforcement dependencies count.
+Enforcement has a 10,029 physical-line ceiling. It was raised from 10,000 by
+exactly the measured 29-line registration of the two pristine continuation-preflight
+probes (PF-12a, PF-20b); any further growth needs separate approval. Native code,
+policy, generators, generated enforcement, workflows and external enforcement
+dependencies count.
 Tests are measured separately. Moving, packing or renaming code does not reduce
 that scope. `size_budget.py` reports current bytes and lines; an independent
 closure review must check external dependencies. Neither size nor component

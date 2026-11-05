@@ -34,6 +34,7 @@ withdraws the former repository governance language and duplicate root schemas.
 - [Continuation value types](continuation-types.md) — inert int64 ms values, EventId and closed value codec v1.
 - [Continuation recovery reservations](continuation-reservations.md) — inert bounded reservation ledger, actual settlement and snapshot custody.
 - [Continuation unit state](continuation-state.md) — inert finite classifier of one bound unit and its acceptance frontier; advice, not authority.
+- [Continuation preflight](continuation-preflight.md) — experimental read-only fact report for one explicit task; assessment always unavailable.
 
 - [Controlled speed runner v2](controlled-speed-runner.md) — prepared-state compatibility measurement.
 

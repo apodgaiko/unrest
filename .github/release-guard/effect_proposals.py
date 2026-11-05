@@ -9,7 +9,7 @@ from content_manifest import Refused, refuse_if
 from launch_policy import admit_expected
 from plan_launch import CASES as PLANS, expected as plan_expected
 from session_launch import CASES as SESSIONS, expected as session_expected
-from fixed_inline import CASES as FIXED, SEQUENCES, NESTED_CASES, STORAGE_CASES, INSPECTION_CASES, MEASUREMENT_CASE, COMPLETION_CASES, DRAIN_CASE, expected as fixed_expected, STDIO, startup_expected, translated as fixed_translated
+from fixed_inline import CASES as FIXED, SEQUENCES, NESTED_CASES, STORAGE_CASES, INSPECTION_CASES, MEASUREMENT_CASE, COMPLETION_CASES, DRAIN_CASE, PREFLIGHT_CASES, expected as fixed_expected, STDIO, startup_expected, translated as fixed_translated
 from ordinary_acp import EXECUTION_CASES as ORDINARY, expected as ordinary_expected
 from cleanup_launch import EXECUTION_CASES as CLEANUP, expected as cleanup_expected, base_path, translated as cleanup_vector
 from controlled_startup import expected_entry, ACP
@@ -124,6 +124,11 @@ def proposal(host, actor, raw):
             expected=leaf_expected(host,operation,argv,cwd,environment,native,pin)
         elif case in STDIO:
             expected = startup_expected(case,native,pin,cwd,owned)
+        elif case in PREFLIGHT_CASES:
+            from owned_fixture import retain
+            home=Path(raw['environment'].get('UNREST_HOME',''))
+            root=retain(host,home.parent.parent if case==PREFLIGHT_CASES[0] else home.parent, 20000)
+            expected=fixed_expected(case,operation,native,pin,checkout,environment,root=root)
         else:
             from speed_inline import CASES as SPEED_CASES,fixture,CLI_CASE,directory
             if case==CLI_CASE:
