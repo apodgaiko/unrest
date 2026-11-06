@@ -266,6 +266,7 @@ def worker(binding, metadata, raw_directory):
         if full:
             from full_launch import finished
             finished(observer)
+        require(observer.ledger.final_settled(), 'original source group status unresolved')
         require(result['root_parent_wait_raw'] == 0 and not result['poison']
                 and observer.finished and tuple(observer.completed) == observer.cases
                 and not observer.frames

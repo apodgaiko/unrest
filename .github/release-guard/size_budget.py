@@ -15,7 +15,7 @@ from typing import Sequence, TypedDict
 
 from content_manifest import Refused as Refused, capture, encode, measure_lines, refuse_if
 
-LIMIT = 10_029
+LIMIT = 10_068
 
 
 class Row(TypedDict):

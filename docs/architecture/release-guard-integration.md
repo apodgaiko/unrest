@@ -17,9 +17,11 @@ callers. Hostile-Python isolation is not claimed. Unchanged product tests certif
 application behavior, including protocol authorization, refusal, completion,
 credential redaction, persistence, integration and cleanup.
 
-Enforcement has a 10,029 physical-line ceiling. It was raised from 10,000 by
+Enforcement has a 10,068 physical-line ceiling. It was raised from 10,000 by
 exactly the measured 29-line registration of the two pristine continuation-preflight
-probes (PF-12a, PF-20b); any further growth needs separate approval. Native code,
+probes (PF-12a, PF-20b), then by exactly the measured 39-line ledger event-order
+repair ([ADR-0506](../decisions/ADR-0506-ledger-thread-group-status-order.md));
+any further growth needs separate approval. Native code,
 policy, generators, generated enforcement, workflows and external enforcement
 dependencies count.
 Tests are measured separately. Moving, packing or renaming code does not reduce
@@ -948,12 +950,43 @@ retired. Fixture custody is acquired again before any further Git command or
 server launch; finished fixtures grant no later capability. Original concurrent
 server, late-client and restart tests retain their actual ordering assertions.
 
-A thread's observed exit stop and tracer terminal status can differ when a
-subsequent group SIGKILL arrives. A terminal SIGKILL with an earlier member exit
-may precede the exact group's leader exit observation. That terminal fact remains
-pending corroboration: the later leader exit must match it. The earlier member
-exit is never overwritten, no parent-wait evidence is inferred, and a missing or
-mismatched leader exit cannot certify completion.
+A thread's observed exit stop and its tracer terminal status can differ when the
+thread group exits after the thread's own exit stop. The ledger keeps both real
+facts and never overwrites the thread's own exit. A thread terminal whose status
+differs from its own exit (or, for exact SIGKILL status 9 only, has no observed
+exit stop) is group-dependent. It is admitted before the exact group leader's
+exit observation only for canonical normal statuses (0, 256, …, 65280) with an
+actually observed earlier own exit stop, or for exact status 9; only when the
+thread's membership epoch (the leader's exec generation at the thread's
+observed birth) equals the leader's current generation; and only when every
+other received group-dependent terminal of that group has the same status.
+Such a terminal is an observed obligation, not closure: the later actual exit of
+the same leader Birth must have the same status, or the leader exit is refused.
+A thread child is admitted only when its creator's normalized thread-group
+parent is itself a group leader; this keeps every admitted thread inside the
+recorded children of its group. It is an admission tightening whose runtime
+compatibility with non-leader exec is not established, and it does not
+authenticate operating-system identity of a reused numeric PID.
+No exit stop, parent wait or terminal is synthesized; an own exit reported after
+the thread's terminal is refused; a leader exec while an obligation is unresolved
+is refused, so an obligation never moves to a new exec generation. A terminal
+joined after the leader exit is accepted on status equality without an epoch
+check (bounded scope; cross-generation attribution is not certified). Failure
+cleanup observations never settle an obligation. Retirement additionally
+requires that no received obligation of the retiring leader's group remains
+unresolved. Case completion additionally requires that no case actor has an
+unresolved own group-dependent terminal and no member of a group led by a case
+actor has one; the actor's own obligation is checked first. Obligations of the
+root's and other groups are caught only by final source completion, which fails
+the whole run after the case has been recorded. Completed cases, outcomes and
+cohort observations in a failed source result are therefore not evidence that
+those cases closed. These checks are defence in depth; their equivalence on
+current-tracer traces is proved only for named domains and premises in the
+contract, not unconditionally. Every refusal introduced by this rule leaves the
+ledger state and kernel sequence unchanged; this is not a claim about every
+pre-existing ledger refusal. A member without any observed terminal is not an
+obligation; this guard does not certify complete thread lifecycle, non-leader
+exec or former-TID custody.
 
 Role subprocess admission treats node names, mission IDs, attempt names and target
 contents as bounded application data inside the acquired project. Case-selected

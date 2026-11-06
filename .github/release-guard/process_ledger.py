@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import os
-from typing import Any
+from typing import Any, Iterable
 
 from content_manifest import Refused, refuse_if
 
@@ -85,6 +85,7 @@ class Process:
     parent_wait: tuple[int, int, int, int] | None = None
     adopted_identity: dict | None = None
     init_wait: int | None = None
+    epoch: int = 0
 
 
 class Ledger:
@@ -155,6 +156,7 @@ class Ledger:
             refuse_if(len(self.processes) >= MAX_PROCESSES or birth in self.processes, 'ledger duplicate or unbounded birth')
             previous = self.current.get(birth.pid)
             refuse_if(previous is not None and self.process(previous).terminal is None, 'ledger live PID replacement')
+            epoch = 0
             if kind == 'kernel_root':
                 refuse_if(self.root is not None, 'ledger duplicate root')
                 parent = None
@@ -173,10 +175,14 @@ class Ledger:
                 if (birth.uid != parent.uid or birth.parent != expected_parent
                         or (birth.pid != birth.tgid and (row['event'] != 3 or birth.tgid != parent.tgid))):
                     raise Refused('ledger child kernel identity')
+                if birth.pid != birth.tgid:
+                    # Only a leader parent keeps every admitted thread inside its group's children.
+                    refuse_if(parent.pid != parent.tgid, 'ledger child parent group')
+                    epoch = self.process(parent).generation
             identity = canonical(row['identity'])
             self.processes[birth] = Process(birth, identity, sequence, parent,
                                              group=birth if birth.pid == birth.tgid else self.current.get(birth.tgid),
-                                             registered_identity=dict(identity))
+                                             registered_identity=dict(identity), epoch=epoch)
             self.current[birth.pid] = birth
             if parent is not None:
                 self.children.setdefault(parent, []).append(birth)
@@ -187,6 +193,7 @@ class Ledger:
             birth = observed_birth
             if kind == 'kernel_exec':
                 refuse_if(process.exit is not None or process.terminal is not None, 'ledger exec after exit')
+                refuse_if(any(map(self.dependent, self.members(birth))), 'ledger exec with group status debt')
                 process.generation += 1
                 if process.registered_generation != process.generation:
                     process.stage = 'exec-unregistered'
@@ -194,9 +201,9 @@ class Ledger:
                 raw = integer(row.get('raw'), maximum=65535)
                 status(raw, os.waitstatus_to_exitcode(raw))
                 refuse_if(process.exit is not None, 'ledger duplicate exit')
-                refuse_if(birth.pid==birth.tgid and any(member.group==birth and member.terminal is not None
-                        and (member.exit is None or member.exit[1]!=member.terminal[1])
-                        and member.terminal[1]!=raw for member in map(self.process,self.children.get(birth,()))), 'ledger pending thread group status')
+                refuse_if(process.terminal is not None, 'ledger exit after terminal')
+                refuse_if(birth.pid==birth.tgid and any(self.dependent(member) and self.process(member).terminal[1]!=raw
+                        for member in self.members(birth)), 'ledger pending thread group status')
                 process.exit = (sequence, raw)
                 process.stage = 'exited'
             else:
@@ -209,10 +216,12 @@ class Ledger:
                     own_exit=process.exit is not None and process.exit[1]==raw
                     group_terminal=(group_exit is not None and group_exit[1]==raw
                                     and (process.exit is not None or raw==9))
-                    pending_group_kill=(birth.pid!=birth.tgid and process.group is not None and process.group.pid==birth.tgid
-                                        and raw==9 and group_exit is None)
-                    if (not (own_exit or group_terminal or pending_group_kill) or Birth.read(row.get('identity')) != birth):
+                    pending=(self.member(birth) and group_exit is None and process.epoch==self.process(process.group).generation
+                             and (raw==9 or (raw & 0xFF)==0 and process.exit is not None))
+                    if (not (own_exit or group_terminal or pending) or Birth.read(row.get('identity')) != birth):
                         raise Refused('ledger terminal birth or exit')
+                    refuse_if(not own_exit and not group_terminal and any(self.dependent(member) and self.process(member).terminal[1]!=raw
+                            for member in self.members(process.group)), 'ledger group status contradiction')
                 process.terminal = (sequence, raw, code)
                 if process.parent is not None and process.birth.pid == process.birth.tgid:
                     key = (birth.pid, process.parent.tgid, raw, code)
@@ -267,7 +276,34 @@ class Ledger:
             return False
         return (process.born < process.exit[0] < process.terminal[0] < process.parent_wait[0]
                 and process.exit[1] == process.terminal[1] == process.parent_wait[1]
-                and process.terminal[2] == process.parent_wait[2])
+                and process.terminal[2] == process.parent_wait[2] and self.settled((birth,)))
+
+    def member(self, birth: Birth) -> bool:
+        group = self.process(birth).group
+        return birth.pid != birth.tgid and group is not None and group.pid == birth.tgid
+
+    def dependent(self, birth: Birth) -> bool:
+        process = self.process(birth)
+        return (self.member(birth) and process.terminal is not None
+                and (process.exit is None or process.exit[1] != process.terminal[1]))
+
+    def debt_of(self, birth: Birth) -> bool:
+        """A received group-dependent terminal not yet matched by its leader's actual exit."""
+        process = self.process(birth)
+        if not self.dependent(birth) or process.group is None or process.terminal is None:
+            return False
+        leader_exit = self.process(process.group).exit
+        return leader_exit is None or leader_exit[1] != process.terminal[1]
+
+    def members(self, leader: Birth) -> list[Birth]:
+        return [birth for birth in self.children.get(leader, ())
+                if self.process(birth).group == leader and self.member(birth)]
+
+    def settled(self, leaders: Iterable[Birth]) -> bool:
+        return not any(self.debt_of(member) for leader in leaders for member in self.members(leader))
+
+    def final_settled(self) -> bool:
+        return not any(map(self.debt_of, self.processes))
 
     def peer_birth(self, birth: Birth) -> Birth:
         process=self.process(birth)
@@ -297,7 +333,7 @@ class Ledger:
         refuse_if(process.adopted_identity is None or process.init_wait is not None
                 or process.parent_wait is not None or process.exit is None or process.terminal is None
                 or not process.born<process.exit[0]<process.terminal[0]
-                or process.exit[1]!=raw or process.terminal[1]!=raw, 'ledger actual namespace init terminal join')
+                or process.exit[1]!=raw or process.terminal[1]!=raw or not self.settled((birth,)), 'ledger actual namespace init terminal join')
         process.init_wait=raw
 
     def body_ready(self, birth: Birth, token: str) -> bool:

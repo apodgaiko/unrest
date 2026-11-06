@@ -30,6 +30,7 @@ Provide the canonical registry for repository ADR IDs and accepted status.
 - [ADR-0503: Enforce typed integrity of durable run records](ADR-0503-run-record-integrity.md)
 - [ADR-0504: Classify bound work-unit state without execution authority](ADR-0504-continuation-state.md)
 - [ADR-0505: Observe one explicit task without continuation classification](ADR-0505-continuation-preflight.md)
+- [ADR-0506: Admit bounded reordered thread group status in the release-guard ledger](ADR-0506-ledger-thread-group-status-order.md)
 
 ## Public contract
 

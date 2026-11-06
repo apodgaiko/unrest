@@ -383,6 +383,8 @@ class Observer:
                         or any(not value['consumed'] for value in self.intents.values() if value['case'] == self.case)
                         or any(not (self.git.reaped(value) if value['role']=='git-helper' else
                             self.ledger.reaped(value['birth'], value['token']) or self.case in composed_adoption.CLOSEOUT and self.ledger.process(value['birth']).init_wait is not None) for value in ordinary), 'source original case actual cleanup incomplete')
+                refuse_if(any(self.ledger.debt_of(value['birth']) for value in children), 'source case actor group status unresolved')
+                refuse_if(not self.ledger.settled(value['birth'] for value in children), 'source case group status unresolved')
                 if self.full:
                     self.outcomes.append(dict(payload))
                 self.completed.append(self.case)

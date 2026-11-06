@@ -21,6 +21,7 @@ from source_host import inventory
 import source_host
 from source_entry import Policy
 from source_observer import Observer
+import test_process_ledger as ledger_rows
 
 
 def test_private_input_inventory_rejects_aliases_and_writeable_members(tmp_path):
@@ -391,3 +392,246 @@ def test_observer_refuses_a_foreign_namespace_before_consuming_any_launch(monkey
     monkeypatch.setattr(source_observer,'process_identity',lambda pid:{'namespaces':identities})
     monkeypatch.setattr(source_observer.os,'readlink',lambda path:'expected-mount')
     assert observer.resolve(None,123,'/native',[],{},'/owned') is False
+
+
+# Ledger event-order contract V3 + amendment 1: case-finish and final-source settlement.
+
+CASE_ID = 'case[one]'
+
+
+def finishing_observer(ledger, root):
+    observer = object.__new__(Observer)
+    observer.full, observer.outcomes, observer.frames = False, [], []
+    observer.root_birth, observer.finished, observer.case = root, False, CASE_ID
+    observer.cases, observer.completed, observer.cohort_observations = (CASE_ID,), [], []
+    observer.ledger, observer.intents, observer.actors = ledger, {}, {}
+    return observer
+
+
+def ordinary_actor(observer, birth, token):
+    intent = {'ticket': len(observer.intents) + 1, 'birth': birth, 'token': token, 'case': CASE_ID,
+              'role': 'sleep', 'consumed': True}
+    observer.intents[intent['ticket']] = intent
+    observer.actors[birth.pid] = {'birth': birth, 'role': 'sleep', 'case': CASE_ID, 'token': token,
+                                  'body_ready': False, 'signals': set(), 'kernel_admitted': True, 'intent': intent}
+
+
+def waived_actor(observer, birth, monkeypatch):
+    """Synthetic stand-in for an approved crash pair: the waiver is patched, not observed."""
+    import cohort_controller
+    monkeypatch.setattr(cohort_controller, 'CASES', (CASE_ID,))
+    monkeypatch.setattr(cohort_controller, 'closeout',
+                        lambda host, children: {value['birth'] for value in children if value['role'] == 'backend'})
+    observer.actors[birth.pid] = {'birth': birth, 'role': 'backend', 'case': CASE_ID, 'token': str(birth.pid),
+                                  'body_ready': True, 'signals': set()}
+
+
+def finish(observer):
+    return observer.dispatch({'birth': observer.root_birth, 'role': 'root'},
+                             {'kind': 'case-finish', 'payload': {'case': CASE_ID}})
+
+
+def closed_leader():
+    ledger, root, leader = ledger_rows.setup()
+    ledger_rows.terminal(ledger, leader, 0)
+    ledger_rows.wait4(ledger, root, leader, 0)
+    return ledger, root, leader
+
+
+def assert_case_refused(observer, text):
+    with pytest.raises(Refused, match='^' + text + '$'):
+        finish(observer)
+    assert observer.completed == [] and observer.outcomes == [] and observer.case == CASE_ID
+
+
+def synthetic_member_debt(ledger, member):
+    process = ledger.process(member)  # synthetic state, defensive only
+    process.exit, process.terminal = (90, 0), (91, 256, 1)
+
+
+def test_case_finish_leader_actor_behaviour_unchanged():
+    ledger, root, leader = ledger_rows.setup()
+    member = ledger_rows.thread(ledger, 102)
+    ledger_rows.terminal(ledger, member, 0)
+    ledger_rows.terminal(ledger, leader, 0)
+    ledger_rows.wait4(ledger, root, leader, 0)
+    observer = finishing_observer(ledger, root)
+    ordinary_actor(observer, leader, 'child-token')
+    finish(observer)
+    assert observer.completed == [CASE_ID] and observer.case is None
+
+
+def test_case_finish_root_or_unrelated_debt_left_to_final():
+    ledger, root, leader = ledger_rows.setup()
+    root_thread = Birth.read(ledger_rows.identity(102, 99, tgid=100))
+    ledger_rows.emit(ledger, 'kernel_child', parent=100, child=102, event=3, identity=ledger_rows.identity(102, 99, tgid=100))
+    ledger_rows.emit(ledger, 'kernel_child', parent=100, child=103, event=1, identity=ledger_rows.identity(103, 100))
+    unrelated = ledger_rows.thread(ledger, 104, creator=103, tgid=103)
+    ledger_rows.emit(ledger, 'kernel_exit', pid=102, raw=256)
+    ledger_rows.reap(ledger, root_thread, 0)
+    ledger_rows.emit(ledger, 'kernel_exit', pid=104, raw=0)
+    ledger_rows.reap(ledger, unrelated, 256)
+    ledger_rows.terminal(ledger, leader, 0)
+    ledger_rows.wait4(ledger, root, leader, 0)
+    observer = finishing_observer(ledger, root)
+    ordinary_actor(observer, leader, 'child-token')
+    finish(observer)
+    assert observer.completed == [CASE_ID] and not ledger.final_settled()
+    ledger_rows.emit(ledger, 'kernel_exit', pid=100, raw=0)
+    ledger_rows.emit(ledger, 'kernel_exit', pid=103, raw=256)
+    assert ledger.final_settled()
+
+
+def test_case_finish_synthetic_waived_debt_refuses(monkeypatch):
+    ledger, root, leader = ledger_rows.setup()
+    member = ledger_rows.thread(ledger, 102)
+    ledger_rows.terminal(ledger, leader, 0)
+    synthetic_member_debt(ledger, member)
+    observer = finishing_observer(ledger, root)
+    waived_actor(observer, leader, monkeypatch)
+    assert_case_refused(observer, 'source case group status unresolved')
+
+
+def test_case_finish_actor_self_debt_refuses(monkeypatch):
+    ledger, root, leader = ledger_rows.setup()
+    member = ledger_rows.thread(ledger, 102)
+    ledger_rows.emit(ledger, 'kernel_exit', pid=102, raw=0)
+    ledger_rows.reap(ledger, member, 256)
+    observer = finishing_observer(ledger, root)
+    waived_actor(observer, member, monkeypatch)
+    assert_case_refused(observer, 'source case actor group status unresolved')
+
+
+def test_case_finish_actor_self_supported_terminal_passes(monkeypatch):
+    ledger, root, leader = ledger_rows.setup()
+    member = ledger_rows.thread(ledger, 102)
+    ledger_rows.terminal(ledger, member, 0)
+    observer = finishing_observer(ledger, root)
+    waived_actor(observer, member, monkeypatch)
+    finish(observer)
+    assert observer.completed == [CASE_ID]
+
+
+def test_case_finish_self_check_precedes_member_check(monkeypatch):
+    # Amendment 1 (A2): one actor's own debt and another leader actor's member debt.
+    ledger, root, leader = ledger_rows.setup()
+    member = ledger_rows.thread(ledger, 102)
+    ledger_rows.emit(ledger, 'kernel_exit', pid=102, raw=0)
+    ledger_rows.reap(ledger, member, 256)
+    ledger_rows.emit(ledger, 'kernel_child', parent=100, child=103, event=1, identity=ledger_rows.identity(103, 100))
+    other = Birth.read(ledger_rows.identity(103, 100))
+    other_member = ledger_rows.thread(ledger, 104, creator=103, tgid=103)
+    ledger_rows.terminal(ledger, other, 0)
+    synthetic_member_debt(ledger, other_member)
+    observer = finishing_observer(ledger, root)
+    waived_actor(observer, other, monkeypatch)
+    waived_actor(observer, member, monkeypatch)
+    assert ledger.debt_of(member) and not ledger.settled((other,))
+    assert_case_refused(observer, 'source case actor group status unresolved')
+
+
+def final_worker(monkeypatch, tmp_path, *, full, debt):
+    """Synthetic host: no fork, ptrace or launch; the trace only reports a clean return."""
+    import json
+    import compartment
+    import full_launch
+    import full_source
+    import console_entries
+    import linux_trace
+    import source_observer
+    ledger, root, leader = ledger_rows.setup()
+    member = ledger_rows.thread(ledger, 102)
+    ledger_rows.emit(ledger, 'kernel_exit', pid=102, raw=0)
+    ledger_rows.reap(ledger, member, 256)
+    if not debt:
+        ledger_rows.terminal(ledger, leader, 256)
+    entry = tmp_path / 'entry'
+    entry.write_bytes(b'entry')
+    cases = tmp_path / 'cases.json'
+    cases.write_bytes(b'{}')
+    import hashlib
+    metadata = {'cases': {'path': str(cases), 'sha256': hashlib.sha256(b'{}').hexdigest()} if full else [],
+                'checkout': str(tmp_path)}
+
+    class Trace:
+        def __init__(self, *args, **kwargs):
+            self.records, self.poison = [], []
+
+        def run(self):
+            return {'root_parent_wait_raw': 0, 'poison': []}
+
+    class FinishedObserver:
+        def __init__(self, binding, value, child, output):
+            self.full, self.meta, self.ledger = full, value, ledger
+            self.finished, self.completed, self.cases, self.frames, self.intents = True, [], (), [], {}
+            self.controls, self.outcomes, self.cohort_observations, self.adoptions, self.plan_records = [], [], [], [], []
+            self.output = b''
+
+        def consume(self, *args):
+            return None
+
+        tick = before_exit = resolve = validate_wait = consume
+
+        def close(self):
+            return None
+
+    held = []
+    original_pipe = os.pipe
+
+    def pipe():
+        pair = original_pipe()
+        held.append(pair)
+        if len(held) == 2:
+            os.write(pair[1], b'R')
+        return pair
+
+    monkeypatch.setattr(source_host, 'isolate', lambda value, support, output: value)
+    monkeypatch.setattr(compartment, 'credentials', lambda uid: None)
+    monkeypatch.setattr(linux_trace, 'OwnedTrace', Trace)
+    monkeypatch.setattr(source_observer, 'Observer', FinishedObserver)
+    monkeypatch.setattr(full_launch, 'finished', lambda observer: None)
+    monkeypatch.setattr(full_source, 'environment', lambda value: {})
+    monkeypatch.setattr(console_entries, 'standalone_environment', lambda value: {})
+    forks = []
+
+    def fork():
+        forks.append(True)
+        return 4242
+
+    def forbidden(*args, **kwargs):
+        pytest.fail('synthetic host reached a process effect')
+
+    import subprocess
+    monkeypatch.setattr(os, 'pipe', pipe)
+    monkeypatch.setattr(os, 'fork', fork)
+    for name in ('execve', 'execv', 'posix_spawn', 'system', 'kill', 'killpg', 'waitpid'):
+        monkeypatch.setattr(os, name, forbidden)
+    monkeypatch.setattr(subprocess.Popen, '__init__', forbidden)
+    binding = {'support': '/support', 'entry': {'path': str(entry)}, 'checkout': '/checkout'}
+    try:
+        if debt:
+            with pytest.raises(RuntimeError, match='^original source group status unresolved$'):
+                source_host.worker(binding, metadata, tmp_path)
+        else:
+            source_host.worker(binding, metadata, tmp_path)
+    finally:
+        for descriptor in (held[0][1], held[2][0]):  # start_write and output_read stay with the trace
+            os.close(descriptor)
+    assert len(forks) == 1
+    return json.loads((tmp_path / 'source-result.json').read_text())
+
+
+@pytest.mark.parametrize('full', (True, False), ids=('full', 'nonfull'))
+def test_worker_final_group_status_debt_refuses_source(monkeypatch, tmp_path, full):
+    record = final_worker(monkeypatch, tmp_path, full=full, debt=True)
+    assert 'original source group status unresolved' in record['failure']
+    if full:
+        assert record['source_checkpoint_ready'] is False
+
+
+@pytest.mark.parametrize('full', (True, False), ids=('full', 'nonfull'))
+def test_worker_final_group_status_clean_passes_to_existing_checks(monkeypatch, tmp_path, full):
+    record = final_worker(monkeypatch, tmp_path, full=full, debt=False)
+    assert record['failure'] is None
+    if full:
+        assert record['source_checkpoint_ready'] is True
