@@ -79,9 +79,10 @@ def test_no_effect_endpoint_and_signal_requests_are_sticky(event, arguments):
 @pytest.mark.parametrize("with_child", [False, True])
 def test_case_finish_requires_actual_completion_of_every_observed_child(with_child):
     from source_observer import Observer
-    from process_ledger import Birth
+    from process_ledger import Birth, Ledger
 
     observer = object.__new__(Observer)
+    observer.ledger = Ledger('case-finish-fixture')
     observer.full, observer.outcomes = False, []
     observer.frames=[]
     root = Birth(100, 100, 99, 1, "boot", 20000)
