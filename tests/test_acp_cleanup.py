@@ -10,9 +10,8 @@ import sys
 
 import pytest
 
-from unrest_harness import acp_runner as a
+from unrest_harness import acp_runner as a, governed_records as g
 from unrest_harness.assets import AssetLoader
-from unrest_harness.governed_records import LegacyNoAdmission
 from unrest_harness.models import Task, TaskList
 from unrest_harness.storage import ProjectStore
 from tests.test_acp_runner import _safe_policy
@@ -89,7 +88,7 @@ async def test_startup_failure_attribution_and_owned_cleanup(tmp_path, monkeypat
             pending = runner.run_terminal_review('project', 'mission-001', 'startup', store)
         else:
             pending = runner.run_node('project', 'mission-001', Task(
-                id='startup', type=role, body='local startup', targets=[], skill='s'), 'startup', store, governance=LegacyNoAdmission())
+                id='startup', type=role, body='local startup', targets=[], skill='s'), 'startup', store, governance=g.LegacyNoAdmission())
         task = asyncio.create_task(pending)
         if failure == 'cancel':
             await entered.wait()
@@ -159,7 +158,7 @@ async def test_recorded_transport_failures(tmp_path, monkeypatch, role, case):
             else:
                 result = await asyncio.wait_for(runner.run_node(
                     'project', 'mission-001', Task(id='w1', type=role, body='controlled',
-                    targets=targets, skill='s'), 'attempt-1', store, governance=LegacyNoAdmission()), 20)
+                    targets=targets, skill='s'), 'attempt-1', store, governance=g.LegacyNoAdmission()), 20)
         except Exception as exc:
             error = exc
         assert (tmp_path / 'receipt').exists(), repr(error)
@@ -238,7 +237,7 @@ async def test_cleanup_faults_and_repeated_cancellation(tmp_path, monkeypatch, r
         coro = runner.run_terminal_review('project', 'mission-001', 'attempt-1', store)
     else:
         coro = runner.run_node('project', 'mission-001', Task(id='w1', type=role,
-            body='controlled', targets=[], skill='s'), 'attempt-1', store, governance=LegacyNoAdmission())
+            body='controlled', targets=[], skill='s'), 'attempt-1', store, governance=g.LegacyNoAdmission())
     task = asyncio.create_task(coro)
     try:
         if fault == 'cancel':
