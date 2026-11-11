@@ -74,7 +74,7 @@ def test_val01_capture_reads_each_candidate_once_and_stages_snapshot(tmp_path, m
         (b"a\nb\n", b"a\nb\n"),
         (b"a\r\nb\r\n", b"a\nb\n"),
         ("text\u3000".encode(), b"text\n"),
-        (b"x" * 65_535, b"x" * 65_535 + b"\n"),
+        pytest.param(b"x" * 65_535, b"x" * 65_535 + b"\n", id="max_65535"),
     ],
 )
 def test_val02_canonicalization_accepts(raw, expected):
@@ -90,7 +90,7 @@ def test_val02_canonicalization_accepts(raw, expected):
         (b"a\x00b", "criterion_invalid_encoding"),
         (b"\xff\xfe", "criterion_invalid_encoding"),
         (b"  \n\t\n", "criterion_empty"),
-        (b"x" * 65_536, "criterion_too_large"),
+        pytest.param(b"x" * 65_536, "criterion_too_large", id="over_65536"),
     ],
 )
 def test_val02_canonicalization_refuses(raw, code):
