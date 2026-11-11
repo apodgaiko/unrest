@@ -21,7 +21,7 @@ PROGRAMS={RAW:('f4ce4c072ea2f9aaca39a3fdfbaac6fd245f9af013575da904056ef2114e60a0
 READINESS_TEST='tests/test_acp_runner.py'
 NAME='test_readiness_attributes_local_child_and_drains'
 READINESS_CASES=tuple(READINESS_TEST+'::'+NAME+'['+mode+']' for mode in ('early_exit','never_ready','ready','cancel'))
-PIN='558010a851595fece4c186cb30b717ff38dad4fa075705dbc316cfd8537910b4'
+PIN='35dffad32b0216e8ebf2b6027a7b06675c47e3d22f9d14ea6199cd9ad5a3b6b4'
 
 SESSION='tests/test_experimental_session.py'
 SESSION_PIN='baca26ee3feb60d74d435becb950db24e8849aa16015cf15e1943cfbc0f3f9e3'

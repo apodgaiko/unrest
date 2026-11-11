@@ -1858,11 +1858,11 @@ FILE_BASELINE = {
     "src/unrest_harness/capability_policy.py":
         "0aaa3eca3a1b891bcf7458832aeed92768489826fda23320ab000ce3d1df3c30",
     "src/unrest_harness/server.py":
-        "d1abbe2f76ff874849d113919777efe1ccb8fee0a6327d5eaf27e87892fd886f",
+        "6c9df14211b1aec796395e5534129eeb2cfab9f83639eecaf580e4d9d647bffa",
     "src/unrest_harness/controller.py":
-        "5a6c2208127214ff9a275b26f0f3de5bb06761c810c0c2778b2d462a50650881",
+        "5a72d2671606770750a8b9039296005eb174092529bff037033aab65109d7168",
     "src/unrest_harness/coordinator.py":
-        "a945a6ab9d4a41362ef5dd59d06d4d6767b77188b51ec3a47c59b40bf84387d1",
+        "17a7f92940d15972b509ca8143668f1bfc4aa4da19bc01e3863b0706c5c8ce52",
     "src/unrest_harness/run_control.py":
         "a4a010d6560ebffb9f1a842ca5fad6ab5d999f75d653eac12bc4762da7d9c122",
     "src/unrest_harness/supervision.py":
@@ -1885,7 +1885,7 @@ FILE_BASELINE = {
         "bc4977de515c9f3a3b3ccab626a245525deccd9a6449fce8ad02253d220af305",
     "tests/test_cli.py": "5976e28915db5c021ad80aaa7a772402ea3732120e63eece0104d84ac7e241a8",
     "tests/test_continuation_state.py":
-        "a40cc6c87bf7b99ca4760344fd7870d2fb829c7add038d13940f47ef3f205850",
+        "b95bf0704c1af13ca4428d176a99a40c9915732fc883259b1f0938687e8c925c",
     "tests/test_continuation_reservations.py":
         "6a7ef81c77c70458cdc89431dffee5f585d2c13d61f4efb483a87bacbcfb5268",
     "tests/test_continuation_types.py":
@@ -1896,7 +1896,7 @@ FILE_BASELINE = {
         "13ad6766039059c212f53d615e7521e67fce69bfd0e329c4ae63ea28a7b88fcf",
     "tests/test_mutation_journal.py":
         "dbaec57f5937ce7583c1de5819ee87b55dd30f45d8e4a3cc0c2d8d9b1607ea49",
-    "tests/test_server.py": "0550689ff20fb183ea62b47606bd3e66c5fc1222b5d4166e57e74d546afbb286",
+    "tests/test_server.py": "a9ce122c8928dad545be1502f43f8e6d33e2f1a0d836f81bff599462bb697a44",
     "tests/test_run_stop_custody.py":
         "f4dd95cd2d8b066246a35a5e02686abcda1b9db4239152c1f9a77d259f8e5c4a",
     "tests/test_run_receipt_golden.py":

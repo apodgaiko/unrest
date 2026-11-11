@@ -20,6 +20,7 @@ from pathlib import Path
 import pytest
 from fastmcp import Client
 import unrest_harness.acp_runner as acp_runner_module
+from unrest_harness.governed_records import LegacyNoAdmission
 
 from unrest_harness.acp_runner import (
     ACPClient,
@@ -484,6 +485,7 @@ def test_run_node_with_mock_agent(config: HarnessConfig, project_setup, workspac
                 task=task,
                 spawn_ts=spawn_ts,
                 store=store,
+                governance=LegacyNoAdmission(),
             )
         )
     finally:
@@ -571,6 +573,7 @@ def test_full_jobs_and_handoffs_preserve_complete_format_templates(
             task=task,
             spawn_ts=spawn_ts,
             store=project_setup,
+            governance=LegacyNoAdmission(),
         )
     )
     handoff_path = project_setup.attempt_path(
@@ -659,6 +662,7 @@ def test_full_jobs_do_not_infer_credentials_inside_format_fields(
             task=task,
             spawn_ts=spawn_ts,
             store=project_setup,
+            governance=LegacyNoAdmission(),
         )
     )
     handoff_path = project_setup.attempt_path(
@@ -1126,6 +1130,7 @@ def test_dispatch_batch_serializes_mcp_startup_and_preserves_sibling_success(
                 skill="s",
             ),
             spawn_ts=f"2026-08-10T07-00-00Z-{index:04d}",
+            governance=LegacyNoAdmission(),
         )
         for index in range(2)
     ]
@@ -1174,6 +1179,7 @@ def test_reused_dispatcher_serializes_startup_in_each_fresh_event_loop(
                     skill="s",
                 ),
                 spawn_ts=f"2026-08-12T12-00-0{batch}Z-{index:04d}",
+                governance=LegacyNoAdmission(),
             )
             for index in range(2)
         ]
@@ -1416,6 +1422,7 @@ def test_dispatch_batch_persists_bounded_redacted_crash_without_harming_sibling(
             skill="s",
         ),
         spawn_ts="2026-08-10T07-05-00Z-0000",
+        governance=LegacyNoAdmission(),
     )
     bad = DispatchRequest(
         project_id="p1",
@@ -1428,6 +1435,7 @@ def test_dispatch_batch_persists_bounded_redacted_crash_without_harming_sibling(
             skill="s",
         ),
         spawn_ts="2026-08-10T07-05-00Z-0001",
+        governance=LegacyNoAdmission(),
     )
 
     good_handoff, crash_handoff = dispatcher.dispatch_batch([good, bad])
@@ -1547,6 +1555,7 @@ async def test_malformed_codex_config_fails_before_any_runtime_process_starts(
             task,
             "2026-05-17T00-00-02Z",
             project_setup,
+            governance=LegacyNoAdmission(),
         )
     assert started is False
 
@@ -1871,6 +1880,7 @@ def test_owned_node_launch_uses_one_identical_plan(
             task,
             f"2026-08-30T00-00-00Z-{task_type}",
             project_setup,
+            governance=LegacyNoAdmission(),
         )
     )
 
@@ -1945,7 +1955,7 @@ def test_owned_node_local_rejection_starts_no_mcp_client_or_protocol(
 
     handoff = asyncio.run(
         runner.run_node(
-            "p1", "mission-001", task, spawn_ts, project_setup
+            "p1", "mission-001", task, spawn_ts, project_setup, governance=LegacyNoAdmission()
         )
     )
 
@@ -2023,7 +2033,7 @@ def test_owned_node_rejects_malformed_os_fields_before_any_launch_work(
     spawn_ts = f"2026-08-30T02-00-00Z-{task_type}-{field}-{malformation}"
 
     handoff = asyncio.run(
-        runner.run_node("p1", "mission-001", task, spawn_ts, project_setup)
+        runner.run_node("p1", "mission-001", task, spawn_ts, project_setup, governance=LegacyNoAdmission())
     )
 
     assert handoff.done is False
@@ -2078,7 +2088,7 @@ def test_owned_node_rejects_illegal_environment_name_before_any_launch_work(
     spawn_ts = f"2026-08-30T03-00-00Z-{task_type}"
 
     handoff = asyncio.run(
-        runner.run_node("p1", "mission-001", task, spawn_ts, project_setup)
+        runner.run_node("p1", "mission-001", task, spawn_ts, project_setup, governance=LegacyNoAdmission())
     )
 
     assert handoff.done is False
@@ -2149,6 +2159,7 @@ def test_owned_node_obstruction_starts_no_mcp_client_or_protocol(
             task,
             f"2026-08-30T03-00-00Z-{task_type}-{fixture}",
             project_setup,
+            governance=LegacyNoAdmission(),
         )
     )
 
@@ -2236,7 +2247,7 @@ def test_owned_node_real_startup_failure_is_safe_and_starts_no_protocol(
 
     handoff = asyncio.run(
         runner.run_node(
-            "p1", "mission-001", task, spawn_ts, project_setup
+            "p1", "mission-001", task, spawn_ts, project_setup, governance=LegacyNoAdmission()
         )
     )
 

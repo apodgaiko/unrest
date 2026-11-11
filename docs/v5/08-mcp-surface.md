@@ -57,6 +57,12 @@ promote/rollback. Every additive MCP method delegates to the same
 | `inspect_project` | Existing project. | Pure read with full textual task view. |
 | `abort_project` | Existing project and non-empty reason of at most 4096 UTF-8 bytes. | Rejects an oversized reason before terminal writes; otherwise preserves evidence, seals abort where possible, and returns the same bounded `aborted` reason. |
 
+Three governed lifecycle tools — `submit_governed_plan`, `abandon_governance`
+and `inspect_governed` — are registered next to them; they return
+`governed_admission`, `governed_abandon` and `governed_inspection` objects
+instead of the envelope and use the legacy error shape with tool-local codes.
+See [Governed S1](../architecture/governed-s1.md).
+
 All successful calls return the typed envelope:
 
 ```json

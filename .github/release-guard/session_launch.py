@@ -33,7 +33,7 @@ INVALID_BYTES = b'invalid executable format\n'
 LIVE = (*PLAN, *INVALID, *ARGS)
 TIMEOUT = node('timeout_kills_adapter_process_group')
 CASES = LIVE
-PINS = {'tests/test_provider_sessions.py': 'a6f8e62dd6ed4dce983bcc11f4ed5d600e92c36f5f1500be1fbae4317fe9145e', 'src/unrest_harness/provider_sessions.py': '7ecb0826e0c6a6b322f08209676d0b8e673688b64dd4c2aa3aad212ddc7cd7cc', 'tests/mock_provider_session_acp.py': '1328102286bd9b61f9bb3bc83f35cf6bc8ef57a1bcc489e015ea5719b62f0dad', 'src/unrest_harness/acp_runner.py': '36ca5c18af8a541e062e08900e57d2e5d43643e81e44e11b56ed9e599ad840a3'}
+PINS = {'tests/test_provider_sessions.py': 'a6f8e62dd6ed4dce983bcc11f4ed5d600e92c36f5f1500be1fbae4317fe9145e', 'src/unrest_harness/provider_sessions.py': '7ecb0826e0c6a6b322f08209676d0b8e673688b64dd4c2aa3aad212ddc7cd7cc', 'tests/mock_provider_session_acp.py': '1328102286bd9b61f9bb3bc83f35cf6bc8ef57a1bcc489e015ea5719b62f0dad', 'src/unrest_harness/acp_runner.py': '81c7999cf8d1c66d893598d489fa3dc3849b8fe184317a7d88b3ff8588d2457d'}
 
 
 def expected(case, cwd, checkout, owned, native, pin, root_environment, *, child=False):

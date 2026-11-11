@@ -12,6 +12,7 @@ import pytest
 from unrest_harness.config import HarnessConfig
 from unrest_harness.controller import ProjectController
 from unrest_harness.coordinator import MissionCoordinator
+from unrest_harness.governed_records import LegacyNoAdmission
 from unrest_harness.dispatcher import (
     DispatchRequest,
     MockDispatcher,
@@ -234,6 +235,7 @@ class TestRunnableSelection:
                 TaskList(tasks=[work]),
                 TaskStateFile(),
                 [work],
+                governance={work.id: LegacyNoAdmission()},
             )
 
     @pytest.mark.parametrize(

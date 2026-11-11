@@ -10,6 +10,7 @@ from pathlib import Path
 import unrest_harness.approval_recovery as recovery
 import unrest_harness.acp_runner as acp
 from unrest_harness.assets import AssetLoader
+from unrest_harness.governed_records import LegacyNoAdmission
 from unrest_harness.models import Task
 from unrest_harness.config import HarnessConfig
 from unrest_harness.storage import ProjectStore
@@ -63,6 +64,7 @@ def execute(operation, arguments, context):
             Task(id="w1", type="work", body="controlled", targets=[], skill="s"),
             "attempt-1",
             store,
+            governance=LegacyNoAdmission(),
         )
     )
     return {

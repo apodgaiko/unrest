@@ -396,6 +396,9 @@ async def test_orchestrator_tools_registered(config: HarnessConfig) -> None:
         "decide_attention",
         "inspect_project",
         "abort_project",
+        "submit_governed_plan",
+        "abandon_governance",
+        "inspect_governed",
     }
 
 

@@ -10,6 +10,7 @@ import pytest
 
 from unrest_harness.acp_runner import ACPClient, ACPError, ACPNodeRunner
 from unrest_harness.assets import AssetLoader
+from unrest_harness.governed_records import LegacyNoAdmission
 from unrest_harness.config import HarnessConfig
 from unrest_harness.controller import ProjectController, ToolError
 from unrest_harness.dispatcher import MockDispatcher, MockTerminalReviewer
@@ -230,6 +231,7 @@ async def test_runner_denial_overrides_handoff_and_reaps_owned_processes(tmp_pat
     task = Task(id="w1", type="work", body="controlled", targets=[], skill="s")
     handoff = await asyncio.wait_for(runner.run_node(
         "project", "mission-001", task, "attempt-1", store,
+        governance=LegacyNoAdmission(),
     ), 10)
     assert not handoff.done and handoff.request_attention
     assert "Review outcome: denied" in handoff.report

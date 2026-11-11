@@ -11,6 +11,7 @@ import pytest
 
 from unrest_harness.acp_runner import ACPNodeRunner
 from unrest_harness.assets import AssetLoader
+from unrest_harness.governed_records import LegacyNoAdmission
 from unrest_harness.controller import ProjectController, ToolError
 from unrest_harness.models import Decision, Task, TaskListPatch
 from unrest_harness.provider_review import ProviderReviewCapture
@@ -97,6 +98,7 @@ async def test_actual_runner_mcp_restart_and_retained_projection(tmp_path, monke
     handoff = await asyncio.wait_for(runner.run_node(
         "project", "mission-001", Task(id="w1", type="work", body="controlled", targets=[], skill="s"),
         "attempt-1", store,
+        governance=LegacyNoAdmission(),
     ), 15)
     assert len(owned) == 2 and all(child.returncode is not None for child in owned)
     envelope = controller.advance_project("project", max_steps=1)

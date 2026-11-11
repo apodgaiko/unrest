@@ -12,6 +12,7 @@ import pytest
 from tests.test_provider_review import FIXTURE, controller_fixture, event, wire
 from unrest_harness.acp_runner import ACPNodeRunner
 from unrest_harness.assets import AssetLoader
+from unrest_harness.governed_records import LegacyNoAdmission
 from unrest_harness.models import Task
 from unrest_harness.provider_review import ProviderReviewCapture
 from unrest_harness.storage import ProjectStore
@@ -90,6 +91,7 @@ async def test_actual_runner_matching_id_order_and_owned_cleanup(tmp_path, monke
     handoff = await asyncio.wait_for(runner.run_node(
         'project', 'mission-001', Task(id='w1', type='work', body='controlled', targets=[], skill='s'),
         'attempt-1', store,
+        governance=LegacyNoAdmission(),
     ), 15)
     assert (tmp_path / 'mcp-receipt').read_text() == 'recorded'
     assert len(children) == 2 and all(child.returncode is not None for child in children)

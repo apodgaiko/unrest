@@ -47,6 +47,15 @@ from .capability_policy import (
 )
 from .config import HarnessConfig
 from .dispatcher import DispatchRequest, NodeHandoff
+from .governed_records import (
+    GovernedBound,
+    GovernedRecordError,
+    GovernedRedactionConflict,
+    RequestGovernance,
+    publish_witness_stage,
+    register_witness,
+    witness_record,
+)
 from .models import (
     Task,
     TerminalReviewHandoff,
@@ -235,6 +244,28 @@ def _drop_structured_credential_aliases(
 
 class ACPError(Exception):
     pass
+
+
+class GovernedWitnessUnavailable(ACPError):
+    def __init__(self) -> None:
+        super().__init__("governed_witness_unavailable")
+
+
+class GovernedRenderRefused(ACPError):
+    def __init__(self) -> None:
+        super().__init__("governed_render_refused")
+
+
+def _write_error_class(exc: BaseException) -> str:
+    if isinstance(exc, BrokenPipeError):
+        return "broken_pipe"
+    if isinstance(exc, ConnectionResetError):
+        return "connection_reset"
+    if isinstance(exc, asyncio.CancelledError):
+        return "cancelled"
+    if isinstance(exc, OSError):
+        return "os_error"
+    return "other"
 
 
 LaunchFailureCategory = Literal[
@@ -735,6 +766,10 @@ class ACPClient:
         self._wire_credentials = wire_credentials
         self._request_id = 0
         self._pending: dict[int, asyncio.Future] = {}
+        # Governed witness correlation: request ids whose response class is
+        # recorded by the reader before the future settles.
+        self._witnessed_rids: set[int] = set()
+        self._correlated: dict[int, str] = {}
         self._reader_task: asyncio.Task | None = None
         self._terminals: dict[str, ManagedTerminal] = {}
         self._terminal_count = 0
@@ -774,6 +809,109 @@ class ACPClient:
             elif not future.cancelled():
                 # EOF may settle the future while drain itself raises/cancels.
                 future.exception()
+
+    async def send_prepared(
+        self,
+        params: dict[str, Any],
+        governance: GovernedBound,
+        input_kind: Literal["initial", "continuation"],
+    ) -> Any:
+        """Witnessed ``session/prompt``: register, prepare, write, observe."""
+        if self._closing:
+            raise ACPError("ACP client is shutting down")
+        self._request_id += 1
+        rid = self._request_id
+        msg = {
+            "jsonrpc": "2.0",
+            "method": "session/prompt",
+            "params": params,
+            "id": rid,
+        }
+        future: asyncio.Future = asyncio.get_running_loop().create_future()
+        self._pending[rid] = future
+        self._witnessed_rids.add(rid)
+        scope = governance.scope
+        try:
+            safe_msg = _redact_json_value(
+                msg,
+                self._credentials if self._wire_credentials is None else self._wire_credentials,
+            )
+            data = json.dumps(safe_msg).encode("utf-8") + b"\n"
+            wid = register_witness(scope)
+            if wid is None:
+                raise GovernedWitnessUnavailable()
+            inventories = (scope.inventory, self._credentials, self._wire_credentials)
+
+            def record(stage: str, **extra: Any) -> bool:
+                # Synchronous in the loop thread; failure only loses evidence.
+                try:
+                    publish_witness_stage(
+                        scope, wid, stage,
+                        witness_record(scope, wid, stage, input_kind, **extra),
+                        inventories,
+                    )
+                    return True
+                except Exception:  # noqa: BLE001
+                    return False
+
+            criteria = (
+                [
+                    {"assertion_id": aid, "criterion_version_id": cvid}
+                    for aid, cvid, _ in governance.template.criteria
+                ]
+                if input_kind == "initial"
+                else []
+            )
+            try:
+                publish_witness_stage(
+                    scope, wid, "prepared",
+                    witness_record(
+                        scope, wid, "prepared", input_kind, jsonrpc_id=rid,
+                        render_version=governance.template.render_version,
+                        criteria=sorted(criteria, key=lambda row: row["assertion_id"]),
+                    ),
+                    inventories,
+                )
+            except (OSError, GovernedRecordError, GovernedRedactionConflict) as exc:
+                raise GovernedWitnessUnavailable() from exc
+            assert self._process.stdin is not None
+            if self._closing or self._process.stdin.is_closing():
+                record("not_submitted", reason="transport_closing_before_write")
+                raise ACPError("ACP client is shutting down")
+            try:
+                self._process.stdin.write(data)
+                await self._process.stdin.drain()
+            except BaseException as exc:
+                record("write_error", error_class=_write_error_class(exc))
+                if rid in self._correlated:
+                    record("response", response_class=self._correlated[rid])
+                raise
+            record("write_completed")
+            try:
+                result = await future
+            except BaseException as exc:
+                if rid in self._correlated:
+                    record("response", response_class=self._correlated[rid])
+                else:
+                    record(
+                        "local_failure",
+                        failure_class=(
+                            "cancelled"
+                            if isinstance(exc, asyncio.CancelledError)
+                            else "local_exception"
+                        ),
+                    )
+                raise
+            record("response", response_class="result")
+            return result
+        finally:
+            self._pending.pop(rid, None)
+            if not future.done():
+                future.cancel()
+            elif not future.cancelled():
+                future.exception()
+            self._witnessed_rids.discard(rid)
+            self._correlated.pop(rid, None)
 
     async def _write(self, msg: dict[str, Any]) -> None:
         assert self._process.stdin is not None
@@ -865,6 +1003,8 @@ class ACPClient:
             fut = self._pending.pop(rid)
             if fut.done():
                 return
+            if int(rid) in self._witnessed_rids:
+                self._correlated[int(rid)] = "error" if "error" in data else "result"
             if "error" in data:
                 error = _redact_json_value(data["error"], self._credentials)
                 fut.set_exception(ACPError(str(error)))
@@ -1422,6 +1562,7 @@ class ACPNodeRunner:
         *,
         cwd: str | Path | None = None,
         progress_callback: ProgressCallback | None = None,
+        governance: RequestGovernance,
     ) -> NodeHandoff:
         """Spawn the worker MCP server + ACP agent; poll the attempt file; return the handoff."""
         invocation_started = time.monotonic()
@@ -1537,6 +1678,7 @@ class ACPNodeRunner:
                 workspace_dir=workspace_dir,
                 store=store,
                 project_id=project_id,
+                governance=governance,
             )
 
             # The bridge is created at launch, never substituted after denial.
@@ -1653,10 +1795,14 @@ class ACPNodeRunner:
 
             if recovery is not None:
                 client.retain_provider_denial = True
-            prompt_task = asyncio.create_task(client.send_request(
-                "session/prompt",
-                {"prompt": [{"type": "text", "text": first_message}], "sessionId": session_id},
-            ))
+            prompt_params = {
+                "prompt": [{"type": "text", "text": first_message}], "sessionId": session_id,
+            }
+            prompt_task = asyncio.create_task(
+                client.send_prepared(prompt_params, governance, "initial")
+                if isinstance(governance, GovernedBound)
+                else client.send_request("session/prompt", prompt_params)
+            )
             owned_prompts.add(prompt_task)
             if recovery is None:
                 prompt_result = await prompt_task
@@ -1688,11 +1834,16 @@ class ACPNodeRunner:
                     )
                     # ACK only queues the native operation. Exclusive settled
                     # ownership plus the provider FIFO orders this next input.
-                    continuation = asyncio.create_task(client.send_request("session/prompt", {
+                    continuation_params = {
                         "sessionId": session_id, "prompt": [{"type": "text", "text":
                             "Continue in this same context after the native exact-action review; "
                             "all actions remain subject to provider review."}],
-                    }))
+                    }
+                    continuation = asyncio.create_task(
+                        client.send_prepared(continuation_params, governance, "continuation")
+                        if isinstance(governance, GovernedBound)
+                        else client.send_request("session/prompt", continuation_params)
+                    )
                     owned_prompts.add(continuation)
                     client.retain_provider_denial = False
                     prompt_result = await asyncio.wait_for(continuation, recovery.remaining())
@@ -2344,6 +2495,7 @@ class ACPNodeRunner:
         workspace_dir: str,
         store: ProjectStore,
         project_id: str,
+        governance: RequestGovernance,
     ) -> str:
         session_type = "validator" if task.type == "validate" else "worker"
         system_prompt = self.loader.load_prompt_file(session_type, "system_prompt.md")
@@ -2354,6 +2506,7 @@ class ACPNodeRunner:
             workspace_dir=workspace_dir,
             store=store,
             project_id=project_id,
+            governance=governance,
         )
         template = self.loader.render_prompt_template(session_type, "template.md", template_vars)
         if system_prompt:
@@ -2392,17 +2545,30 @@ class ACPNodeRunner:
         workspace_dir: str,
         store: ProjectStore,
         project_id: str,
+        governance: RequestGovernance,
     ) -> dict[str, str]:
         assertions: list[str] = []
         target_rows: list[str] = []
-        for aid in task.targets:
-            contract_p = store.contract_assertion_path(project_id, mission_id, aid)
-            target_rows.append(f"- **{aid}**: `{contract_p}`")
-            body = store.load_contract_assertion(project_id, mission_id, aid)
-            if body is None:
-                assertions.append(f"[Missing contract assertion {aid} at {contract_p}]\n")
-                continue
-            assertions.append(body.rstrip() + "\n")
+        if isinstance(governance, GovernedBound):
+            # Admitted buffers only; authoring files are never read here.
+            admitted = {
+                aid: (cvid, body) for aid, cvid, body in governance.template.criteria
+            }
+            for aid in task.targets:
+                if aid not in admitted:
+                    raise GovernedRenderRefused()
+                cvid, body_bytes = admitted[aid]
+                target_rows.append(f"- **{aid}**: admitted criterion version {cvid}")
+                assertions.append(body_bytes.decode("utf-8"))
+        else:
+            for aid in task.targets:
+                contract_p = store.contract_assertion_path(project_id, mission_id, aid)
+                target_rows.append(f"- **{aid}**: `{contract_p}`")
+                body = store.load_contract_assertion(project_id, mission_id, aid)
+                if body is None:
+                    assertions.append(f"[Missing contract assertion {aid} at {contract_p}]\n")
+                    continue
+                assertions.append(body.rstrip() + "\n")
         target_paths = "\n".join(target_rows) if target_rows else ""
         mission_dir = store.mission_dir(project_id, mission_id)
         project_bucket_path = Path(project_bucket)
@@ -2555,6 +2721,7 @@ class ACPNodeDispatcher:
     """Implements `NodeDispatcher` by calling `ACPNodeRunner.run_node`."""
 
     supports_isolated_workspaces = True
+    supports_governed_delivery = True
 
     def __init__(
         self,
@@ -2583,6 +2750,7 @@ class ACPNodeDispatcher:
                     spawn_ts=request.spawn_ts,
                     store=self.store,
                     cwd=request.cwd,
+                    governance=request.governance,
                 )
             )
         finally:
@@ -2643,6 +2811,7 @@ class ACPNodeDispatcher:
                         spawn_ts=request.spawn_ts,
                         store=self.store,
                         cwd=request.cwd,
+                        governance=request.governance,
                     )
                     for request in requests
                 ),

@@ -10,6 +10,7 @@ The coordinator is constructed per-invocation; it has no in-memory state.
 """
 from __future__ import annotations
 
+import os
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,6 +18,23 @@ from typing import Iterator
 
 from .config import VALID_REASONING_EFFORTS, HarnessConfig
 from .coordinator import MissionCoordinator
+from .governed_admission import (
+    abandon_governance,
+    allocate_next_mission,
+    inspect_governed,
+    legacy_submit_needs_marker,
+    legacy_submit_refusal,
+    mark_legacy_consumption,
+    submit_governed_plan,
+)
+from .governed_records import (
+    IdentityError,
+    classify,
+    governed_fs_capable,
+    initialize_identity,
+    publish_identity_ready,
+    reserve_mission,
+)
 from .dispatcher import NodeDispatcher, TerminalReviewer
 from .attention import cooperative_stop
 from .envelope import (
@@ -160,18 +178,41 @@ class ProjectController:
                 "worker_reasoning_effort must be one of: "
                 + ", ".join(VALID_REASONING_EFFORTS),
             )
+        workspace = Path(workspace_dir).expanduser().resolve()
+        if not workspace.exists():
+            raise FileNotFoundError(f"workspace_dir does not exist: {workspace}")
+        project_id = self.store.generate_project_id(brief)
+        # ADR-0507: claim a new bucket atomically before any initializer effect.
+        # A crash leaves an incomplete bucket; nothing cleans up or retries.
+        self.config.projects_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            os.mkdir(self.store.bucket_root(project_id))
+        except FileExistsError:
+            raise ToolError("project_id_collision", "project id collision") from None
+        mission_id = self.store.generate_mission_id(1)
+        governed_identity = governed_fs_capable()
+        if governed_identity:
+            initialize_identity(self.store, project_id)
+            try:
+                reserve_mission(
+                    self.store, project_id, mission_id, route="start", existing=0
+                )
+            except IdentityError as exc:
+                raise ToolError(exc.code, exc.code.replace("_", " ")) from None
         record = self.store.create_project(
             brief,
             workspace_dir,
+            project_id=project_id,
             worker_model=worker_model,
             worker_reasoning_effort=worker_reasoning_effort,
         )
-        mission_id = self.store.generate_mission_id(1)
         record.current_mission_id = mission_id
         self.store.save_project(record)
         self.store.save_state(
             record.id, MissionPlanning(mission_id=mission_id)
         )
+        if governed_identity:
+            publish_identity_ready(self.store, project_id)
         return self._build_envelope(record.id, dag_mode="none")
 
     def submit_plan(self, project_id: str, task_list: TaskList) -> Envelope:
@@ -186,6 +227,13 @@ class ProjectController:
                 f"submit_plan requires MissionPlanning; got {state.state}",
             )
         mid = state.mission_id
+        refusal = legacy_submit_refusal(classify(self.store, project_id, mid))
+        if refusal is not None:
+            raise ToolError(refusal, refusal.replace("_", " "))
+        if legacy_submit_needs_marker(self.store, project_id, mid):
+            # S-5 order: read-only validation -> R -> baseline ensure/writes.
+            self._validate_submission_read_only(project_id, mid, task_list)
+            mark_legacy_consumption(self.store, project_id, mid)
         contract_dir = self.store.ensure_contract_dir(project_id, mid)
         ids, parse_errs = parse_contract_dir(contract_dir)
         if parse_errs:
@@ -212,6 +260,62 @@ class ProjectController:
         self.store.save_state(project_id, MissionRunning(mission_id=mid))
         return self._build_envelope(project_id, dag_mode="frontier")
 
+    def _validate_submission_read_only(
+        self, project_id: str, mid: str, task_list: TaskList
+    ) -> None:
+        """S-5 beta: never creates directories. ENOENT means an empty contract (as the
+        baseline mkdir would yield); other stat errors propagate as raised."""
+        path = self.store.contract_dir(project_id, mid)
+        ids: set[str] = set()
+        try:
+            os.stat(path)
+        except FileNotFoundError:
+            pass
+        else:
+            ids, parse_errs = parse_contract_dir(path)
+            if parse_errs:
+                raise ToolError(
+                    "invalid_contract_dir",
+                    "contract directory invalid",
+                    details=[
+                        ValidationError(e.code, "contract/")
+                        if e.code == "contract_dir_missing" else e
+                        for e in parse_errs
+                    ],
+                )
+        errs = validate_task_list_submission(ids, task_list)
+        if errs:
+            raise ToolError(
+                "invalid_task_list", "task list validation failed", details=errs
+            )
+
+    def submit_governed_plan(
+        self,
+        project_id: str,
+        mission_id: str,
+        task_list: TaskList,
+        governed: object,
+    ) -> dict[str, object]:
+        """Synchronous governed admission; returns a receipt, not an envelope."""
+        return submit_governed_plan(
+            self.store, project_id, mission_id, task_list, governed
+        )
+
+    def abandon_governance(
+        self, project_id: str, mission_id: str, governed_abandon: object
+    ) -> dict[str, object]:
+        return abandon_governance(self.store, project_id, mission_id, governed_abandon)
+
+    def inspect_governed(
+        self,
+        project_id: str,
+        mission_id: str,
+        section: object = "summary",
+        cursor: object = None,
+    ) -> dict[str, object]:
+        """Lock-free governed inspection; never recovers or writes."""
+        return inspect_governed(self.store, project_id, mission_id, section, cursor)
+
     def advance_project(
         self,
         project_id: str,
@@ -226,7 +330,8 @@ class ProjectController:
         max_steps: int | None = None,
     ) -> Envelope:
         coordinator = MissionCoordinator(
-            self.store, project_id, self.dispatcher, self.terminal_reviewer
+            self.store, project_id, self.dispatcher, self.terminal_reviewer,
+            governed_delivery_route=True,
         )
         state = self.store.load_state(project_id)
         if isinstance(state, MissionRunning):
@@ -267,7 +372,8 @@ class ProjectController:
                 f"end_mission requires MissionRunning; got {state.state}",
             )
         coordinator = MissionCoordinator(
-            self.store, project_id, self.dispatcher, self.terminal_reviewer
+            self.store, project_id, self.dispatcher, self.terminal_reviewer,
+            governed_delivery_route=True,
         )
         try:
             resolved_roots = (
@@ -322,11 +428,24 @@ class ProjectController:
         item_by_id = {it.id: it for it in open_items}
         for decision in decisions:
             self._check_provider_decision(project_id, item_by_id[decision.item_id], decision)
-        if any(decision.action == "patch" for decision in decisions):
-            return self._apply_transactional_decisions(
-                project_id, decisions, open_items, item_by_id
+        transactional = any(decision.action == "patch" for decision in decisions)
+        # ADR-0507: the single next-mission reservation point, before either
+        # application branch; one reserved mission id per decision batch.
+        reserved_mid: str | None = None
+        if any(decision.action == "next_mission" for decision in decisions):
+            reserved_mid = allocate_next_mission(
+                self.store,
+                project_id,
+                route="next_tx" if transactional else "next_seal",
             )
-        next_state = self._apply_decisions(project_id, decisions, item_by_id)
+        if transactional:
+            return self._apply_transactional_decisions(
+                project_id, decisions, open_items, item_by_id,
+                reserved_mid=reserved_mid,
+            )
+        next_state = self._apply_decisions(
+            project_id, decisions, item_by_id, reserved_mid=reserved_mid
+        )
         self.store.append_decision_record(project_id, decisions, open_items)
         self.store.clear_attention(project_id)
         self.store.save_state(project_id, next_state)
@@ -596,6 +715,8 @@ class ProjectController:
         decisions: list[Decision],
         open_items: list[AttentionItemInternal],
         item_by_id: dict[str, AttentionItemInternal],
+        *,
+        reserved_mid: str | None,
     ) -> Envelope:
         for decision in decisions:
             self._check_provider_decision(project_id, item_by_id[decision.item_id], decision)
@@ -673,7 +794,7 @@ class ProjectController:
                     timestamp=timestamp,
                 )
                 seal_bytes = self.store.render_text_bytes(seal)
-                new_mission_id = self.store.generate_mission_id(
+                new_mission_id = reserved_mid or self.store.generate_mission_id(
                     len(self.store.list_missions(project_id)) + 1
                 )
                 record.current_mission_id = new_mission_id
@@ -899,11 +1020,13 @@ class ProjectController:
         project_id: str,
         decisions: list[Decision],
         item_by_id: dict[str, AttentionItemInternal],
+        *,
+        reserved_mid: str | None,
     ) -> ProjectState:
         next_state: ProjectState | None = None
         for dec in decisions:
             item = item_by_id[dec.item_id]
-            outcome = self._apply_one(project_id, item, dec)
+            outcome = self._apply_one(project_id, item, dec, reserved_mid=reserved_mid)
             if outcome is not None:
                 next_state = outcome
         if next_state is not None:
@@ -919,6 +1042,8 @@ class ProjectController:
         project_id: str,
         item: AttentionItemInternal,
         decision: Decision,
+        *,
+        reserved_mid: str | None,
     ) -> ProjectState | None:
         self._check_provider_decision(project_id, item, decision)
         mid = item.mission_id
@@ -960,19 +1085,24 @@ class ProjectController:
             return Aborted(reason=decision.justification or "aborted")
 
         if action == "next_mission":
-            return self._seal_and_plan_next(project_id, mid)
+            return self._seal_and_plan_next(project_id, mid, reserved_mid)
 
         return None
 
-    def _seal_and_plan_next(self, project_id: str, mid: str) -> ProjectState:
+    def _seal_and_plan_next(
+        self, project_id: str, mid: str, reserved_mid: str | None
+    ) -> ProjectState:
         self.store.seal_mission(
             project_id,
             mid,
             status="done_with_acknowledged_gaps",
             body="Sealed with gap(s) acknowledged via next_mission decision.",
         )
-        existing = self.store.list_missions(project_id)
-        new_mid = self.store.generate_mission_id(len(existing) + 1)
+        if reserved_mid is not None:
+            new_mid = reserved_mid
+        else:
+            existing = self.store.list_missions(project_id)
+            new_mid = self.store.generate_mission_id(len(existing) + 1)
         record = self.store.load_project(project_id)
         record.current_mission_id = new_mid
         self.store.save_project(record)

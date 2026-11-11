@@ -260,6 +260,31 @@
     },
     {
       "decisions": [
+        "ADR-0507"
+      ],
+      "id": "COMP-GOVERNED",
+      "invariants": [],
+      "paths": [
+        "src/unrest_harness/governed_admission.py",
+        "src/unrest_harness/governed_records.py"
+      ],
+      "specifications": [
+        "docs/architecture/governed-s1.md"
+      ],
+      "tests": [
+        "tests/test_governed_s1_admission.py",
+        "tests/test_governed_s1_gate.py",
+        "tests/test_governed_s1_identity.py",
+        "tests/test_governed_s1_inspect.py",
+        "tests/test_governed_s1_privacy.py",
+        "tests/test_governed_s1_route.py",
+        "tests/test_governed_s1_scope.py",
+        "tests/test_governed_s1_submit_order.py",
+        "tests/test_governed_s1_transport.py"
+      ]
+    },
+    {
+      "decisions": [
         "ADR-0002"
       ],
       "id": "COMP-MCP",

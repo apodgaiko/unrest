@@ -15,7 +15,7 @@ import re
 import subprocess
 import threading
 import time
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Literal, Mapping
 
 from . import attention as attn_factory
 from .accepted_point_authority import (
@@ -30,6 +30,25 @@ from .dispatcher import (
     NodeDispatcher,
     NodeHandoff,
     TerminalReviewer,
+)
+from .governed_admission import bind_tasks, gate_refusal, legacy_mode
+from .governed_records import (
+    ATTEMPT_ID,
+    EXECUTIONS_MAX,
+    Classification,
+    ExecutionScope,
+    GovernedBound,
+    GovernedRecordError,
+    GovernedRedactionConflict,
+    GovernedTemplate,
+    LegacyAfterAbandon,
+    LegacyNoAdmission,
+    RequestGovernance,
+    TaskGovernance,
+    classify,
+    close_scope,
+    count_executions,
+    open_scope,
 )
 from .models import (
     ActiveAttemptSnapshot,
@@ -123,11 +142,16 @@ class MissionCoordinator:
         project_id: str,
         dispatcher: NodeDispatcher,
         terminal_reviewer: TerminalReviewer,
+        *,
+        governed_delivery_route: bool = False,
     ):
         self.store = store
         self.project_id = project_id
         self.dispatcher = dispatcher
         self.terminal_reviewer = terminal_reviewer
+        # Fail-closed route default: only the E1/E3 controller paths deliver
+        # governed templates. It selects the route, never the request mode.
+        self.governed_delivery_route = governed_delivery_route
 
     # ------------------------------------------------------------------
     # The main step() kernel
@@ -154,6 +178,19 @@ class MissionCoordinator:
     # ------------------------------------------------------------------
 
     def _step_mission(self, mid: str) -> StepResult:
+        # Governed S1: classify and refuse before any step effect. Every read,
+        # binding and write below uses this ``mid``, never a re-read state.
+        classification = classify(self.store, self.project_id, mid)
+        if (
+            classification.committed
+            and classification.executions_status != "unavailable"
+            and not self.governed_delivery_route
+        ):
+            return StepResult.idle("governed_route_unsupported")
+        refusal = gate_refusal(classification)
+        if refusal is not None:
+            return StepResult.idle(refusal)
+        step_mode: _StepMode = legacy_mode(classification) or _GovernedPending(classification)
         try:
             tl = self.store.load_task_list(self.project_id, mid)
         except FileNotFoundError:
@@ -174,7 +211,7 @@ class MissionCoordinator:
         if resume_result is not None:
             return resume_result
 
-        gate_event = self._try_evaluate_a_gate(tl, task_state)
+        gate_event = self._try_evaluate_a_gate(mid, tl, task_state)
         if gate_event is not None:
             return self._apply_gate_event(mid, tl, task_state, gate_event)
 
@@ -186,9 +223,100 @@ class MissionCoordinator:
             return StepResult.idle("no runnable task work; call end_mission to request closure")
 
         selected = self._select_dispatch_tasks(tl, task_state, runnable)
+        governance = self._bind_selected(step_mode, selected)
+        if isinstance(governance, str):
+            return StepResult.idle(governance)
         if len(selected) == 1:
-            return self._dispatch_one(mid, selected[0])
-        return self._dispatch_batch(mid, tl, task_state, selected)
+            return self._dispatch_one(
+                mid, selected[0], governance=governance[selected[0].id]
+            )
+        return self._dispatch_batch(
+            mid, tl, task_state, selected, governance=governance
+        )
+
+    def _bind_selected(
+        self, step_mode: "_StepMode", selected: list[Task]
+    ) -> dict[str, TaskGovernance] | str:
+        """Bind the whole selected set or refuse it as a whole."""
+        if not isinstance(step_mode, _GovernedPending):
+            return {task.id: step_mode for task in selected}
+        if not self.governed_delivery_route:
+            # Defensive: the primary route refusal precedes every step effect.
+            return "governed_route_unsupported"
+        return bind_tasks(step_mode.classification, selected, self.dispatcher)
+
+    def _open_scopes(
+        self,
+        mid: str,
+        attempts: list[tuple[Task, str]],
+        governance: Mapping[str, TaskGovernance],
+    ) -> list[ExecutionScope] | None:
+        """Open one scope per governed attempt; ``None`` refuses the whole set."""
+        governed = [
+            (task, spawn_ts, governance[task.id])
+            for task, spawn_ts in attempts
+            if isinstance(governance[task.id], GovernedTemplate)
+        ]
+        if not governed:
+            return []
+        if any(ATTEMPT_ID.fullmatch(spawn_ts) is None for _, spawn_ts, _ in governed):
+            return None
+        try:
+            existing = count_executions(self.store, self.project_id, mid)
+        except (OSError, GovernedRecordError):
+            return None
+        if existing + len(governed) > EXECUTIONS_MAX:
+            return None
+        scopes: list[ExecutionScope] = []
+        for task, spawn_ts, template in governed:
+            assert isinstance(template, GovernedTemplate)
+            scope = ExecutionScope(
+                anchor=self.store.unrest_dir(self.project_id),
+                project_id=self.project_id,
+                mission_id=mid,
+                admission_id=template.admission_id,
+                attempt_id=spawn_ts,
+                node_id=task.id,
+                inventory=self.store.inventory,
+            )
+            try:
+                open_scope(self.store, scope)
+            except (OSError, GovernedRecordError, GovernedRedactionConflict):
+                self._close_scopes(
+                    [*scopes, scope], _DispatchObservation(), opened_only=True
+                )
+                return None
+            scopes.append(scope)
+        return scopes
+
+    @staticmethod
+    def _close_scopes(
+        scopes: list[ExecutionScope],
+        observation: "_DispatchObservation",
+        *,
+        opened_only: bool = False,
+    ) -> None:
+        for scope in scopes:
+            if opened_only and not scope.opened:
+                continue
+            try:
+                close_scope(
+                    scope,
+                    effect_started=observation.effect_started,
+                    outcome=observation.outcomes.get(scope.node_id),
+                )
+            except (OSError, GovernedRecordError, GovernedRedactionConflict):
+                # The scope stays unresolved; the handoff applies as baseline.
+                continue
+
+    @staticmethod
+    def _request_governance(
+        governance: TaskGovernance, scopes: list[ExecutionScope], task_id: str
+    ) -> RequestGovernance:
+        if not isinstance(governance, GovernedTemplate):
+            return governance
+        scope = next(scope for scope in scopes if scope.node_id == task_id)
+        return GovernedBound(template=governance, scope=scope)
 
     def _reconcile_provider_denials(
         self, mid: str, tl: TaskList, task_state: TaskStateFile
@@ -425,51 +553,69 @@ class MissionCoordinator:
             index += 1
         return f"{candidate}-{index:04d}"
 
-    def _dispatch_one(self, mid: str, task: Task) -> StepResult:
+    def _dispatch_one(
+        self, mid: str, task: Task, *, governance: TaskGovernance
+    ) -> StepResult:
         """Dispatch one work task or one validator."""
         if not self._guard_dispatch(mid, [task]):
             return StepResult.idle("selected task is no longer eligible")
         self.store.refresh_inventory(os.environ)
         spawn_ts = self._unique_attempt_id(mid, utc_now_filesafe())
-        task_state = self.store.load_task_state(self.project_id, mid)
-        task_state.set_status(task.id, "running")
-        task_state.set_last_attempt(task.id, spawn_ts)
-        self.store.save_task_state(self.project_id, mid, task_state)
-
-        request = DispatchRequest(
-            project_id=self.project_id,
-            mission_id=mid,
-            task=task,
-            spawn_ts=spawn_ts,
-        )
-        self._begin_supervision_attempt(
-            mid,
-            attempt_id=spawn_ts,
-            role="worker" if task.type == "work" else "validator",
-            assigned_target_ids=task.targets,
-            node_id=task.id,
-        )
-        self._assert_dispatch_unblocked(mid, [request])
+        scopes = self._open_scopes(mid, [(task, spawn_ts)], {task.id: governance})
+        if scopes is None:
+            return StepResult.idle("governed_witness_unavailable")
+        observation = _DispatchObservation()
         try:
-            handoff = self._await_role_effect(
-                mid, lambda: self.dispatcher.dispatch(request)
-            )
-        except Exception as exc:  # noqa: BLE001
-            synthetic = self._synthesize_handoff(
-                task, self._bounded_dispatch_failure("Dispatcher crashed: ", exc)
-            )
-            self.store.save_attempt(
-                self.project_id,
-                mid,
-                spawn_ts,
-                task.id,
-                synthetic,
-            )
-            return self._apply_handoff(mid, task, synthetic, spawn_ts)
+            task_state = self.store.load_task_state(self.project_id, mid)
+            task_state.set_status(task.id, "running")
+            task_state.set_last_attempt(task.id, spawn_ts)
+            self.store.save_task_state(self.project_id, mid, task_state)
 
-        handoff = self._bind_dispatched_handoff(task, handoff, spawn_ts)
-        self.store.save_attempt(self.project_id, mid, spawn_ts, task.id, handoff)
-        return self._apply_handoff(mid, task, handoff, spawn_ts)
+            request = DispatchRequest(
+                project_id=self.project_id,
+                mission_id=mid,
+                task=task,
+                spawn_ts=spawn_ts,
+                governance=self._request_governance(governance, scopes, task.id),
+            )
+            self._begin_supervision_attempt(
+                mid,
+                attempt_id=spawn_ts,
+                role="worker" if task.type == "work" else "validator",
+                assigned_target_ids=task.targets,
+                node_id=task.id,
+            )
+            self._assert_dispatch_unblocked(mid, [request])
+            observation.effect_started = True
+            try:
+                handoff = self._await_role_effect(
+                    mid, lambda: self.dispatcher.dispatch(request)
+                )
+            except Exception as exc:  # noqa: BLE001
+                observation.outcomes[task.id] = "synthetic"
+                synthetic = self._synthesize_handoff(
+                    task, self._bounded_dispatch_failure("Dispatcher crashed: ", exc)
+                )
+                self.store.save_attempt(
+                    self.project_id,
+                    mid,
+                    spawn_ts,
+                    task.id,
+                    synthetic,
+                )
+                return self._apply_handoff(mid, task, synthetic, spawn_ts)
+            except BaseException:
+                observation.outcomes[task.id] = "cancelled"
+                raise
+
+            handoff, synthesized = self._bind_dispatched_handoff_observed(
+                task, handoff, spawn_ts
+            )
+            observation.observe(task.id, handoff, synthesized=synthesized)
+            self.store.save_attempt(self.project_id, mid, spawn_ts, task.id, handoff)
+            return self._apply_handoff(mid, task, handoff, spawn_ts)
+        finally:
+            self._close_scopes(scopes, observation)
 
     # ------------------------------------------------------------------
     # Runnable selection (the only graph-shape-coupled code)
@@ -636,6 +782,8 @@ class MissionCoordinator:
         tl: TaskList,
         task_state: TaskStateFile,
         batch: list[Task],
+        *,
+        governance: Mapping[str, TaskGovernance],
     ) -> StepResult:
         if any(task.type == "work" for task in batch):
             if not all(task.type == "work" for task in batch):
@@ -646,10 +794,12 @@ class MissionCoordinator:
         if not batch:
             return StepResult.idle("selected tasks are no longer eligible")
         if len(batch) == 1:
-            return self._dispatch_one(mid, batch[0])
+            return self._dispatch_one(mid, batch[0], governance=governance[batch[0].id])
         task_state = self.store.load_task_state(self.project_id, mid)
         if any(task.type == "work" for task in batch):
-            return self._dispatch_isolated_work_batch(mid, task_state, batch)
+            return self._dispatch_isolated_work_batch(
+                mid, task_state, batch, governance=governance
+            )
 
         self.store.refresh_inventory(os.environ)
         batch_attempts: list[_BatchAttempt] = []
@@ -660,43 +810,59 @@ class MissionCoordinator:
             batch_attempts.append(
                 _BatchAttempt(task=task, spawn_ts=spawn_ts)
             )
-        self.store.save_task_state(self.project_id, mid, task_state)
+        scopes = self._open_scopes(
+            mid,
+            [(attempt.task, attempt.spawn_ts) for attempt in batch_attempts],
+            governance,
+        )
+        if scopes is None:
+            # The in-memory running statuses are discarded, never saved.
+            return StepResult.idle("governed_witness_unavailable")
+        observation = _DispatchObservation()
+        try:
+            self.store.save_task_state(self.project_id, mid, task_state)
 
-        for attempt in batch_attempts:
-            self._begin_supervision_attempt(
-                mid,
-                attempt_id=attempt.spawn_ts,
-                role="worker" if attempt.task.type == "work" else "validator",
-                assigned_target_ids=attempt.task.targets,
-                node_id=attempt.task.id,
-            )
+            for attempt in batch_attempts:
+                self._begin_supervision_attempt(
+                    mid,
+                    attempt_id=attempt.spawn_ts,
+                    role="worker" if attempt.task.type == "work" else "validator",
+                    assigned_target_ids=attempt.task.targets,
+                    node_id=attempt.task.id,
+                )
 
-        requests = [
-            DispatchRequest(
-                project_id=self.project_id,
-                mission_id=mid,
-                task=attempt.task,
-                spawn_ts=attempt.spawn_ts,
-            )
-            for attempt in batch_attempts
-        ]
-        handoffs = self._dispatch_requests(mid, requests)
+            requests = [
+                DispatchRequest(
+                    project_id=self.project_id,
+                    mission_id=mid,
+                    task=attempt.task,
+                    spawn_ts=attempt.spawn_ts,
+                    governance=self._request_governance(
+                        governance[attempt.task.id], scopes, attempt.task.id
+                    ),
+                )
+                for attempt in batch_attempts
+            ]
+            handoffs = self._observed_dispatch_requests(mid, requests, observation)
 
-        attention: list[AttentionItemInternal] = []
-        for attempt in sorted(batch_attempts, key=lambda item: item.task.id):
-            handoff = self._bind_dispatched_handoff(
-                attempt.task, handoffs[attempt.task.id], attempt.spawn_ts
-            )
-            self.store.save_attempt(
-                self.project_id,
-                mid,
-                attempt.spawn_ts,
-                attempt.task.id,
-                handoff,
-            )
-            attention.extend(
-                self._apply_handoff_collect(mid, attempt.task, handoff, attempt.spawn_ts)
-            )
+            attention: list[AttentionItemInternal] = []
+            for attempt in sorted(batch_attempts, key=lambda item: item.task.id):
+                handoff, synthesized = self._bind_dispatched_handoff_observed(
+                    attempt.task, handoffs[attempt.task.id], attempt.spawn_ts
+                )
+                observation.observe(attempt.task.id, handoff, synthesized=synthesized)
+                self.store.save_attempt(
+                    self.project_id,
+                    mid,
+                    attempt.spawn_ts,
+                    attempt.task.id,
+                    handoff,
+                )
+                attention.extend(
+                    self._apply_handoff_collect(mid, attempt.task, handoff, attempt.spawn_ts)
+                )
+        finally:
+            self._close_scopes(scopes, observation)
 
         if attention:
             self._raise_attention(attention)
@@ -705,11 +871,28 @@ class MissionCoordinator:
             "batch cleared: " + ", ".join(attempt.task.id for attempt in batch_attempts)
         )
 
+    def _observed_dispatch_requests(
+        self,
+        mission_id: str,
+        requests: list[DispatchRequest],
+        observation: "_DispatchObservation",
+    ) -> dict[str, NodeHandoff]:
+        try:
+            return self._dispatch_requests(mission_id, requests, observation=observation)
+        except Exception:
+            raise
+        except BaseException:
+            for request in requests:
+                observation.outcomes[request.task.id] = "cancelled"
+            raise
+
     def _dispatch_isolated_work_batch(
         self,
         mid: str,
         task_state: TaskStateFile,
         batch: list[Task],
+        *,
+        governance: Mapping[str, TaskGovernance],
     ) -> StepResult:
         """Dispatch explicit disjoint scopes in T1 worktrees, then integrate.
 
@@ -722,7 +905,7 @@ class MissionCoordinator:
         if not batch:
             return StepResult.idle("selected tasks are no longer eligible")
         if len(batch) == 1:
-            return self._dispatch_one(mid, batch[0])
+            return self._dispatch_one(mid, batch[0], governance=governance[batch[0].id])
         task_state = self.store.load_task_state(self.project_id, mid)
 
         repository = self.store.workspace_dir(self.project_id).resolve(strict=True)
@@ -772,8 +955,43 @@ class MissionCoordinator:
                     manager.cleanup_workspace(lease.lease_id)
                 except (UnboundLocalError, WorkspaceError):
                     pass
-            return self._dispatch_one(mid, batch[0])
+            return self._dispatch_one(mid, batch[0], governance=governance[batch[0].id])
 
+        scopes = self._open_scopes(
+            mid,
+            [(attempt.task, attempt.spawn_ts) for attempt in batch_attempts],
+            governance,
+        )
+        if scopes is None:
+            for lease in leases.values():
+                try:
+                    manager.cancel_workspace(lease.lease_id)
+                    manager.cleanup_workspace(lease.lease_id)
+                except (UnboundLocalError, WorkspaceError):
+                    pass
+            return StepResult.idle("governed_witness_unavailable")
+        observation = _DispatchObservation()
+        try:
+            return self._run_isolated_work_batch(
+                mid, task_state, batch_attempts, leases, manager, base,
+                governance=governance, scopes=scopes, observation=observation,
+            )
+        finally:
+            self._close_scopes(scopes, observation)
+
+    def _run_isolated_work_batch(
+        self,
+        mid: str,
+        task_state: TaskStateFile,
+        batch_attempts: list["_BatchAttempt"],
+        leases: dict[str, Any],
+        manager: WorkspaceManager,
+        base: str,
+        *,
+        governance: Mapping[str, TaskGovernance],
+        scopes: list[ExecutionScope],
+        observation: "_DispatchObservation",
+    ) -> StepResult:
         self.store.refresh_inventory(os.environ)
         for attempt in batch_attempts:
             task_state.set_status(attempt.task.id, "running")
@@ -795,17 +1013,21 @@ class MissionCoordinator:
                 task=attempt.task,
                 spawn_ts=attempt.spawn_ts,
                 cwd=leases[attempt.task.id].worktree_path,
+                governance=self._request_governance(
+                    governance[attempt.task.id], scopes, attempt.task.id
+                ),
             )
             for attempt in batch_attempts
         ]
-        handoffs = self._dispatch_requests(mid, requests)
+        handoffs = self._observed_dispatch_requests(mid, requests, observation)
         batch_error: str | None = None
         grants: list[HumanIntegrationGrant] = []
         bound_handoffs: dict[str, NodeHandoff] = {}
         for attempt in sorted(batch_attempts, key=lambda item: item.task.id):
-            handoff = self._bind_dispatched_handoff(
+            handoff, synthesized = self._bind_dispatched_handoff_observed(
                 attempt.task, handoffs[attempt.task.id], attempt.spawn_ts
             )
+            observation.observe(attempt.task.id, handoff, synthesized=synthesized)
             bound_handoffs[attempt.task.id] = handoff
             if not handoff.done:
                 batch_error = "A parallel worker failed; batch integration was withheld."
@@ -922,6 +1144,8 @@ class MissionCoordinator:
         self,
         mission_id: str,
         requests: list[DispatchRequest],
+        *,
+        observation: "_DispatchObservation",
     ) -> dict[str, NodeHandoff]:
         if not requests:
             return {}
@@ -930,6 +1154,7 @@ class MissionCoordinator:
         batch_method = getattr(self.dispatcher, "dispatch_batch", None)
         if callable(batch_method):
             try:
+                observation.effect_started = True
                 handoffs = self._await_role_effect(
                     mission_id, lambda: batch_method(requests)
                 )
@@ -943,6 +1168,8 @@ class MissionCoordinator:
                     for request, handoff in zip(requests, handoffs, strict=True)
                 }
             except Exception as exc:  # noqa: BLE001
+                for request in requests:
+                    observation.outcomes[request.task.id] = "synthetic"
                 return {
                     request.task.id: self._synthesize_handoff(
                         request.task,
@@ -957,6 +1184,7 @@ class MissionCoordinator:
             try:
                 return request.task.id, self.dispatcher.dispatch(request)
             except Exception as exc:  # noqa: BLE001
+                observation.raised.add(request.task.id)
                 return (
                     request.task.id,
                     self._synthesize_handoff(
@@ -965,6 +1193,7 @@ class MissionCoordinator:
                     ),
                 )
 
+        observation.effect_started = True
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(requests)) as pool:
             futures = [pool.submit(_run, request) for request in requests]
             while True:
@@ -1159,19 +1388,25 @@ class MissionCoordinator:
     def _bind_dispatched_handoff(
         self, task: Task, handoff: NodeHandoff, spawn_ts: str
     ) -> NodeHandoff:
+        return self._bind_dispatched_handoff_observed(task, handoff, spawn_ts)[0]
+
+    def _bind_dispatched_handoff_observed(
+        self, task: Task, handoff: NodeHandoff, spawn_ts: str
+    ) -> tuple[NodeHandoff, bool]:
+        """Bind a handoff; the flag reports whether a synthesis branch was taken."""
         if handoff.node_id != task.id:
             return self._synthesize_handoff(
                 task, "Dispatcher returned a handoff for a different task."
-            ).model_copy(update={"attempt_id": spawn_ts})
+            ).model_copy(update={"attempt_id": spawn_ts}), True
         if handoff.attempt_id is None:
             return self._synthesize_handoff(
                 task, "Dispatcher returned a handoff with a null attempt identity."
-            ).model_copy(update={"attempt_id": spawn_ts})
+            ).model_copy(update={"attempt_id": spawn_ts}), True
         if handoff.attempt_id != spawn_ts:
             return self._synthesize_handoff(
                 task, "Dispatcher returned a handoff for a stale generation."
-            ).model_copy(update={"attempt_id": spawn_ts})
-        return handoff.model_copy(update={"attempt_id": spawn_ts})
+            ).model_copy(update={"attempt_id": spawn_ts}), True
+        return handoff.model_copy(update={"attempt_id": spawn_ts}), False
 
     def close_mission(
         self, mid: str, *, deliverable_roots: list[str] | None = None
@@ -1200,7 +1435,7 @@ class MissionCoordinator:
             ) is not None:
                 return StepResult.idle(EXPLANATION)
 
-        gate_event = self._try_evaluate_a_gate(tl, task_state)
+        gate_event = self._try_evaluate_a_gate(mid, tl, task_state)
         if gate_event is not None:
             return StepResult.idle("mission has a ready gate; call advance_project first")
 
@@ -1223,7 +1458,7 @@ class MissionCoordinator:
     # ------------------------------------------------------------------
 
     def _try_evaluate_a_gate(
-        self, tl: TaskList, task_state: TaskStateFile
+        self, mid: str, tl: TaskList, task_state: TaskStateFile
     ) -> "_GateEvent | None":
         for gate in gates_in_order(tl):
             if task_state.status_of(gate.id) != "pending":
@@ -1234,12 +1469,17 @@ class MissionCoordinator:
                 continue
             return _GateEvent(
                 gate=gate,
-                result=self._evaluate_gate(tl, task_state, gate),
+                result=self._evaluate_gate(tl, task_state, gate, mid=mid),
             )
         return None
 
     def _evaluate_gate(
-        self, tl: TaskList, task_state: TaskStateFile, gate: Task
+        self,
+        tl: TaskList,
+        task_state: TaskStateFile,
+        gate: Task,
+        *,
+        mid: str | None = None,
     ) -> "_GateResult":
         """AND-semantics gate evaluation.
 
@@ -1248,7 +1488,10 @@ class MissionCoordinator:
         "covers" a target when the validator task was authored with that
         target in `task.targets`; missing expected items count as passed=False.
         """
-        mid = self._lookup_mid_for_state()
+        # Step and closure paths always pass ``mid``; the state lookup remains
+        # only for direct external callers.
+        if mid is None:
+            mid = self._lookup_mid_for_state()
         current_by_target = self._current_validators_by_target(tl, task_state, gate)
         current_validator_ids = {
             validator_id
@@ -1825,6 +2068,33 @@ class MissionCoordinator:
 class _BatchAttempt:
     task: Task
     spawn_ts: str
+
+
+@dataclass(frozen=True)
+class _GovernedPending:
+    """Step mode for a COMMITTED admission before selection-time binding."""
+
+    classification: Classification
+
+
+_StepMode = LegacyNoAdmission | LegacyAfterAbandon | _GovernedPending
+
+
+@dataclass
+class _DispatchObservation:
+    """Owner-observed facts for scope closure; never inferred from files."""
+
+    effect_started: bool = False
+    raised: set[str] = field(default_factory=set)
+    outcomes: dict[str, str] = field(default_factory=dict)
+
+    def observe(self, task_id: str, handoff: NodeHandoff, *, synthesized: bool) -> None:
+        if task_id in self.outcomes:
+            return
+        if synthesized or task_id in self.raised:
+            self.outcomes[task_id] = "synthetic"
+        else:
+            self.outcomes[task_id] = "completed" if handoff.done else "failed"
 
 
 @dataclass(frozen=True)

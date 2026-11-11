@@ -15,6 +15,7 @@ from click.testing import CliRunner
 
 from unrest_harness import api
 from unrest_harness.acp_runner import ACPNodeDispatcher
+from unrest_harness.governed_records import LegacyNoAdmission
 from unrest_harness.cli import cli
 from unrest_harness.config import HarnessConfig
 from unrest_harness.dispatcher import DispatchRequest
@@ -389,6 +390,7 @@ def test_prompt_marker_alone_cannot_claim_cache_disabled(tmp_path: Path) -> None
             mission_id="mission-001",
             task=task,
             spawn_ts="2026-08-24T00-00-00Z",
+            governance=LegacyNoAdmission(),
         ),
         0.01,
     )

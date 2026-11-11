@@ -1940,7 +1940,7 @@ PINNED = {
     "src/unrest_harness/foundation_tools.py":
         "b6925fed1c9be7b79b0ed76b517bdd9a1d2bd156d7111008862c9cedaca70df3",
     "src/unrest_harness/server.py":
-        "d1abbe2f76ff874849d113919777efe1ccb8fee0a6327d5eaf27e87892fd886f",
+        "6c9df14211b1aec796395e5534129eeb2cfab9f83639eecaf580e4d9d647bffa",
     "src/unrest_harness/cli.py":
         "2ca82d15f3ad4bbc877971bfde90f20bcea8a4a1631641584f7077e785bc0b87",
     "tests/test_run_control.py":
@@ -1948,7 +1948,7 @@ PINNED = {
     "tests/test_mutation_journal.py":
         "dbaec57f5937ce7583c1de5819ee87b55dd30f45d8e4a3cc0c2d8d9b1607ea49",
     "tests/test_server.py":
-        "0550689ff20fb183ea62b47606bd3e66c5fc1222b5d4166e57e74d546afbb286",
+        "a9ce122c8928dad545be1502f43f8e6d33e2f1a0d836f81bff599462bb697a44",
     "tests/test_run_stop_custody.py":
         "f4dd95cd2d8b066246a35a5e02686abcda1b9db4239152c1f9a77d259f8e5c4a",
     "tests/test_run_receipt_golden.py":

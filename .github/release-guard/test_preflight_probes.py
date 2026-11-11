@@ -75,7 +75,7 @@ def _raw(case, operation, home, checkout=ROOT):
 
 
 def test_preflight_pin_sequences_and_independent_derivation():
-    assert PINS[PREFLIGHT_TEST] == "1a7f4389c22f7b0467064d586c00b436db5c634d7d003716216beb0ee9eee410"
+    assert PINS[PREFLIGHT_TEST] == "ccce4799735b7554116e5d79cdd8a553063148611ceb615cfc563c1432a78459"
     assert SEQUENCES[PREFLIGHT_CASES[0]] == ("g1", "g2", "x1", "m18", "help")
     assert SEQUENCES[PREFLIGHT_CASES[1]] == ("root-help", "list", "observe-help", "help", "g1")
     forbidden = _source_value("FORBIDDEN_MODULES")

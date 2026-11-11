@@ -20,7 +20,7 @@ NODES=tuple(TEST+'::'+name for name in (
     'test_cancellation_closes_owned_transport_and_keeps_record',
 ))
 FRAMES='tests/test_provider_review_frames.py'
-FRAMES_PIN='7a061260ee39629f5d529052eeec70ae32fe02ac5c8b9d226ad7c67dfb1377f7'
+FRAMES_PIN='c239adf7cb092b13be7afc86a0a0be33fa364e52849224bd46d82d525d82ab57'
 NODES+=tuple(FRAMES+'::'+name for name in (
     *('test_malformed_frame_cannot_correlate_or_escape_capture['+value+']' for value in (
         'id-None','id-0','id-2_0','id-2_1','id-True','id-value5','id-value6',
@@ -36,7 +36,7 @@ NODES+=(*(TEST+'::test_schema_action_variants_do_not_persist_private_payloads[ac
 DENIAL=tuple(TEST+'::test_runner_denial_overrides_handoff_and_reaps_owned_processes['+value+']' for value in ('True','False'))
 NODES+=DENIAL
 REPAIR='tests/test_provider_review_repair.py'
-REPAIR_PIN='e0aa8957ca85cb0d2f7250ae58243ed79de00cf04cd6f0aec437b6f92be45907'
+REPAIR_PIN='ff4d274af3ed5e8c15d98b59e8ab01321d9fb58cf3c2fbff5a9a7cb0e02cb136'
 REVIEW_SOURCES={FRAMES:FRAMES_PIN,REPAIR:REPAIR_PIN}
 NODES+=tuple(REPAIR+'::'+name for name in (
     *(f'test_malformed_outer_identity_blocks_on_managed_wire[{value}-{mapping}]'

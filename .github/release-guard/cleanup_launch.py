@@ -14,10 +14,10 @@ from review_wire import RUNNER,RUNNER_GIT,runner_scenario,SCRIPT as REVIEW_SCRIP
 TEST = 'tests/test_acp_cleanup.py'
 SCRIPT = 'tests/fixtures/cleanup_acp_process.py'
 SERVER = 'src/unrest_harness/server.py'
-PINS = {**REVIEW_SOURCES,REVIEW_SCRIPT:REVIEW_PIN,PRODUCT: ACP_PINS[PRODUCT], TEST: '8903f87610c61684a4db0dcf22f771ed5a9f75bcade8ce4f1c528378b1c992ae',
+PINS = {**REVIEW_SOURCES,REVIEW_SCRIPT:REVIEW_PIN,PRODUCT: ACP_PINS[PRODUCT], TEST: '9427a18d99f1aba0cc47b9722a5a76c03c6a44f18d4ba3445d07f49ed0b7e8d9',
     SCRIPT: 'f4b1c4ca59b7550e5bcd43210e487b0f979c3133196ff39470eae36b76726959',
-    SERVER: 'd1abbe2f76ff874849d113919777efe1ccb8fee0a6327d5eaf27e87892fd886f',
-    'tests/test_provider_review.py': 'dd9962020bcf265bc6a4e35de8ca7fe557666a1d0e63fa325b4ad955c2465a5e'}
+    SERVER: '6c9df14211b1aec796395e5534129eeb2cfab9f83639eecaf580e4d9d647bffa',
+    'tests/test_provider_review.py': '33377079c9387676d529977feac5af0824849f1c611799459ffc1da4ab227a9b'}
 CASES = tuple(TEST + '::' + name for name in (
     'test_recorded_transport_failures[success-work]',
     'test_recorded_transport_failures[array_id-work]',

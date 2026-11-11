@@ -19,6 +19,7 @@ import pytest
 
 import unrest_harness.approval_recovery as recovery
 import unrest_harness.acp_runner as acp
+from unrest_harness.governed_records import LegacyNoAdmission
 from unrest_harness.approval_native import (
     ApprovalUnavailable,
     NativeBinding,
@@ -662,6 +663,7 @@ async def test_actual_acp_owner_native_subprocess_order_and_cleanup(tmp_path, mo
                 Task(id="w1", type="work", body="controlled", targets=[], skill="s"),
                 "attempt-1",
                 store,
+                governance=LegacyNoAdmission(),
             ),
             25,
         )

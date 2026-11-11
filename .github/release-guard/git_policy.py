@@ -234,7 +234,7 @@ CANDIDATE_CANARIES=(('filter.canary.clean', 'CANARY'),
  ('extensions.objectformat', 'sha256'))
 
 MEASUREMENT_TEST='tests/test_measurement.py'
-MEASUREMENT_PIN='d850dcaf77c4b4ebd08efa87089cbc7b59762d5eb8d7fd0b673a9e043bc3e97f'
+MEASUREMENT_PIN='ca539e322e768ae20ead39cb4bfd5ef1a05ff7df919a9e1db84d696fcf0c9145'
 MEASUREMENT_WORKERS=tuple(MEASUREMENT_TEST+'::'+name for name in ('test_evolution_cases_use_real_public_state_machine_and_cold_state','test_project_cases_use_real_run_control_and_nested_acp'))
 
 def measurement_worker(host,actor,raw):
@@ -265,7 +265,7 @@ FIXTURE_SERVER_INQUIRY='tests/test_server.py::test_real_run_inquiry_workspace_an
 FIXTURE_PINS={
     'tests/test_workspaces.py':'a578e3070eb68ab4012b40dc41443dc833a92ffbff14aa42c7f39dbc27f56595',
     'tests/test_evolution.py':'778aeac7d73291bbeaaad3cb2ad2905d6a4e93a723a42378daa080222e7c57db',
-    'tests/test_server.py':'0550689ff20fb183ea62b47606bd3e66c5fc1222b5d4166e57e74d546afbb286',
+    'tests/test_server.py':'a9ce122c8928dad545be1502f43f8e6d33e2f1a0d836f81bff599462bb697a44',
     MEASUREMENT_TEST:MEASUREMENT_PIN,
     CANDIDATE_TEST:CANDIDATE_PIN,
     'tests/test_foundation_authority.py':'c8f63d70d4dcc3d74215a9db538632fc9115086d32d42f633235135dcaea2c70',

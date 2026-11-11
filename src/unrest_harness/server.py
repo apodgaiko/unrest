@@ -848,6 +848,80 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
         )
 
     @mcp.tool(
+        name="submit_governed_plan",
+        description=(
+            "Governed alternative to submit_plan for the current planning mission. "
+            "Captures the mission contract criteria once, publishes an admission "
+            "and moves the mission to mission_running. Returns a governed_admission "
+            "receipt, not an envelope; retrying with the same idempotency_key and "
+            "task list replays the receipt."
+        ),
+    )
+    async def submit_governed_plan(
+        project_id: Annotated[str, Field(description="Project id from start_project.")],
+        mission_id: Annotated[str, Field(description="Current planning mission id.")],
+        task_list: Annotated[TaskList, Field(description="Mission task list.")],
+        governed: Annotated[
+            dict[str, Any],
+            Field(
+                description=(
+                    "{schema: unrest.governed-admission-request.v1, idempotency_key, "
+                    "criterion_identity_policy: internal_digest_with_plaintext}"
+                )
+            ),
+        ],
+    ) -> dict[str, Any]:
+        return await call_project_mutation(
+            lambda: controller.submit_governed_plan(
+                project_id, mission_id, task_list, governed
+            )
+        )
+
+    @mcp.tool(
+        name="abandon_governance",
+        description=(
+            "Abandon a mission's governed admission so it continues as legacy work. "
+            "Deletes nothing; refuses while a governed execution scope is open."
+        ),
+    )
+    async def abandon_governance(
+        project_id: Annotated[str, Field(description="Project id.")],
+        mission_id: Annotated[str, Field(description="Mission id.")],
+        governed_abandon: Annotated[
+            dict[str, Any],
+            Field(
+                description=(
+                    "{schema: unrest.governed-abandon-request.v1, idempotency_key}"
+                )
+            ),
+        ],
+    ) -> dict[str, Any]:
+        return await call_project_mutation(
+            lambda: controller.abandon_governance(project_id, mission_id, governed_abandon)
+        )
+
+    @mcp.tool(
+        name="inspect_governed",
+        description=(
+            "Read-only governed status of one mission: summary, or a page of "
+            "criteria, task_gate or executions. Lock-free; pages are not a snapshot."
+        ),
+    )
+    async def inspect_governed(
+        project_id: Annotated[str, Field(description="Project id.")],
+        mission_id: Annotated[str, Field(description="Mission id.")],
+        section: Annotated[
+            str, Field(description="summary | criteria | task_gate | executions")
+        ] = "summary",
+        cursor: Annotated[
+            str | None, Field(description="Page cursor from a previous page, or null.")
+        ] = None,
+    ) -> dict[str, Any]:
+        return await call_project_mutation(
+            lambda: controller.inspect_governed(project_id, mission_id, section, cursor)
+        )
+
+    @mcp.tool(
         name="advance_project",
         description=(
             "Drive the runtime forward. BLOCKING — may run for many minutes while "
@@ -1546,6 +1620,9 @@ def _to_payload(
             "message": env_or_err.message,
             "details": [str(d) for d in (env_or_err.details or [])],
         }
+    elif isinstance(env_or_err, dict):
+        # Governed lifecycle receipts are already allowlist projections.
+        payload = env_or_err
     else:
         payload = env_or_err.model_dump(mode="json", by_alias=True)
     redacted = redact_sensitive_value(payload, inventory or {})

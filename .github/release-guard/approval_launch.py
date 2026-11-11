@@ -21,7 +21,7 @@ CRASH=tuple(case for case in RUNS if case.rsplit('[',1)[1].startswith('crash'))
 CASES=(*OWNER_CASES,*RUNS)
 ADAPTER='tests/fixtures/approval_recovery_acp.py'
 BACKEND='tests/fixtures/approval_native_backend.py'
-PINS={TEST:'59f3eb0a28b856081bfd32173e6259f7f916eda711e3911d2ab76843c695efcb',
+PINS={TEST:'8eb35c6b60f64d1a4faf1153b5a050813cee3913a34a6a054bb990f1849c8df3',
     ADAPTER:'1813512c5ad2177af6738fbfb99e9d43f6884394878e1034d3956ca5f0f31d46',
     BACKEND:'a18a3a8c87c86b5629304e99c6667b8c6accd31b72ded5885ffe386a6e803ba3'}
 ROLES=('approval-adapter','approval-relay','approval-backend')
@@ -46,7 +46,7 @@ def worker(host,actor,raw):
     host.root_only(actor)
     from run_worker_launch import admit_worker
     checkout=Path(host.meta['checkout'])
-    source_unit(checkout,'tests/fixtures/approval_run_executor.py','f6e24716d1b9103035fe99fe2af9f00bf42544d31086caa94486f3e8259a4d33')
+    source_unit(checkout,'tests/fixtures/approval_run_executor.py','47a1423f5ed5ee2a6b1929c9c9c14193eb45a15acb5f549063730d36602885d7')
     home=Path(raw['cwd'])
     base=retain(host,home.parent, 20000)
     refuse_if(home!=base/'run-home' or raw['stdin'] is not None, 'approval exact worker private home')

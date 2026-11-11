@@ -7,6 +7,7 @@ import pytest
 
 from unrest_harness.controller import ProjectController, ToolError
 from unrest_harness.coordinator import MissionCoordinator
+from unrest_harness.governed_records import LegacyNoAdmission
 from unrest_harness.models import (
     Decision, MissionRunning, Task, TaskListPatch, ValidateHandoff, WorkHandoff,
 )
@@ -100,7 +101,7 @@ def test_additive_patch_keeps_failed_origin(tmp_path, path):
         controller.decide_attention("project", [decision])
     else:
         with controller._project_access("project"):
-            controller._apply_one("project", item, decision)
+            controller._apply_one("project", item, decision, reserved_mid=None)
     ts = store.load_task_state("project", "mission-001")
     assert ts.status_of("w1") == "failed" and ts.tasks["w1"].last_attempt == "attempt-1"
     assert calls == []
@@ -124,7 +125,7 @@ def test_denial_decisions_cannot_override(tmp_path, path, action):
             controller.decide_attention("project", [decision])
         else:
             with controller._project_access("project"):
-                controller._apply_one("project", item, decision)
+                controller._apply_one("project", item, decision, reserved_mid=None)
     assert calls == []
     assert_protected(before)
     assert (store.mission_runtime_dir("project", "mission-001") / "task-state.json").read_bytes() == state
@@ -179,10 +180,10 @@ def test_final_dispatch_boundary_excludes_denied_and_descendant(tmp_path, bounda
     tl = store.load_task_list("project", "mission-001")
     ts = store.load_task_state("project", "mission-001")
     if boundary == "single":
-        c._dispatch_one("mission-001", tl.tasks[0])
+        c._dispatch_one("mission-001", tl.tasks[0], governance=LegacyNoAdmission())
         assert calls == []
     elif boundary == "isolated":
-        c._dispatch_isolated_work_batch("mission-001", ts, tl.tasks)
+        c._dispatch_isolated_work_batch("mission-001", ts, tl.tasks, governance={task.id: LegacyNoAdmission() for task in tl.tasks})
         assert calls == ["independent"]
     else:
         for task in tl.tasks:
@@ -197,7 +198,7 @@ def test_final_dispatch_boundary_excludes_denied_and_descendant(tmp_path, bounda
             calls.append(r.task.id) or ValidateHandoff(node_id=r.task.id, done=True, report="ok", items=[], passed=True)
         ))
         c.dispatcher = controller.dispatcher
-        c._dispatch_batch("mission-001", tl, ts, tl.tasks)
+        c._dispatch_batch("mission-001", tl, ts, tl.tasks, governance={task.id: LegacyNoAdmission() for task in tl.tasks})
         assert calls == ["independent"]
     assert store.load_task_state("project", "mission-001").tasks["w1"].last_attempt == "attempt-1"
     assert_protected(before)

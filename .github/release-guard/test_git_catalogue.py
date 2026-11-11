@@ -36,7 +36,7 @@ CANDIDATE_CASES=tuple(CANDIDATE_TEST+'::'+name+('['+parameter+']' if parameter i
 
 MEASUREMENT_TEST='tests/test_measurement.py'
 
-MEASUREMENT_PIN='d850dcaf77c4b4ebd08efa87089cbc7b59762d5eb8d7fd0b673a9e043bc3e97f'
+MEASUREMENT_PIN='ca539e322e768ae20ead39cb4bfd5ef1a05ff7df919a9e1db84d696fcf0c9145'
 
 MEASUREMENT_SYNTHETIC=('test_successful_exact_protocol_publishes_sanitized_recomputable_bundle',
     *(f'test_oracle_cache_and_cost_fail_closed[provider{index}-invalid]' for index in range(3)),

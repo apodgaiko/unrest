@@ -11,6 +11,7 @@ import pytest
 import yaml
 
 from unrest_harness import __version__
+from unrest_harness.governed_records import LegacyNoAdmission
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -88,7 +89,7 @@ async def test_acp_handshakes_derive_the_public_runtime_version(tmp_path, monkey
         else:
             await runner.run_node("project", "mission-001", Task(
                 id="w1", type=role, body="identity probe", targets=[], skill="s"),
-                "attempt-1", store)
+                "attempt-1", store, governance=LegacyNoAdmission())
     assert len(requests) == 1
     method, params = requests[0]
     assert method == "initialize"

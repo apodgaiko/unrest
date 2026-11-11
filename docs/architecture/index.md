@@ -35,6 +35,7 @@ withdraws the former repository governance language and duplicate root schemas.
 - [Continuation recovery reservations](continuation-reservations.md) — inert bounded reservation ledger, actual settlement and snapshot custody.
 - [Continuation unit state](continuation-state.md) — inert finite classifier of one bound unit and its acceptance frontier; advice, not authority.
 - [Continuation preflight](continuation-preflight.md) — experimental read-only fact report for one explicit task; assessment always unavailable.
+- [Governed S1 criteria delivery](governed-s1.md) — opt-in admission of mission criteria, dispatch gate, execution scopes, transport witness and identity ownership.
 
 - [Controlled speed runner v2](controlled-speed-runner.md) — prepared-state compatibility measurement.
 

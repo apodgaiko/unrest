@@ -16,8 +16,8 @@ from launch_policy import build_expected
 PRODUCT = 'src/unrest_harness/acp_runner.py'
 TEST = 'tests/test_acp_runner.py'
 MOCK = 'tests/mock_acp_agent.py'
-PINS = {PRODUCT: '36ca5c18af8a541e062e08900e57d2e5d43643e81e44e11b56ed9e599ad840a3',
-        TEST: '558010a851595fece4c186cb30b717ff38dad4fa075705dbc316cfd8537910b4',
+PINS = {PRODUCT: '81c7999cf8d1c66d893598d489fa3dc3849b8fe184317a7d88b3ff8588d2457d',
+        TEST: '35dffad32b0216e8ebf2b6027a7b06675c47e3d22f9d14ea6199cd9ad5a3b6b4',
         MOCK: '8141170328ff5fc28acf10dfd70bbf22f4062cceb1b2de8b8ea11ab0c17a48b6'}
 CASES = tuple(TEST + '::' + name for name in (
     'test_owned_node_launch_uses_one_identical_plan[work]',

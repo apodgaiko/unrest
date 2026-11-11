@@ -53,7 +53,7 @@ PREFLIGHT_ARGUMENTS = {
     'list': ('list-projects',),
     'observe-help': ('observe-project','--help'),
 }
-PINS[PREFLIGHT_TEST] = '1a7f4389c22f7b0467064d586c00b436db5c634d7d003716216beb0ee9eee410'
+PINS[PREFLIGHT_TEST] = 'ccce4799735b7554116e5d79cdd8a553063148611ceb615cfc563c1432a78459'
 JOURNAL_TEST='tests/test_mutation_journal.py'
 JOURNAL_CASE=JOURNAL_TEST+'::test_live_foreign_owner_is_busy_and_record_is_unchanged'
 PINS[JOURNAL_TEST]='dbaec57f5937ce7583c1de5819ee87b55dd30f45d8e4a3cc0c2d8d9b1607ea49'

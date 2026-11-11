@@ -7,9 +7,10 @@ mocks without spinning up subprocesses.
 from __future__ import annotations
 
 import concurrent.futures
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Protocol
 
+from .governed_records import RequestGovernance
 from .models import Task, TerminalReviewHandoff, ValidateHandoff, WorkHandoff
 
 
@@ -23,6 +24,8 @@ class DispatchRequest:
     task: Task
     spawn_ts: str
     cwd: str | None = None
+    # Governed S1: explicit request mode, deliberately without a default.
+    governance: RequestGovernance = field(kw_only=True)
 
 
 class NodeDispatcher(Protocol):
